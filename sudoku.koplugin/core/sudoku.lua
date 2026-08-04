@@ -1,0 +1,51 @@
+local board = require("core.board")
+local solver = require("core.solver")
+
+local sudoku = {}
+
+function sudoku.from_string(s)
+    return board.from_string(s)
+end
+
+function sudoku.solve_any(puzzle, opts)
+    local b, err = sudoku.from_string(puzzle)
+    if not b then
+        return nil, err
+    end
+    local s, s_err = solver.new(b, opts)
+    if not s then
+        return nil, s_err
+    end
+    return s:solve_any()
+end
+
+function sudoku.solve_all(puzzle, opts)
+    local b, err = sudoku.from_string(puzzle)
+    if not b then
+        return nil, err
+    end
+    local s, s_err = solver.new(b, opts)
+    if not s then
+        return nil, s_err
+    end
+    return s:solve_all()
+end
+
+function sudoku.solutions_count(puzzle, opts)
+    local sols = sudoku.solve_all(puzzle, opts)
+    if not sols then
+        return nil
+    end
+    return #sols
+end
+
+function sudoku.is_solved(puzzle)
+    local b, err = sudoku.from_string(puzzle)
+    if not b then
+        return false, err
+    end
+    local s = solver.new(b)
+    return s:is_solved()
+end
+
+return sudoku

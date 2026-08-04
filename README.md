@@ -130,7 +130,8 @@ Copy the `sudoku.koplugin/` folder onto the Kobo's
 - [x] Dev environment: emulator builds and runs on macOS (Apple Silicon)
 - [x] Plugin skeleton registers in the Tools menu
 - [x] M0: test harness (specs symlinked, `./dev.sh test`), rustoku pinned
-- [ ] M1: core foundations (board, masks, candidates, solver)
+- [x] M1: core foundations (board, masks, candidates, MRV solver, PRNG,
+      solve path, facade) — fully tested
 - [ ] M2: techniques (easy → expert, per tier, test-first)
 - [ ] M3: solve path, difficulty, generation
 - [ ] M4: hint engine

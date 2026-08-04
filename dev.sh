@@ -30,6 +30,14 @@ for spec in tests/unit/*_spec.lua; do
     ln -sfn "$(pwd)/$spec" "$KOREADER/spec/unit/$(basename "$spec")"
 done
 
+# Make the plugin requireable from the test CWD (the meson build dir):
+# specs use `require("core.board")` with package.path including
+# plugins/sudoku.koplugin/?.lua (same layout as the emulator bundle).
+BUILD_DIR=$(ls -d "$KOREADER"/base/build/*/ 2>/dev/null | head -1 || true)
+if [[ -n "$BUILD_DIR" && ! -e "$BUILD_DIR/plugins" ]]; then
+    ln -sfn "$(pwd)/$KOREADER/plugins" "$BUILD_DIR/plugins"
+fi
+
 cd "$KOREADER"
 
 if [[ "${1:-}" == "test" ]]; then

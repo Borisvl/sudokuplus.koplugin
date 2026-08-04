@@ -103,14 +103,40 @@ accurate; luacheck clean; initial commit.
 
 ### M1 — Core foundations (fully tested)
 
-- [ ] `board.lua` (grid, 81-char parse/serialize, duplicate detection)
-- [ ] `masks.lua`, `candidates.lua`
-- [ ] `solver.lua`: MRV backtracking `solve_any` / `solve_until` / `solve_all`
-- [ ] Inject a pure-Lua PRNG (xoshiro-style) for deterministic shuffle
-- [ ] Port rustoku's core test suite (puzzle→solution pairs, multi-solution
-      counting, invalid input)
+Refined plan (design decisions: plain functions + data tables; errors as
+`nil, message`; board = flat 81-array, candidates = 9×9 cache; coordinates
+0-based, rustoku parity; LuaJIT `bit` for masks; state tables carry methods
+via metatable).
 
-**Exit criteria**: all tests green, luacheck clean.
+- [x] `core/prng.lua` — xorshift32; `new(seed)` (fixed default, no
+      `os.time`/`math.random`), `:next()`, `:int(n)`, `:shuffle(list)`
+- [x] `core/board.lua` — `new` / `from_string` (81 chars, `0-9 . _`) /
+      `to_string` / `get` / `set` / `clone` / `is_empty` / `count_clues` /
+      `iter_empty_cells`
+- [x] `core/masks.lua` — row/col/box u16 bitmasks; `new`, `get_box_idx`,
+      `add_number`, `remove_number`, `is_safe`,
+      `compute_candidates_mask_for_cell`
+- [x] `core/candidates.lua` — 9×9 u16 cache; `get`/`set`/`get_candidates`,
+      `update_affected_cells`/`_for` (placed-number optimization), `count`
+- [x] `core/solve_path.lua` — SolveStep-shaped steps (`type`, `row`, `col`,
+      `value`, `flags`, `step_number`, `candidates_eliminated`,
+      `related_cell_count`, `difficulty_point`); pattern metadata added in M2
+- [x] `core/solver.lua` — `new(board, opts)` clones the board, detects
+      duplicate values, injects rng; `solve_until(bound)` (DFS + MRV via
+      candidate counts, rng-shuffled candidates, path recording),
+      `solve_any`, `solve_all` (= `solve_until(0)`; rustoku's rayon split is
+      not ported), `is_solved`; technique-phase hook point reserved for M2
+- [x] `core/sudoku.lua` — minimal facade (`from_string`, `solve_any`,
+      `solve_all`, `solutions_count`, `is_solved`)
+- [x] Specs `sudoku_{prng,board,masks,candidates,solver}_spec.lua` — port
+      rustoku's tests (board.rs, masks.rs, candidates.rs, mod.rs core: known
+      puzzle→solution, unsolvable, `solve_until` bound semantics, 1/2/6
+      solutions, `is_solved`, duplicate detection, determinism). Require
+      path: `plugins/sudoku.koplugin/?.lua` relative to the test CWD
+      (dev.sh symlinks the plugin into the build dir).
+
+**Exit criteria**: all specs green via `./dev.sh test`, lint clean, PLAN.md
++ README updated, commit.
 
 ### M2 — Techniques (port per tier, test-first each)
 
