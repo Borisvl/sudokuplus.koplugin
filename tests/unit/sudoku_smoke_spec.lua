@@ -1,0 +1,5 @@
+describe("sudoku test harness", function()
+    it("runs specs from the sudoku repo's tests/unit directory", function()
+        assert.is_true(true)
+    end)
+end)
