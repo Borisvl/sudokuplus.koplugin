@@ -104,15 +104,21 @@ then; subsequent runs are fast (< 1 s per test file). Pattern matching
 uses meson's `suite:test` names, so plain filenames (`util_spec.lua`) do
 not work with the default runner.
 
-### Linting
+### Linting and formatting
 
 ```sh
 source env.sh
-luacheck sudoku.koplugin/
+./dev.sh lint   # luacheck + stylua --check (style violations fail)
+./dev.sh fmt    # apply stylua formatting
 ```
 
-Uses the project's `.luacheckrc`, which mirrors KOReader's
-(`unused_args = false`, implicit `self`).
+Linting uses the project's `.luacheckrc` (mirrors KOReader's: `std =
+"luajit"`, `unused_args = false`, implicit `self`; specs get `+busted`).
+Formatting uses [stylua](https://github.com/JohnnyMorganz/StyLua)
+(`brew install stylua`) with `.stylua.toml` (4-space indent, 120 columns,
+Unix endings). Note: stylua renders `WidgetContainer:extend {` with a space
+before `{`, slightly diverging from KOReader's `extend{` idiom — accepted
+for project-wide consistency.
 
 ### Deployment to a device (later)
 

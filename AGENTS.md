@@ -31,10 +31,16 @@ every session and every agent working in this repository.
 
 Every milestone must end with all of:
 
-1. Tests green (`kodev test` / busted),
-2. `luacheck` clean,
+1. Tests green (`./dev.sh test`),
+2. `./dev.sh lint` clean (luacheck + stylua --check),
 3. Emulator smoke check (if the milestone touches UI/runtime code),
 4. Commit with a clear message.
+
+## Lint and format
+
+- Run `./dev.sh fmt` before committing; `./dev.sh lint` gates the milestone.
+- Style is enforced by stylua (`.stylua.toml`, 4-space indent, 120 cols);
+  do not hand-format around it.
 
 ## Porting rules
 

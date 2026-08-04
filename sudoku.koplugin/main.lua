@@ -3,7 +3,7 @@ local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
-local Sudoku = WidgetContainer:extend{
+local Sudoku = WidgetContainer:extend {
     name = "sudoku",
     is_doc_only = false,
 }
@@ -17,7 +17,7 @@ function Sudoku:addToMainMenu(menu_items)
         text = _("Sudoku"),
         sorting_hint = "more_tools",
         callback = function()
-            UIManager:show(InfoMessage:new{
+            UIManager:show(InfoMessage:new {
                 text = _("Sudoku coming soon"),
             })
         end,
