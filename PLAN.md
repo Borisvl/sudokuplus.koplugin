@@ -105,8 +105,10 @@ accurate; luacheck clean; initial commit.
 
 Refined plan (design decisions: plain functions + data tables; errors as
 `nil, message`; board = flat 81-array, candidates = 9×9 cache; coordinates
-0-based, rustoku parity; LuaJIT `bit` for masks; state tables carry methods
-via metatable).
+0-based, rustoku parity; **data tables are 1-based, coordinates are 0-based
+and converted at accessor boundaries** (board flat 1-based, masks/candidates
+`[x + 1]`); LuaJIT `bit` for masks; state tables carry methods via
+metatable).
 
 - [x] `core/prng.lua` — xorshift32; `new(seed)` (fixed default, no
       `os.time`/`math.random`), `:next()`, `:int(n)`, `:shuffle(list)`

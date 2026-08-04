@@ -56,6 +56,12 @@ describe("core.candidates", function()
         assert.are.equal(3, candidates.count(bit.bor(bit_of(2), bit.bor(bit_of(4), bit_of(7)))))
     end)
 
+    it("expands a mask to numbers", function()
+        assert.are.same({}, candidates.from_mask(0))
+        assert.are.same({ 1, 2, 3, 4, 5, 6, 7, 8, 9 }, candidates.from_mask(0x1FF))
+        assert.are.same({ 2, 4, 7 }, candidates.from_mask(bit.bor(bit_of(2), bit.bor(bit_of(4), bit_of(7)))))
+    end)
+
     it("updates affected cells on placement", function()
         local b = board.new()
         local m = masks.new()

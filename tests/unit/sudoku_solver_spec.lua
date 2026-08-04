@@ -20,6 +20,20 @@ describe("core.solver", function()
         assert.is_string(err)
     end)
 
+    it("rejects cell values out of range", function()
+        local b10 = board.new()
+        board.set(b10, 0, 0, 10)
+        local s10, err10 = solver.new(b10)
+        assert.is_nil(s10)
+        assert.is_string(err10)
+
+        local b15 = board.new()
+        board.set(b15, 0, 0, 15)
+        local s15, err15 = solver.new(b15)
+        assert.is_nil(s15)
+        assert.is_string(err15)
+    end)
+
     it("solves a unique puzzle to its known solution", function()
         local s = solver.new(board.from_string(UNIQUE_PUZZLE))
         local solution = s:solve_any()
@@ -74,6 +88,34 @@ describe("core.solver", function()
             return { board.to_string(sols[1].board), board.to_string(sols[2].board) }
         end
         assert.are.same(solve(), solve())
+    end)
+
+    it("returns only valid solutions that preserve the givens", function()
+        local function assert_valid_solutions(puzzle)
+            local s = solver.new(board.from_string(puzzle))
+            local givens = board.from_string(puzzle)
+            for _, solution in ipairs(s:solve_all()) do
+                assert.are.equal(81, board.count_clues(solution.board))
+                assert.is_not_nil(solver.validate(solution.board))
+                for i = 1, 81 do
+                    if givens[i] ~= 0 then
+                        assert.are.equal(givens[i], solution.board[i])
+                    end
+                end
+            end
+        end
+        assert_valid_solutions(UNIQUE_PUZZLE)
+        assert_valid_solutions(TWO_PUZZLE)
+        assert_valid_solutions(SIX_PUZZLE)
+    end)
+
+    it("reuses the state after a bounded solve", function()
+        local s = solver.new(board.from_string(UNIQUE_PUZZLE))
+        local bounded = s:solve_until(1)
+        local all = s:solve_until(0)
+        assert.are.equal(1, #bounded)
+        assert.are.equal(1, #all)
+        assert.are.equal(board.to_string(bounded[1].board), board.to_string(all[1].board))
     end)
 
     it("records placement steps with increasing step numbers", function()

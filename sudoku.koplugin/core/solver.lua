@@ -1,4 +1,3 @@
-local bit = require("bit")
 local board = require("core.board")
 local candidates = require("core.candidates")
 local masks = require("core.masks")
@@ -9,29 +8,58 @@ local solver = {}
 local mt = {}
 mt.__index = mt
 
-function solver.new(b, opts)
+local board_get = board.get
+local board_set = board.set
+local board_is_empty = board.is_empty
+local board_clone = board.clone
+local masks_add = masks.add_number
+local masks_remove = masks.remove_number
+local masks_is_safe = masks.is_safe
+local masks_compute = masks.compute_candidates_mask_for_cell
+local cand_get = candidates.get
+local cand_set = candidates.set
+local cand_count = candidates.count
+local cand_from_mask = candidates.from_mask
+local cand_update_for = candidates.update_affected_cells_for
+local cand_update = candidates.update_affected_cells
+local path_push = solve_path.push
+local path_placement = solve_path.placement_step
+local path_snapshot = solve_path.snapshot
+
+function solver.validate(b)
     local m = masks.new()
     for r = 0, 8 do
         for col = 0, 8 do
-            local num = board.get(b, r, col)
+            local num = board_get(b, r, col)
             if num ~= 0 then
-                if not masks.is_safe(m, r, col, num) then
+                if num < 1 or num > 9 then
+                    return nil, "cell value out of range"
+                end
+                if not masks_is_safe(m, r, col, num) then
                     return nil, "initial board contains duplicates"
                 end
-                masks.add_number(m, r, col, num)
+                masks_add(m, r, col, num)
             end
         end
+    end
+    return m
+end
+
+function solver.new(b, opts)
+    local m, err = solver.validate(b)
+    if not m then
+        return nil, err
     end
     local c = candidates.new()
     for r = 0, 8 do
         for col = 0, 8 do
-            if board.is_empty(b, r, col) then
-                candidates.set(c, r, col, masks.compute_candidates_mask_for_cell(m, r, col))
+            if board_is_empty(b, r, col) then
+                cand_set(c, r, col, masks_compute(m, r, col))
             end
         end
     end
     local state = {
-        board = board.clone(b),
+        board = board_clone(b),
         masks = m,
         candidates = c,
         rng = (opts or {}).rng or prng.new(),
@@ -40,59 +68,52 @@ function solver.new(b, opts)
 end
 
 local function place_number(state, r, col, num)
-    board.set(state.board, r, col, num)
-    masks.add_number(state.masks, r, col, num)
-    candidates.update_affected_cells_for(state.candidates, r, col, state.masks, state.board, num)
+    board_set(state.board, r, col, num)
+    masks_add(state.masks, r, col, num)
+    cand_update_for(state.candidates, r, col, state.masks, state.board, num)
 end
 
 local function remove_number(state, r, col, num)
-    board.set(state.board, r, col, 0)
-    masks.remove_number(state.masks, r, col, num)
-    candidates.update_affected_cells(state.candidates, r, col, state.masks, state.board)
+    board_set(state.board, r, col, 0)
+    masks_remove(state.masks, r, col, num)
+    cand_update(state.candidates, r, col, state.masks, state.board)
 end
 
 local function find_next_empty_cell(state)
     local min_count = 10
-    local best = nil
-    for _, cell in ipairs(board.iter_empty_cells(state.board)) do
-        local count = candidates.count(candidates.get(state.candidates, cell[1], cell[2]))
-        if count < min_count then
-            min_count = count
-            best = cell
-            if count == 1 then
-                return best
+    local best_r, best_c
+    for r = 0, 8 do
+        for col = 0, 8 do
+            if board_is_empty(state.board, r, col) then
+                local count = cand_count(cand_get(state.candidates, r, col))
+                if count < min_count then
+                    min_count = count
+                    best_r, best_c = r, col
+                    if count == 1 then
+                        return best_r, best_c
+                    end
+                end
             end
         end
     end
-    return best
-end
-
-local function candidates_from_mask(mask)
-    local nums = {}
-    for v = 1, 9 do
-        if bit.band(mask, bit.lshift(1, v - 1)) ~= 0 then
-            nums[#nums + 1] = v
-        end
-    end
-    return nums
+    return best_r, best_c
 end
 
 local function solve_until_recursive(state, solutions, path, bound)
-    local cell = find_next_empty_cell(state)
-    if not cell then
+    local r, col = find_next_empty_cell(state)
+    if not r then
         solutions[#solutions + 1] = {
-            board = board.clone(state.board),
-            solve_path = solve_path.snapshot(path),
+            board = board_clone(state.board),
+            solve_path = path_snapshot(path),
         }
         return
     end
-    local r, col = cell[1], cell[2]
-    local nums = candidates_from_mask(candidates.get(state.candidates, r, col))
+    local nums = cand_from_mask(cand_get(state.candidates, r, col))
     state.rng:shuffle(nums)
     for _, num in ipairs(nums) do
-        if masks.is_safe(state.masks, r, col, num) then
+        if masks_is_safe(state.masks, r, col, num) then
             place_number(state, r, col, num)
-            solve_path.push(path, solve_path.placement_step(r, col, num))
+            path_push(path, path_placement(r, col, num))
             solve_until_recursive(state, solutions, path, bound)
             path.steps[#path.steps] = nil
             remove_number(state, r, col, num)
@@ -121,12 +142,12 @@ end
 function mt:is_solved()
     for r = 0, 8 do
         for col = 0, 8 do
-            if board.is_empty(self.board, r, col) then
+            if board_is_empty(self.board, r, col) then
                 return false
             end
         end
     end
-    return solver.new(self.board) ~= nil
+    return solver.validate(self.board) ~= nil
 end
 
 return solver

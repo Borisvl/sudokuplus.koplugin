@@ -2,6 +2,8 @@ local bit = require("bit")
 
 local masks = {}
 
+local FULL_MASK = 0x1FF
+
 local function mask_for(num)
     return bit.lshift(1, num - 1)
 end
@@ -20,16 +22,18 @@ end
 
 function masks.add_number(m, r, c, num)
     local bitmask = mask_for(num)
+    local box_idx = masks.get_box_idx(r, c)
     m.row[r + 1] = bit.bor(m.row[r + 1], bitmask)
     m.col[c + 1] = bit.bor(m.col[c + 1], bitmask)
-    m.box[masks.get_box_idx(r, c) + 1] = bit.bor(m.box[masks.get_box_idx(r, c) + 1], bitmask)
+    m.box[box_idx + 1] = bit.bor(m.box[box_idx + 1], bitmask)
 end
 
 function masks.remove_number(m, r, c, num)
     local bitmask = mask_for(num)
+    local box_idx = masks.get_box_idx(r, c)
     m.row[r + 1] = bit.band(m.row[r + 1], bit.bnot(bitmask))
     m.col[c + 1] = bit.band(m.col[c + 1], bit.bnot(bitmask))
-    m.box[masks.get_box_idx(r, c) + 1] = bit.band(m.box[masks.get_box_idx(r, c) + 1], bit.bnot(bitmask))
+    m.box[box_idx + 1] = bit.band(m.box[box_idx + 1], bit.bnot(bitmask))
 end
 
 function masks.is_safe(m, r, c, num)
@@ -42,7 +46,7 @@ end
 
 function masks.compute_candidates_mask_for_cell(m, r, c)
     local used = bit.bor(m.row[r + 1], bit.bor(m.col[c + 1], m.box[masks.get_box_idx(r, c) + 1]))
-    return bit.band(bit.bnot(used), 0x1FF)
+    return bit.band(bit.bnot(used), FULL_MASK)
 end
 
 return masks

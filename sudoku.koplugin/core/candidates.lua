@@ -6,22 +6,21 @@ local candidates = {}
 
 function candidates.new()
     local cache = {}
-    for r = 0, 8 do
-        cache[r] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    for i = 1, 9 do
+        cache[i] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 }
     end
     return cache
 end
 
 function candidates.get(c, r, col)
-    return c[r][col + 1]
+    return c[r + 1][col + 1]
 end
 
 function candidates.set(c, r, col, mask)
-    c[r][col + 1] = mask
+    c[r + 1][col + 1] = mask
 end
 
-function candidates.get_candidates(c, r, col)
-    local mask = candidates.get(c, r, col)
+function candidates.from_mask(mask)
     local result = {}
     for i = 0, 8 do
         if bit.band(mask, bit.lshift(1, i)) ~= 0 then
@@ -29,6 +28,10 @@ function candidates.get_candidates(c, r, col)
         end
     end
     return result
+end
+
+function candidates.get_candidates(c, r, col)
+    return candidates.from_mask(candidates.get(c, r, col))
 end
 
 function candidates.count(mask)
