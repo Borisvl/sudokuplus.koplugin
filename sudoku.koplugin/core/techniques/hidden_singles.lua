@@ -32,21 +32,11 @@ end
 
 function hidden_singles.apply(prop, path)
     local changed = false
-    for r = 0, 8 do
-        if check_unit(prop, path, units.row_cells(r), { type = "row", index = r }) then
+    units.for_each_unit(function(unit, cells)
+        if check_unit(prop, path, cells, unit) then
             changed = true
         end
-    end
-    for col = 0, 8 do
-        if check_unit(prop, path, units.col_cells(col), { type = "col", index = col }) then
-            changed = true
-        end
-    end
-    for box_idx = 0, 8 do
-        if check_unit(prop, path, units.box_cells(box_idx), { type = "box", index = box_idx }) then
-            changed = true
-        end
-    end
+    end)
     return changed
 end
 

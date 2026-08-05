@@ -1,13 +1,16 @@
 local bit = require("bit")
 local flags = require("core.techniques.flags")
+local units = require("core.techniques.units")
 
 local locked_candidates = {}
 
 -- Pointing: a candidate is confined to a single box within a row/column, so it
 -- can be eliminated from the rest of that box. unit = the row/column,
 -- target = the box.
-local function pointing_from_line(prop, path, unit, index, is_row, eliminate)
+local function pointing_from_line(prop, path, unit_desc, eliminate)
     local changed = false
+    local index = unit_desc.index
+    local is_row = unit_desc.type == "row"
     for v = 1, 9 do
         local v_bit = bit.lshift(1, v - 1)
         local box_mask = 0
@@ -35,8 +38,8 @@ local function pointing_from_line(prop, path, unit, index, is_row, eliminate)
                 kind = "pointing",
                 cells = confined,
                 values = { v },
-                unit = { type = unit, index = index },
-                target = { type = "box", index = box_idx },
+                unit = unit_desc,
+                target = units.box_unit(box_idx),
             }
             for r = start_row, start_row + 2 do
                 for col = start_col, start_col + 2 do
@@ -81,8 +84,8 @@ local function claiming_from_box(prop, path, box_idx, eliminate)
                 kind = "claiming",
                 cells = confined,
                 values = { v },
-                unit = { type = "box", index = box_idx },
-                target = { type = "row", index = row },
+                unit = units.box_unit(box_idx),
+                target = units.row_unit(row),
             }
             for col = 0, 8 do
                 if col < start_col or col >= start_col + 3 then
@@ -96,8 +99,8 @@ local function claiming_from_box(prop, path, box_idx, eliminate)
                 kind = "claiming",
                 cells = confined,
                 values = { v },
-                unit = { type = "box", index = box_idx },
-                target = { type = "col", index = col },
+                unit = units.box_unit(box_idx),
+                target = units.col_unit(col),
             }
             for row = 0, 8 do
                 if row < start_row or row >= start_row + 3 then
@@ -118,12 +121,12 @@ function locked_candidates.apply(prop, path)
         return false
     end
     for r = 0, 8 do
-        if pointing_from_line(prop, path, "row", r, true, eliminate) then
+        if pointing_from_line(prop, path, units.row_unit(r), eliminate) then
             changed = true
         end
     end
     for col = 0, 8 do
-        if pointing_from_line(prop, path, "col", col, false, eliminate) then
+        if pointing_from_line(prop, path, units.col_unit(col), eliminate) then
             changed = true
         end
     end

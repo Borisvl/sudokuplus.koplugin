@@ -35,17 +35,18 @@ local function process_unit(prop, path, unit_cells, unit)
                     and #cell_lists[3] <= 3
                 then
                     local all = {}
-                    local function add(cell)
-                        for _, existing in ipairs(all) do
-                            if existing == cell then
-                                return
-                            end
-                        end
-                        all[#all + 1] = cell
-                    end
                     for i = 1, 3 do
                         for _, cell in ipairs(cell_lists[i]) do
-                            add(cell)
+                            local dup = false
+                            for _, existing in ipairs(all) do
+                                if existing[1] == cell[1] and existing[2] == cell[2] then
+                                    dup = true
+                                    break
+                                end
+                            end
+                            if not dup then
+                                all[#all + 1] = cell
+                            end
                         end
                     end
                     if #all == 3 then
@@ -80,21 +81,11 @@ end
 
 function hidden_triples.apply(prop, path)
     local changed = false
-    for r = 0, 8 do
-        if process_unit(prop, path, units.row_cells(r), { type = "row", index = r }) then
+    units.for_each_unit(function(unit, cells)
+        if process_unit(prop, path, cells, unit) then
             changed = true
         end
-    end
-    for col = 0, 8 do
-        if process_unit(prop, path, units.col_cells(col), { type = "col", index = col }) then
-            changed = true
-        end
-    end
-    for box_idx = 0, 8 do
-        if process_unit(prop, path, units.box_cells(box_idx), { type = "box", index = box_idx }) then
-            changed = true
-        end
-    end
+    end)
     return changed
 end
 

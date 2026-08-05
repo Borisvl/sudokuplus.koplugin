@@ -24,7 +24,14 @@ local function process_unit(prop, path, unit_cells, unit)
                     end
                 end
             end
-            if #cells1 == 2 and #cells2 == 2 and cells1[1] == cells2[1] and cells1[2] == cells2[2] then
+            if
+                #cells1 == 2
+                and #cells2 == 2
+                and cells1[1][1] == cells2[1][1]
+                and cells1[1][2] == cells2[1][2]
+                and cells1[2][1] == cells2[2][1]
+                and cells1[2][2] == cells2[2][2]
+            then
                 local keep_mask = bit.bor(n1_bit, n2_bit)
                 local pattern = {
                     kind = "hidden_pair",
@@ -54,21 +61,11 @@ end
 
 function hidden_pairs.apply(prop, path)
     local changed = false
-    for r = 0, 8 do
-        if process_unit(prop, path, units.row_cells(r), { type = "row", index = r }) then
+    units.for_each_unit(function(unit, cells)
+        if process_unit(prop, path, cells, unit) then
             changed = true
         end
-    end
-    for col = 0, 8 do
-        if process_unit(prop, path, units.col_cells(col), { type = "col", index = col }) then
-            changed = true
-        end
-    end
-    for box_idx = 0, 8 do
-        if process_unit(prop, path, units.box_cells(box_idx), { type = "box", index = box_idx }) then
-            changed = true
-        end
-    end
+    end)
     return changed
 end
 

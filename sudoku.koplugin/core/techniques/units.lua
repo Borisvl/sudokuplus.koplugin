@@ -7,6 +7,9 @@ local units = {}
 local ROW_CELLS = {}
 local COL_CELLS = {}
 local BOX_CELLS = {}
+local ROW_UNITS = {}
+local COL_UNITS = {}
+local BOX_UNITS = {}
 
 for i = 0, 8 do
     local row = {}
@@ -17,6 +20,8 @@ for i = 0, 8 do
     end
     ROW_CELLS[i + 1] = row
     COL_CELLS[i + 1] = col
+    ROW_UNITS[i + 1] = { type = "row", index = i }
+    COL_UNITS[i + 1] = { type = "col", index = i }
 
     local start_row = math.floor(i / 3) * 3
     local start_col = (i % 3) * 3
@@ -25,6 +30,7 @@ for i = 0, 8 do
         box[k + 1] = { start_row + math.floor(k / 3), start_col + k % 3 }
     end
     BOX_CELLS[i + 1] = box
+    BOX_UNITS[i + 1] = { type = "box", index = i }
 end
 
 function units.row_cells(r)
@@ -37,6 +43,33 @@ end
 
 function units.box_cells(box_idx)
     return BOX_CELLS[box_idx + 1]
+end
+
+-- Shared unit descriptors; treat as immutable. They are referenced from
+-- pattern metadata on solve steps.
+function units.row_unit(r)
+    return ROW_UNITS[r + 1]
+end
+
+function units.col_unit(c)
+    return COL_UNITS[c + 1]
+end
+
+function units.box_unit(box_idx)
+    return BOX_UNITS[box_idx + 1]
+end
+
+-- Iterates every unit in rustoku's fixed order (rows, then columns, then boxes).
+function units.for_each_unit(fn)
+    for i = 1, 9 do
+        fn(ROW_UNITS[i], ROW_CELLS[i])
+    end
+    for i = 1, 9 do
+        fn(COL_UNITS[i], COL_CELLS[i])
+    end
+    for i = 1, 9 do
+        fn(BOX_UNITS[i], BOX_CELLS[i])
+    end
 end
 
 function units.find_units_with_n_candidates(candidate_bit, n, c, b, unit_type)

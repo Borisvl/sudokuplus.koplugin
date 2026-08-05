@@ -39,6 +39,35 @@ describe("core.techniques.units", function()
         assert.are.same({ 8, 8 }, box8[9])
     end)
 
+    it("provides shared immutable unit descriptors", function()
+        assert.are.same({ type = "row", index = 3 }, units.row_unit(3))
+        assert.are.same({ type = "col", index = 5 }, units.col_unit(5))
+        assert.are.same({ type = "box", index = 7 }, units.box_unit(7))
+        assert.is_true(units.row_unit(3) == units.row_unit(3))
+        assert.is_true(units.col_unit(5) == units.col_unit(5))
+        assert.is_true(units.box_unit(7) == units.box_unit(7))
+    end)
+
+    it("iterates every unit in rows, columns, boxes order", function()
+        local seen = {}
+        units.for_each_unit(function(unit, cells)
+            assert.are.equal(9, #cells)
+            seen[#seen + 1] = unit.type .. unit.index
+        end)
+        assert.are.equal(27, #seen)
+        local expected = {}
+        for r = 0, 8 do
+            expected[#expected + 1] = "row" .. r
+        end
+        for c = 0, 8 do
+            expected[#expected + 1] = "col" .. c
+        end
+        for b = 0, 8 do
+            expected[#expected + 1] = "box" .. b
+        end
+        assert.are.same(expected, seen)
+    end)
+
     it("finds units with exactly n occurrences of a candidate", function()
         local b = board.new()
         local c = candidates.new()

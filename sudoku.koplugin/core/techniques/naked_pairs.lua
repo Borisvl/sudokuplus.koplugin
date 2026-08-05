@@ -28,8 +28,8 @@ local function process_unit(prop, path, unit_cells, unit)
                     unit = unit,
                 }
                 for _, cell in ipairs(unit_cells) do
-                    if cell ~= a.cell and cell ~= b.cell then
-                        local r, col = cell[1], cell[2]
+                    local r, col = cell[1], cell[2]
+                    if (r ~= a.cell[1] or col ~= a.cell[2]) and (r ~= b.cell[1] or col ~= b.cell[2]) then
                         if prop:is_empty(r, col) and bit.band(prop:cand(r, col), a.mask) ~= 0 then
                             changed = prop:eliminate_multiple_candidates(
                                 r,
@@ -50,21 +50,11 @@ end
 
 function naked_pairs.apply(prop, path)
     local changed = false
-    for r = 0, 8 do
-        if process_unit(prop, path, units.row_cells(r), { type = "row", index = r }) then
+    units.for_each_unit(function(unit, cells)
+        if process_unit(prop, path, cells, unit) then
             changed = true
         end
-    end
-    for col = 0, 8 do
-        if process_unit(prop, path, units.col_cells(col), { type = "col", index = col }) then
-            changed = true
-        end
-    end
-    for box_idx = 0, 8 do
-        if process_unit(prop, path, units.box_cells(box_idx), { type = "box", index = box_idx }) then
-            changed = true
-        end
-    end
+    end)
     return changed
 end
 
