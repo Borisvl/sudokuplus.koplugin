@@ -21,7 +21,8 @@ local ONE_PUZZLE = "530070000600195000098000060800060003400803001700020006060000
 local TWO_PUZZLE = "295743861431865900876192543387459216612387495549216738763504189928671354154938600"
 local SIX_PUZZLE = "295743001431865900876192543387459216612387495549216738763500000000000000000000000"
 
-local singles = bit.bor(flags.NAKED_SINGLES, flags.HIDDEN_SINGLES)
+-- All techniques implemented so far (easy + medium tiers).
+local all_implemented = bit.bor(flags.EASY, flags.MEDIUM)
 
 describe("core.techniques.propagator", function()
     it("does nothing when no techniques are enabled", function()
@@ -134,7 +135,7 @@ describe("core.techniques.propagator", function()
             local plain = solver.new(board.from_string(puzzle), { rng = require("core.prng").new(7) })
             local tech = solver.new(board.from_string(puzzle), {
                 rng = require("core.prng").new(7),
-                techniques = singles,
+                techniques = all_implemented,
             })
             local a = plain:solve_all()
             local b = tech:solve_all()

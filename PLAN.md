@@ -160,7 +160,9 @@ duplication).
       fixed technique order, restart-on-change, dead-end rollback;
       `solve_path.lua` pattern field; solver `opts.techniques` hook) +
       naked singles, hidden singles
-- [ ] M2b Medium: naked/hidden pairs, locked candidates, naked/hidden triples
+- [x] M2b Medium: naked/hidden pairs, locked candidates, naked/hidden triples
+      (HoDoKu n201, h201, lc101, l302, h301; all five example puzzles solve
+      guess-free with the seven implemented techniques)
 - [ ] M2c Hard: X-Wing, naked/hidden quads, Swordfish, Jellyfish, Skyscraper
 - [ ] M2d Expert: W-Wing, XY-Wing, XYZ-Wing, AIC
 
