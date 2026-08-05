@@ -15,6 +15,7 @@ local masks_add = masks.add_number
 local masks_remove = masks.remove_number
 local cand_get = candidates.get
 local cand_set = candidates.set
+local cand_update_for = candidates.update_affected_cells_for
 local cand_update = candidates.update_affected_cells
 local path_push = solve_path.push
 local path_placement = solve_path.placement_step
@@ -124,7 +125,7 @@ function mt:place_and_update(r, c, num, technique_flags, path, pattern)
     local affected = self:count_affected_cells(r, c)
     local eliminated = self:count_candidates_eliminated(r, c, num)
 
-    cand_update(self.candidates, r, c, self.masks, self.board)
+    cand_update_for(self.candidates, r, c, self.masks, self.board, num)
 
     local step = path_placement(r, c, num, technique_flags, pattern)
     step.candidates_eliminated = eliminated

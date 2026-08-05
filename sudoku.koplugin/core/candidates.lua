@@ -1,6 +1,7 @@
 local bit = require("bit")
 local board = require("core.board")
 local masks = require("core.masks")
+local flags = require("core.techniques.flags")
 
 local candidates = {}
 
@@ -35,12 +36,7 @@ function candidates.get_candidates(c, r, col)
 end
 
 function candidates.count(mask)
-    local count = 0
-    while mask ~= 0 do
-        mask = bit.band(mask, mask - 1)
-        count = count + 1
-    end
-    return count
+    return flags.count(mask)
 end
 
 function candidates.update_affected_cells(c, r, col, m, b)

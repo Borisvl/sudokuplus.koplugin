@@ -39,50 +39,6 @@ function units.box_cells(box_idx)
     return BOX_CELLS[box_idx + 1]
 end
 
-function units.sees(r1, c1, r2, c2)
-    return r1 == r2
-        or c1 == c2
-        or (math.floor(r1 / 3) == math.floor(r2 / 3) and math.floor(c1 / 3) == math.floor(c2 / 3))
-end
-
-function units.peers_of(r, c)
-    local peers = {}
-    for i = 0, 8 do
-        if i ~= c then
-            peers[#peers + 1] = { r, i }
-        end
-        if i ~= r then
-            peers[#peers + 1] = { i, c }
-        end
-    end
-    local start_row = math.floor(r / 3) * 3
-    local start_col = math.floor(c / 3) * 3
-    for br = start_row, start_row + 2 do
-        for bc = start_col, start_col + 2 do
-            if br ~= r and bc ~= c then
-                peers[#peers + 1] = { br, bc }
-            end
-        end
-    end
-    return peers
-end
-
-function units.bivalue_cells(c, b)
-    local cells = {}
-    for r = 0, 8 do
-        for col = 0, 8 do
-            if board.is_empty(b, r, col) then
-                local mask = candidates.get(c, r, col)
-                local rest = bit.band(mask, mask - 1)
-                if rest ~= 0 and bit.band(rest, rest - 1) == 0 then
-                    cells[#cells + 1] = { r, col, mask }
-                end
-            end
-        end
-    end
-    return cells
-end
-
 function units.find_units_with_n_candidates(candidate_bit, n, c, b, unit_type)
     local result = {}
     for i = 0, 8 do

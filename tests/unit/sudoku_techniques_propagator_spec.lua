@@ -6,6 +6,7 @@ local candidates = require("core.candidates")
 local solve_path = require("core.solve_path")
 local solver = require("core.solver")
 local flags = require("core.techniques.flags")
+local propagator = require("core.techniques.propagator")
 
 -- HoDoKu naked single example (single empty cell at (8,8), only candidate 6).
 local NAKED_SINGLE_PUZZLE = "385421967194756328627983145571892634839645271246137589462579813918364752753218490"
@@ -16,6 +17,11 @@ local HIDDEN_SINGLE_PUZZLE = "00800700001608300000000005110729000000000000000004
 -- 1 at (0,0) empties the candidates of (1,1), so propagation dead-ends and must
 -- roll back.
 local INCONSISTENT = "023456789405789236678000000250000000380000000790000000530000000840000000960000000"
+local ONE_PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+local TWO_PUZZLE = "295743861431865900876192543387459216612387495549216738763504189928671354154938600"
+local SIX_PUZZLE = "295743001431865900876192543387459216612387495549216738763500000000000000000000000"
+
+local singles = bit.bor(flags.NAKED_SINGLES, flags.HIDDEN_SINGLES)
 
 describe("core.techniques.propagator", function()
     it("does nothing when no techniques are enabled", function()
@@ -121,5 +127,79 @@ describe("core.techniques.propagator", function()
             assert.are.equal(0, step.flags)
             assert.is_nil(step.pattern)
         end
+    end)
+
+    it("techniques-enabled solving matches the plain solver (solution parity)", function()
+        for _, puzzle in ipairs({ ONE_PUZZLE, TWO_PUZZLE, SIX_PUZZLE }) do
+            local plain = solver.new(board.from_string(puzzle), { rng = require("core.prng").new(7) })
+            local tech = solver.new(board.from_string(puzzle), {
+                rng = require("core.prng").new(7),
+                techniques = singles,
+            })
+            local a = plain:solve_all()
+            local b = tech:solve_all()
+            assert.are.equal(#a, #b, "solution count parity for " .. puzzle:sub(1, 8))
+            for i = 1, #a do
+                assert.are.equal(
+                    board.to_string(a[i].board),
+                    board.to_string(b[i].board),
+                    "solution board parity for " .. puzzle:sub(1, 8)
+                )
+            end
+        end
+    end)
+
+    it("eliminate_candidate removes the candidate, records a step, and reports no-op", function()
+        local s = solver.new(board.from_string(INCONSISTENT), { techniques = 0 })
+        local p = propagator.new(s.board, s.masks, s.candidates, 0)
+        local path = solve_path.new()
+        local mask = p:cand(0, 0)
+        assert.are.equal(1, mask)
+        local bit1 = bit.lshift(1, 0)
+
+        assert.is_true(p:eliminate_candidate(0, 0, bit1, flags.NAKED_SINGLES, path, { kind = "test" }))
+        assert.are.equal(0, p:cand(0, 0))
+        assert.are.equal(1, #path.steps)
+        assert.are.equal("elim", path.steps[1].type)
+        assert.are.equal(flags.NAKED_SINGLES, path.steps[1].flags)
+        assert.are.equal(1, path.steps[1].candidates_eliminated)
+        assert.are.same({ kind = "test" }, path.steps[1].pattern)
+    end)
+
+    it("eliminate_multiple_candidates records one step per eliminated candidate", function()
+        local s = solver.new(board.from_string(INCONSISTENT), { techniques = 0 })
+        local p = propagator.new(s.board, s.masks, s.candidates, 0)
+        local path = solve_path.new()
+        local mask = p:cand(3, 2)
+        local rest = bit.band(mask, mask - 1)
+        local b1 = mask - rest
+        local b2 = rest - bit.band(rest, rest - 1)
+        local two = bit.bor(b1, b2)
+
+        assert.is_true(p:eliminate_multiple_candidates(3, 2, two, flags.NAKED_SINGLES, path, { kind = "test" }))
+        assert.are.equal(2, #path.steps)
+        assert.are.equal(0, bit.band(p:cand(3, 2), two))
+        for _, step in ipairs(path.steps) do
+            assert.are.equal("elim", step.type)
+            assert.are.equal(2, step.candidates_eliminated)
+        end
+    end)
+
+    it("rollback restores eliminated candidates", function()
+        local s = solver.new(board.from_string(INCONSISTENT), { techniques = 0 })
+        local p = propagator.new(s.board, s.masks, s.candidates, 0)
+        local path = solve_path.new()
+        local before0 = p:cand(0, 0)
+        local before32 = p:cand(3, 2)
+
+        p:eliminate_candidate(0, 0, 1, flags.NAKED_SINGLES, path, { kind = "test" })
+        local rest = bit.band(p:cand(3, 2), p:cand(3, 2) - 1)
+        local two = bit.bor(p:cand(3, 2) - rest, rest - bit.band(rest, rest - 1))
+        p:eliminate_multiple_candidates(3, 2, two, flags.NAKED_SINGLES, path, { kind = "test" })
+
+        p:rollback(path, 0)
+        assert.are.equal(0, #path.steps)
+        assert.are.equal(before0, p:cand(0, 0))
+        assert.are.equal(before32, p:cand(3, 2))
     end)
 end)
