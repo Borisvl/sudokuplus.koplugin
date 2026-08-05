@@ -9,26 +9,28 @@ function solve_path.push(path, step)
     path.steps[#path.steps + 1] = step
 end
 
-function solve_path.placement_step(row, col, value, flags)
+function solve_path.placement_step(row, col, value, flags, pattern)
     return {
         type = "place",
         row = row,
         col = col,
         value = value,
         flags = flags or 0,
+        pattern = pattern,
         candidates_eliminated = 0,
         related_cell_count = 0,
         difficulty_point = 0,
     }
 end
 
-function solve_path.elimination_step(row, col, value, flags)
+function solve_path.elimination_step(row, col, value, flags, pattern)
     return {
         type = "elim",
         row = row,
         col = col,
         value = value,
         flags = flags or 0,
+        pattern = pattern,
         candidates_eliminated = 0,
         related_cell_count = 0,
         difficulty_point = 0,

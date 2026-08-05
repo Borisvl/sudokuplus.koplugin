@@ -142,16 +142,32 @@ metatable).
 
 ### M2 — Techniques (port per tier, test-first each)
 
-- [ ] M2a Easy: naked singles, hidden singles
+Refined plan: rustoku **parity for propagation** — the technique fixpoint
+runs once at solve start (`solve_until`), then plain backtracking with
+empty-flag placements; a puzzle needing techniques mid-solve is classified
+"requires guessing" (M3 semantics). `solve_all` = `solve_until(0)` (unchanged,
+rayon not ported). Divergence (design decision #2) stays: every technique
+step carries `pattern` metadata — generic shape `{ kind, cells, values,
+unit? }` plus per-technique extras (skyscraper base/roof, wing pivot/pincers,
+fish base/cover, AIC chain nodes); elimination steps from one pattern share
+the pattern table. Shared helpers (`sees`, `peers_of`, `bivalue_cells`)
+consolidated into `units.lua` (small factoring over rustoku's per-file
+duplication).
+
+- [x] M2a Easy: scaffolding (`techniques/flags.lua` — bitflags, tiers,
+      difficulty, bit helpers; `techniques/units.lua` — row/col/box cells,
+      `find_units_with_n_candidates`; `techniques/propagator.lua` — mediator,
+      fixed technique order, restart-on-change, dead-end rollback;
+      `solve_path.lua` pattern field; solver `opts.techniques` hook) +
+      naked singles, hidden singles
 - [ ] M2b Medium: naked/hidden pairs, locked candidates, naked/hidden triples
 - [ ] M2c Hard: X-Wing, naked/hidden quads, Swordfish, Jellyfish, Skyscraper
 - [ ] M2d Expert: W-Wing, XY-Wing, XYZ-Wing, AIC
-- [ ] `solve_path.lua`: steps record technique flags + pattern metadata
-- [ ] `propagator.lua`: deterministic iteration loop, rollback on dead ends
 
 **Exit criteria**: every technique matches its HoDoKu example (eliminations
 and placements), whole-puzzle solve paths correct; each technique has its
-own failing-then-green spec.
+own failing-then-green spec; parity spec (techniques-enabled `solve_all`
+≡ plain solver on the 1/2/6-solution puzzles); determinism with seeded PRNG.
 
 ### M3 — Solve path, difficulty, generation
 

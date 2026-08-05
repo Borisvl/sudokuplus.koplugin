@@ -3,6 +3,7 @@ local candidates = require("core.candidates")
 local masks = require("core.masks")
 local prng = require("core.prng")
 local solve_path = require("core.solve_path")
+local propagator = require("core.techniques.propagator")
 
 local solver = {}
 local mt = {}
@@ -63,6 +64,7 @@ function solver.new(b, opts)
         masks = m,
         candidates = c,
         rng = (opts or {}).rng or prng.new(),
+        techniques = (opts or {}).techniques or 0,
     }
     return setmetatable(state, mt)
 end
@@ -127,8 +129,19 @@ end
 function mt:solve_until(bound)
     local solutions = {}
     local path = solve_path.new()
+    if self.techniques ~= 0 then
+        local prop = propagator.new(self.board, self.masks, self.candidates, self.techniques)
+        if not prop:propagate_constraints(path, 0) then
+            return solutions
+        end
+    end
     solve_until_recursive(self, solutions, path, bound)
     return solutions
+end
+
+function mt:propagate(path)
+    local prop = propagator.new(self.board, self.masks, self.candidates, self.techniques)
+    return prop:propagate_constraints(path, 0)
 end
 
 function mt:solve_any()
