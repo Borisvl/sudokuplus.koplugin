@@ -139,12 +139,14 @@ function mt:eliminate_candidate(r, c, candidate_bit, technique_flags, path, patt
     local refined = bit.band(initial, bit.bnot(candidate_bit))
     cand_set(self.candidates, r, c, refined)
 
-    local num = flags.lowest_bit(candidate_bit) + 1
-    local step = path_elimination(r, c, num, technique_flags, pattern)
-    step.candidates_eliminated = 1
-    step.related_cell_count = 1
-    step.difficulty_point = flags.difficulty_point(technique_flags)
-    path_push(path, step)
+    if initial ~= refined then
+        local num = flags.lowest_bit(candidate_bit) + 1
+        local step = path_elimination(r, c, num, technique_flags, pattern)
+        step.candidates_eliminated = 1
+        step.related_cell_count = 1
+        step.difficulty_point = flags.difficulty_point(technique_flags)
+        path_push(path, step)
+    end
 
     return initial ~= refined
 end

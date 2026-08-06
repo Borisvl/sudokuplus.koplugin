@@ -32,34 +32,11 @@ local function crossing_type(unit_type)
     return "row"
 end
 
--- All combinations of `size` indices from 1..count.
-local function combinations(count, size)
-    local result = {}
-    local combo = {}
-    local function rec(start)
-        if #combo == size then
-            local copy = {}
-            for i = 1, size do
-                copy[i] = combo[i]
-            end
-            result[#result + 1] = copy
-            return
-        end
-        for i = start, count do
-            combo[#combo + 1] = i
-            rec(i + 1)
-            combo[#combo] = nil
-        end
-    end
-    rec(1)
-    return result
-end
-
 local function process_orientation(prop, path, candidate_bit, unit_type, size, technique_flags, kind)
     local changed = false
     local eligible =
         units.find_units_with_candidate_count_range(candidate_bit, 2, size, prop.candidates, prop.board, unit_type)
-    for _, combo in ipairs(combinations(#eligible, size)) do
+    units.for_each_combination(#eligible, size, function(combo)
         local base_lines, cover_mask = {}, 0
         for _, i in ipairs(combo) do
             local entry = eligible[i]
@@ -118,7 +95,7 @@ local function process_orientation(prop, path, candidate_bit, unit_type, size, t
                 end
             end
         end
-    end
+    end)
     return changed
 end
 

@@ -142,7 +142,18 @@ describe("core.techniques.propagator", function()
     end)
 
     it("techniques-enabled solving matches the plain solver (solution parity)", function()
-        for _, puzzle in ipairs({ ONE_PUZZLE, TWO_PUZZLE, SIX_PUZZLE }) do
+        -- Easy multi-solution puzzles plus every hard-tier HoDoKu example: the
+        -- hard techniques only fire on the latter, so this actually exercises
+        -- the EASY|MEDIUM|HARD tier.
+        local puzzles = {
+            ONE_PUZZLE,
+            TWO_PUZZLE,
+            SIX_PUZZLE,
+        }
+        for _, entry in ipairs(HARD_PUZZLES) do
+            puzzles[#puzzles + 1] = entry[2]
+        end
+        for _, puzzle in ipairs(puzzles) do
             local plain = solver.new(board.from_string(puzzle), { rng = require("core.prng").new(7) })
             local tech = solver.new(board.from_string(puzzle), {
                 rng = require("core.prng").new(7),
@@ -193,6 +204,10 @@ describe("core.techniques.propagator", function()
         assert.are.equal(flags.NAKED_SINGLES, path.steps[1].flags)
         assert.are.equal(1, path.steps[1].candidates_eliminated)
         assert.are.same({ kind = "test" }, path.steps[1].pattern)
+
+        -- Re-eliminating an absent candidate is a no-op: no step is recorded.
+        assert.is_false(p:eliminate_candidate(0, 0, bit1, flags.NAKED_SINGLES, path, { kind = "test" }))
+        assert.are.equal(1, #path.steps)
     end)
 
     it("eliminate_multiple_candidates records one step per eliminated candidate", function()

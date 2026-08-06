@@ -27,47 +27,31 @@ local function process_unit(prop, path, unit_cells, unit)
             end
         end
     end
-    local combo = {}
-    local function rec(start)
-        if #combo == 4 then
-            local union = 0
-            local pattern = {
-                kind = "naked_quad",
-                cells = {},
-                values = {},
-                unit = unit,
-            }
-            for _, i in ipairs(combo) do
-                union = bit.bor(union, eligible[i].mask)
-                pattern.cells[#pattern.cells + 1] = eligible[i].cell
-            end
-            if flags.count(union) == 4 then
-                pattern.values = candidates.from_mask(union)
-                for _, cell in ipairs(unit_cells) do
-                    local r, col = cell[1], cell[2]
-                    if prop:is_empty(r, col) and not is_pattern_cell(pattern, r, col) then
-                        if bit.band(prop:cand(r, col), union) ~= 0 then
-                            changed = prop:eliminate_multiple_candidates(
-                                r,
-                                col,
-                                union,
-                                naked_quads.flags(),
-                                path,
-                                pattern
-                            ) or changed
-                        end
+    units.for_each_combination(#eligible, 4, function(combo)
+        local union = 0
+        local pattern = {
+            kind = "naked_quad",
+            cells = {},
+            values = {},
+            unit = unit,
+        }
+        for _, i in ipairs(combo) do
+            union = bit.bor(union, eligible[i].mask)
+            pattern.cells[#pattern.cells + 1] = eligible[i].cell
+        end
+        if flags.count(union) == 4 then
+            pattern.values = candidates.from_mask(union)
+            for _, cell in ipairs(unit_cells) do
+                local r, col = cell[1], cell[2]
+                if prop:is_empty(r, col) and not is_pattern_cell(pattern, r, col) then
+                    if bit.band(prop:cand(r, col), union) ~= 0 then
+                        changed = prop:eliminate_multiple_candidates(r, col, union, naked_quads.flags(), path, pattern)
+                            or changed
                     end
                 end
             end
-            return
         end
-        for i = start, #eligible do
-            combo[#combo + 1] = i
-            rec(i + 1)
-            combo[#combo] = nil
-        end
-    end
-    rec(1)
+    end)
     return changed
 end
 

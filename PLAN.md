@@ -176,7 +176,8 @@ duplication).
 and placements), whole-puzzle solve paths correct (all six M2c examples solve
 guess-free with the thirteen techniques); each technique has its own
 failing-then-green spec; parity spec (techniques-enabled `solve_all` ≡ plain
-solver on the 1/2/6-solution puzzles, now with `EASY|MEDIUM|HARD`); 
+solver on the 1/2/6-solution puzzles **and** all six HoDoKu hard examples,
+which is what actually exercises the `EASY|MEDIUM|HARD` tier);
 determinism with seeded PRNG.
 
 ### M3 — Solve path, difficulty, generation

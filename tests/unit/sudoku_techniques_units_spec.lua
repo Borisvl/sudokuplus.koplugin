@@ -135,4 +135,44 @@ describe("core.techniques.units", function()
         assert.is_false(units.sees(2, 3, 5, 6))
         assert.is_false(units.sees(0, 4, 4, 7))
     end)
+
+    it("iterates all combinations of size k from 1..n", function()
+        local combos = {}
+        units.for_each_combination(4, 2, function(combo)
+            combos[#combos + 1] = { combo[1], combo[2] }
+        end)
+        assert.are.same({ { 1, 2 }, { 1, 3 }, { 1, 4 }, { 2, 3 }, { 2, 4 }, { 3, 4 } }, combos)
+
+        local combos4 = {}
+        units.for_each_combination(9, 4, function(combo)
+            combos4[#combos4 + 1] = combo
+        end)
+        assert.are.equal(126, #combos4)
+        for _, combo in ipairs(combos4) do
+            assert.are.equal(4, #combo)
+            assert.is_true(combo[1] < combo[2] and combo[2] < combo[3] and combo[3] < combo[4])
+        end
+    end)
+
+    it("yields no combinations when n < k or k == 0", function()
+        local count = 0
+        units.for_each_combination(2, 4, function()
+            count = count + 1
+        end)
+        assert.are.equal(0, count)
+        units.for_each_combination(0, 0, function()
+            count = count + 1
+        end)
+        assert.are.equal(0, count)
+    end)
+
+    it("passes fresh tables that can be retained by the callback", function()
+        local retained = {}
+        units.for_each_combination(3, 2, function(combo)
+            retained[#retained + 1] = combo
+        end)
+        for _, combo in ipairs(retained) do
+            assert.are.equal(2, #combo)
+        end
+    end)
 end)

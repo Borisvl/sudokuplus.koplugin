@@ -109,4 +109,30 @@ function units.sees(r1, c1, r2, c2)
         or (math.floor(r1 / 3) == math.floor(r2 / 3) and math.floor(c1 / 3) == math.floor(c2 / 3))
 end
 
+-- Invokes fn(combo) for every combination of `size` indices from 1..count, in
+-- lexicographic order. fn receives a fresh table it may retain; no calls are
+-- made when count < size or size <= 0.
+function units.for_each_combination(count, size, fn)
+    if size <= 0 or count < size then
+        return
+    end
+    local combo = {}
+    local function rec(start)
+        if #combo == size then
+            local copy = {}
+            for i = 1, size do
+                copy[i] = combo[i]
+            end
+            fn(copy)
+            return
+        end
+        for i = start, count do
+            combo[#combo + 1] = i
+            rec(i + 1)
+            combo[#combo] = nil
+        end
+    end
+    rec(1)
+end
+
 return units
