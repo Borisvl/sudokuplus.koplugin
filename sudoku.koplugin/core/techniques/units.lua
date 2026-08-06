@@ -73,6 +73,10 @@ function units.for_each_unit(fn)
 end
 
 function units.find_units_with_n_candidates(candidate_bit, n, c, b, unit_type)
+    return units.find_units_with_candidate_count_range(candidate_bit, n, n, c, b, unit_type)
+end
+
+function units.find_units_with_candidate_count_range(candidate_bit, min_n, max_n, c, b, unit_type)
     local result = {}
     for i = 0, 8 do
         local cells
@@ -92,11 +96,17 @@ function units.find_units_with_n_candidates(candidate_bit, n, c, b, unit_type)
                 end
             end
         end
-        if #positions == n then
+        if #positions >= min_n and #positions <= max_n then
             result[#result + 1] = { i, positions }
         end
     end
     return result
+end
+
+function units.sees(r1, c1, r2, c2)
+    return r1 == r2
+        or c1 == c2
+        or (math.floor(r1 / 3) == math.floor(r2 / 3) and math.floor(c1 / 3) == math.floor(c2 / 3))
 end
 
 return units

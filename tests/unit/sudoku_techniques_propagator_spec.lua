@@ -21,8 +21,19 @@ local ONE_PUZZLE = "530070000600195000098000060800060003400803001700020006060000
 local TWO_PUZZLE = "295743861431865900876192543387459216612387495549216738763504189928671354154938600"
 local SIX_PUZZLE = "295743001431865900876192543387459216612387495549216738763500000000000000000000000"
 
--- All techniques implemented so far (easy + medium tiers).
-local all_implemented = bit.bor(flags.EASY, flags.MEDIUM)
+-- All techniques implemented so far (easy, medium, and hard tiers).
+local all_implemented = bit.bor(flags.EASY, flags.MEDIUM, flags.HARD)
+
+-- HoDoKu hard-tier examples: x-wing (bf201), swordfish (bf301), jellyfish
+-- (bf401), skyscraper (sk01), naked quads (n401), hidden quads (h401).
+local HARD_PUZZLES = {
+    { "x_wing", "000000000760003002002640009403900070000004903005000020010560000370090041000000060" },
+    { "swordfish", "160540070008001030030800000700050069600902057000000000000030040000000016000164500" },
+    { "jellyfish", "200000003080030050003402100001205400000090000009308600002506900090020070400000001" },
+    { "skyscraper", "000000000001902060000006790902000600370000950005000004140003005709024000000800000" },
+    { "naked_quad", "000000060000030047032500000600007005207010908081004000000002000000000001005870000" },
+    { "hidden_quad", "800570290390000000000200000001000508000496000000800000209000001008000070560000082" },
+}
 
 describe("core.techniques.propagator", function()
     it("does nothing when no techniques are enabled", function()
@@ -147,6 +158,23 @@ describe("core.techniques.propagator", function()
                     "solution board parity for " .. puzzle:sub(1, 8)
                 )
             end
+        end
+    end)
+
+    it("solves every hard-tier HoDoKu example guess-free with all techniques", function()
+        for _, entry in ipairs(HARD_PUZZLES) do
+            local name, puzzle = entry[1], entry[2]
+            local s = solver.new(board.from_string(puzzle), { techniques = all_implemented })
+            local path = solve_path.new()
+            assert.is_true(s:propagate(path), name .. " propagation should not dead-end")
+            assert.are.equal(81, board.count_clues(s.board), name .. " should solve guess-free")
+            local used_target = false
+            for _, step in ipairs(path.steps) do
+                if step.pattern and step.pattern.kind == name then
+                    used_target = true
+                end
+            end
+            assert.is_true(used_target, name .. " technique should appear in the solve path")
         end
     end)
 

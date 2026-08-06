@@ -163,13 +163,21 @@ duplication).
 - [x] M2b Medium: naked/hidden pairs, locked candidates, naked/hidden triples
       (HoDoKu n201, h201, lc101, l302, h301; all five example puzzles solve
       guess-free with the seven implemented techniques)
-- [ ] M2c Hard: X-Wing, naked/hidden quads, Swordfish, Jellyfish, Skyscraper
+- [x] M2c Hard: X-Wing, naked/hidden quads, Swordfish, Jellyfish, Skyscraper
+      (HoDoKu bf201, bf301, bf401, sk01, n401, h401; all six solve guess-free
+      with the thirteen implemented techniques). Divergence from rustoku: the
+      three fish techniques share one generic engine (`techniques/fish.lua`,
+      size 2/3/4) instead of rustoku's per-file duplication; pattern metadata
+      for fish records `base`/`cover` line units, for skyscraper `base`/`roof`
+      cells.
 - [ ] M2d Expert: W-Wing, XY-Wing, XYZ-Wing, AIC
 
 **Exit criteria**: every technique matches its HoDoKu example (eliminations
-and placements), whole-puzzle solve paths correct; each technique has its
-own failing-then-green spec; parity spec (techniques-enabled `solve_all`
-≡ plain solver on the 1/2/6-solution puzzles); determinism with seeded PRNG.
+and placements), whole-puzzle solve paths correct (all six M2c examples solve
+guess-free with the thirteen techniques); each technique has its own
+failing-then-green spec; parity spec (techniques-enabled `solve_all` ≡ plain
+solver on the 1/2/6-solution puzzles, now with `EASY|MEDIUM|HARD`); 
+determinism with seeded PRNG.
 
 ### M3 — Solve path, difficulty, generation
 

@@ -93,4 +93,46 @@ describe("core.techniques.units", function()
         assert.are.equal(0, rows_after[1][1])
         assert.are.same({ 1 }, rows_after[1][2])
     end)
+
+    it("finds units with a candidate count within a range", function()
+        local b = board.new()
+        local c = candidates.new()
+        local one_bit = bit.lshift(1, 0)
+        -- Row 0: candidates in columns 0 and 1 (count 2).
+        candidates.set(c, 0, 0, one_bit)
+        candidates.set(c, 0, 1, one_bit)
+        -- Row 2: candidates in columns 3, 5, 7 (count 3).
+        candidates.set(c, 2, 3, one_bit)
+        candidates.set(c, 2, 5, one_bit)
+        candidates.set(c, 2, 7, one_bit)
+
+        local rows = units.find_units_with_candidate_count_range(one_bit, 2, 3, c, b, "row")
+        assert.are.equal(2, #rows)
+        assert.are.equal(0, rows[1][1])
+        assert.are.same({ 0, 1 }, rows[1][2])
+        assert.are.equal(2, rows[2][1])
+        assert.are.same({ 3, 5, 7 }, rows[2][2])
+
+        assert.are.equal(0, #units.find_units_with_candidate_count_range(one_bit, 4, 9, c, b, "row"))
+
+        -- Filled cells are excluded: column 0 drops below the range, the rest stay.
+        board.set(b, 0, 0, 1)
+        local cols = units.find_units_with_candidate_count_range(one_bit, 1, 2, c, b, "col")
+        assert.are.equal(4, #cols)
+        local col_indices = {}
+        for _, entry in ipairs(cols) do
+            col_indices[entry[1]] = true
+        end
+        assert.is_nil(col_indices[0])
+        assert.is_true(col_indices[1] and col_indices[3] and col_indices[5] and col_indices[7])
+    end)
+
+    it("sees cells sharing a row, column, or box", function()
+        assert.is_true(units.sees(2, 3, 2, 7))
+        assert.is_true(units.sees(2, 3, 5, 3))
+        assert.is_true(units.sees(2, 3, 1, 4))
+        assert.is_true(units.sees(2, 3, 2, 3))
+        assert.is_false(units.sees(2, 3, 5, 6))
+        assert.is_false(units.sees(0, 4, 4, 7))
+    end)
 end)
