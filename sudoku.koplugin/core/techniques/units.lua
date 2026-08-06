@@ -1,6 +1,7 @@
 local bit = require("bit")
 local board = require("core.board")
 local candidates = require("core.candidates")
+local flags = require("core.techniques.flags")
 
 local units = {}
 
@@ -133,6 +134,48 @@ function units.for_each_combination(count, size, fn)
         end
     end
     rec(1)
+end
+
+-- Lists { r, c, mask } for every empty cell holding exactly two candidates.
+function units.bivalue_cells(c, b)
+    local result = {}
+    for r = 0, 8 do
+        for col = 0, 8 do
+            if board.is_empty(b, r, col) then
+                local mask = candidates.get(c, r, col)
+                if flags.count(mask) == 2 then
+                    result[#result + 1] = { r, col, mask }
+                end
+            end
+        end
+    end
+    return result
+end
+
+-- Lists every cell sharing a row, column, or box with (r, c), excluding
+-- itself, each cell exactly once.
+function units.peers_of(r, c)
+    local result = {}
+    for col = 0, 8 do
+        if col ~= c then
+            result[#result + 1] = { r, col }
+        end
+    end
+    for row = 0, 8 do
+        if row ~= r then
+            result[#result + 1] = { row, c }
+        end
+    end
+    local box_r = math.floor(r / 3) * 3
+    local box_c = math.floor(c / 3) * 3
+    for br = box_r, box_r + 2 do
+        for bc = box_c, box_c + 2 do
+            if br ~= r and bc ~= c then
+                result[#result + 1] = { br, bc }
+            end
+        end
+    end
+    return result
 end
 
 return units

@@ -175,4 +175,42 @@ describe("core.techniques.units", function()
             assert.are.equal(2, #combo)
         end
     end)
+
+    it("lists bivalue cells with their candidate masks", function()
+        local b = board.new()
+        local c = candidates.new()
+        local bit1 = bit.lshift(1, 0)
+        local bit2 = bit.lshift(1, 1)
+        local bit3 = bit.lshift(1, 2)
+        candidates.set(c, 1, 1, bit.bor(bit1, bit2))
+        candidates.set(c, 3, 5, bit.bor(bit2, bit3))
+        candidates.set(c, 7, 0, bit.bor(bit1, bit2, bit3))
+        board.set(b, 0, 0, 1)
+
+        local bivalue = units.bivalue_cells(c, b)
+        assert.are.equal(2, #bivalue)
+        assert.are.same({ 1, 1 }, { bivalue[1][1], bivalue[1][2] })
+        assert.are.equal(bit.bor(bit1, bit2), bivalue[1][3])
+        assert.are.same({ 3, 5 }, { bivalue[2][1], bivalue[2][2] })
+        assert.are.equal(bit.bor(bit2, bit3), bivalue[2][3])
+    end)
+
+    it("lists all peers of a cell exactly once", function()
+        local peers = units.peers_of(4, 4)
+        local seen = {}
+        for _, cell in ipairs(peers) do
+            local key = cell[1] .. "," .. cell[2]
+            assert.is_nil(seen[key], "duplicate peer " .. key)
+            seen[key] = true
+            assert.is_true(units.sees(4, 4, cell[1], cell[2]))
+            assert.is_false(cell[1] == 4 and cell[2] == 4)
+        end
+        -- row (8) + col (8) + box-only cells (4), excluding self.
+        assert.are.equal(20, #peers)
+        assert.is_true(seen["4,0"])
+        assert.is_true(seen["0,4"])
+        assert.is_true(seen["3,3"])
+        assert.is_true(seen["5,5"])
+        assert.is_nil(seen["0,0"])
+    end)
 end)

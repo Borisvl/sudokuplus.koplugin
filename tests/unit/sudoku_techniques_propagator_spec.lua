@@ -21,8 +21,8 @@ local ONE_PUZZLE = "530070000600195000098000060800060003400803001700020006060000
 local TWO_PUZZLE = "295743861431865900876192543387459216612387495549216738763504189928671354154938600"
 local SIX_PUZZLE = "295743001431865900876192543387459216612387495549216738763500000000000000000000000"
 
--- All techniques implemented so far (easy, medium, and hard tiers).
-local all_implemented = bit.bor(flags.EASY, flags.MEDIUM, flags.HARD)
+-- All techniques implemented so far (easy through expert tiers).
+local all_implemented = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.EXPERT)))
 
 -- HoDoKu hard-tier examples: x-wing (bf201), swordfish (bf301), jellyfish
 -- (bf401), skyscraper (sk01), naked quads (n401), hidden quads (h401).
@@ -33,6 +33,17 @@ local HARD_PUZZLES = {
     { "skyscraper", "000000000001902060000006790902000600370000950005000004140003005709024000000800000" },
     { "naked_quad", "000000060000030047032500000600007005207010908081004000000002000000000001005870000" },
     { "hidden_quad", "800570290390000000000200000001000508000496000000800000209000001008000070560000082" },
+}
+
+-- Expert-tier examples: w-wing (w101), xy-wing (y101), xyz-wing (z101), and
+-- rustoku's chain puzzles (x-chain, xy-chain, discontinuous nice loop).
+local EXPERT_PUZZLES = {
+    { "w_wing", "025100000000009030400708900040000800150400000000060004000000008263040000080390106" },
+    { "xy_wing", "000060000000010863003009000904000000300000704570820000000006580690007000000040030" },
+    { "xyz_wing", "069000000000021000000800400001530080007600050000000100000000003902080010000340205" },
+    { "aic", "3.4.2..8...6.......5..7.3.....68..2.....34....6.15.7...1.........9....6...8217..5" },
+    { "aic", "3...4.52858.........2..........74....1....35..5.6...4..78.....21..2......39..68.." },
+    { "aic", "....8.2....5....4..2...5........7......21..971.4....3...........973..52...8.5136." },
 }
 
 describe("core.techniques.propagator", function()
@@ -142,15 +153,18 @@ describe("core.techniques.propagator", function()
     end)
 
     it("techniques-enabled solving matches the plain solver (solution parity)", function()
-        -- Easy multi-solution puzzles plus every hard-tier HoDoKu example: the
-        -- hard techniques only fire on the latter, so this actually exercises
-        -- the EASY|MEDIUM|HARD tier.
+        -- Easy multi-solution puzzles plus every hard- and expert-tier example:
+        -- the advanced techniques only fire on the latter, so this actually
+        -- exercises the EASY|MEDIUM|HARD|EXPERT tier.
         local puzzles = {
             ONE_PUZZLE,
             TWO_PUZZLE,
             SIX_PUZZLE,
         }
         for _, entry in ipairs(HARD_PUZZLES) do
+            puzzles[#puzzles + 1] = entry[2]
+        end
+        for _, entry in ipairs(EXPERT_PUZZLES) do
             puzzles[#puzzles + 1] = entry[2]
         end
         for _, puzzle in ipairs(puzzles) do
@@ -172,8 +186,15 @@ describe("core.techniques.propagator", function()
         end
     end)
 
-    it("solves every hard-tier HoDoKu example guess-free with all techniques", function()
+    it("solves every hard- and expert-tier example guess-free with all techniques", function()
+        local all_puzzles = {}
         for _, entry in ipairs(HARD_PUZZLES) do
+            all_puzzles[#all_puzzles + 1] = entry
+        end
+        for _, entry in ipairs(EXPERT_PUZZLES) do
+            all_puzzles[#all_puzzles + 1] = entry
+        end
+        for _, entry in ipairs(all_puzzles) do
             local name, puzzle = entry[1], entry[2]
             local s = solver.new(board.from_string(puzzle), { techniques = all_implemented })
             local path = solve_path.new()

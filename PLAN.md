@@ -170,15 +170,26 @@ duplication).
       size 2/3/4) instead of rustoku's per-file duplication; pattern metadata
       for fish records `base`/`cover` line units, for skyscraper `base`/`roof`
       cells.
-- [ ] M2d Expert: W-Wing, XY-Wing, XYZ-Wing, AIC
+- [x] M2d Expert: W-Wing, XY-Wing, XYZ-Wing, AIC (HoDoKu w101, y101, z101 plus
+      rustoku's x-chain / xy-chain / nice-loop examples; all six solve
+      guess-free with the seventeen implemented techniques). Divergences from
+      rustoku: AIC nodes are encoded as integers and the BFS is bounded by a
+      `MAX_EXPANSIONS` cap (rustoku explores unbounded; a dense board without
+      eliminations takes multiple seconds otherwise) — a capped pass gives up
+      on that state, classifying the puzzle as requiring a guess; AIC BFS
+      starts are filtered to candidates with a strong link (sound, chains
+      always start strong). Wing patterns carry `pivot`/`pincers` (+ W-Wing
+      `bridge` cells and `bridge_value`); AIC patterns carry the chain
+      `nodes`; `values` always = the eliminated digit(s).
 
 **Exit criteria**: every technique matches its HoDoKu example (eliminations
 and placements), whole-puzzle solve paths correct (all six M2c examples solve
-guess-free with the thirteen techniques); each technique has its own
-failing-then-green spec; parity spec (techniques-enabled `solve_all` ≡ plain
-solver on the 1/2/6-solution puzzles **and** all six HoDoKu hard examples,
-which is what actually exercises the `EASY|MEDIUM|HARD` tier);
-determinism with seeded PRNG.
+guess-free with the thirteen techniques; all six M2d examples solve guess-free
+with the seventeen); each technique has its own failing-then-green spec;
+parity spec (techniques-enabled `solve_all` ≡ plain solver on the
+1/2/6-solution puzzles, the six HoDoKu hard examples, and the six expert
+examples, which is what actually exercises the `EASY|MEDIUM|HARD|EXPERT`
+tier); determinism with seeded PRNG.
 
 ### M3 — Solve path, difficulty, generation
 
