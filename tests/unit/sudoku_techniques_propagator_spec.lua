@@ -127,6 +127,36 @@ describe("core.techniques.propagator", function()
         assert.are.same(propagate(), propagate())
     end)
 
+    it("is deterministic across the full technique tier", function()
+        -- Hard (jellyfish) and expert (AIC nice loop) examples: two runs of the
+        -- same propagation must produce identical step traces, including the
+        -- pattern metadata that feeds the hint system.
+        for _, puzzle in ipairs({
+            "200000003080030050003402100001205400000090000009308600002506900090020070400000001",
+            "....8.2....5....4..2...5........7......21..971.4....3...........973..52...8.5136.",
+        }) do
+            local function propagate()
+                local s = solver.new(board.from_string(puzzle), { techniques = all_implemented })
+                local path = solve_path.new()
+                s:propagate(path)
+                local out = {}
+                for i, step in ipairs(path.steps) do
+                    out[i] = {
+                        step.type,
+                        step.row,
+                        step.col,
+                        step.value,
+                        step.flags,
+                        step.pattern and step.pattern.kind,
+                        step.pattern and step.pattern.values,
+                    }
+                end
+                return out
+            end
+            assert.are.same(propagate(), propagate(), "full-tier propagation should be deterministic")
+        end
+    end)
+
     it("solve_until runs propagation before backtracking", function()
         local s = solver.new(board.from_string(NAKED_SINGLE_PUZZLE), { techniques = flags.NAKED_SINGLES })
         local sol = s:solve_any()

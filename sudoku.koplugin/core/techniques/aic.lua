@@ -92,12 +92,19 @@ end
 local function find_next_nodes(prop, current, need_strong)
     local cr, cc, cv = decode(current)
     local next_nodes = {}
+    local seen = {}
+    local function push(next)
+        if not seen[next] then
+            seen[next] = true
+            next_nodes[#next_nodes + 1] = next
+        end
+    end
     local mask = cand_get(prop.candidates, cr, cc)
     for v = 1, 9 do
         if v ~= cv and bit.band(mask, bit.lshift(1, v - 1)) ~= 0 then
             local next = encode(cr, cc, v)
             if not need_strong or is_strong_link(prop, current, next) then
-                next_nodes[#next_nodes + 1] = next
+                push(next)
             end
         end
     end
@@ -106,7 +113,7 @@ local function find_next_nodes(prop, current, need_strong)
         if c ~= cc and bit.band(cand_get(prop.candidates, cr, c), val_bit) ~= 0 then
             local next = encode(cr, c, cv)
             if not need_strong or is_strong_link(prop, current, next) then
-                next_nodes[#next_nodes + 1] = next
+                push(next)
             end
         end
     end
@@ -114,7 +121,7 @@ local function find_next_nodes(prop, current, need_strong)
         if r ~= cr and bit.band(cand_get(prop.candidates, r, cc), val_bit) ~= 0 then
             local next = encode(r, cc, cv)
             if not need_strong or is_strong_link(prop, current, next) then
-                next_nodes[#next_nodes + 1] = next
+                push(next)
             end
         end
     end
@@ -124,7 +131,7 @@ local function find_next_nodes(prop, current, need_strong)
         if (r ~= cr or c ~= cc) and bit.band(cand_get(prop.candidates, r, c), val_bit) ~= 0 then
             local next = encode(r, c, cv)
             if not need_strong or is_strong_link(prop, current, next) then
-                next_nodes[#next_nodes + 1] = next
+                push(next)
             end
         end
     end
