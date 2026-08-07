@@ -44,11 +44,12 @@ local function decode(node)
     return r, c, v
 end
 
-local function chain_contains(nodes, node)
-    for i = 1, #nodes do
-        if nodes[i] == node then
+local function chain_contains(chain, node)
+    while chain do
+        if chain.node == node then
             return true
         end
+        chain = chain.parent
     end
     return false
 end
@@ -173,30 +174,27 @@ local function find_next_nodes(prop, current, need_strong, counts)
     return next_nodes
 end
 
-local function decode_nodes(nodes)
+local function decode_chain(chain)
     local result = {}
-    for i = 1, #nodes do
-        local r, c, v = decode(nodes[i])
-        result[i] = { r = r, c = c, val = v }
+    for index = chain.depth, 1, -1 do
+        local r, c, v = decode(chain.node)
+        result[index] = { r = r, c = c, val = v }
+        chain = chain.parent
     end
     return result
 end
 
-local function find_eliminations(prop, path, nodes)
-    if #nodes < 4 or #nodes % 2 ~= 0 then
+local function find_eliminations(prop, path, chain)
+    if chain.depth < 4 or chain.depth % 2 ~= 0 then
         return false
     end
-    local start, last = nodes[1], nodes[#nodes]
+    local start, last = chain.start, chain.node
     local sr, sc, sv = decode(start)
     local lr, lc, lv = decode(last)
     local progress = false
     if sv == lv then
         local val_bit = bit.lshift(1, sv - 1)
-        local pattern = {
-            kind = "aic",
-            nodes = decode_nodes(nodes),
-            values = { sv },
-        }
+        local pattern
         for r = 0, 8 do
             for c = 0, 8 do
                 if (r ~= sr or c ~= sc) and (r ~= lr or c ~= lc) then
@@ -206,6 +204,12 @@ local function find_eliminations(prop, path, nodes)
                         and is_weak_link(start, target)
                         and is_weak_link(last, target)
                     then
+                        pattern = pattern
+                            or {
+                                kind = "aic",
+                                nodes = decode_chain(chain),
+                                values = { sv },
+                            }
                         progress = prop:eliminate_candidate(r, c, val_bit, aic.flags(), path, pattern) or progress
                     end
                 end
@@ -218,7 +222,7 @@ local function find_eliminations(prop, path, nodes)
         if remove ~= 0 then
             local pattern = {
                 kind = "aic",
-                nodes = decode_nodes(nodes),
+                nodes = decode_chain(chain),
                 values = candidates.from_mask(remove),
             }
             progress = prop:eliminate_multiple_candidates(sr, sc, remove, aic.flags(), path, pattern)
@@ -266,33 +270,39 @@ function aic.apply(prop, path)
     local expansions = 0
     local depth_capped = false
     for _, start in ipairs(starts) do
-        local queue = { { nodes = { start }, last_link = "weak" } }
+        local queue = {
+            {
+                node = start,
+                start = start,
+                parent = nil,
+                depth = 1,
+                last_link = "weak",
+            },
+        }
         local head = 1
         while head <= #queue do
             local current_path = queue[head]
             head = head + 1
-            if #current_path.nodes >= max_depth then
+            if current_path.depth >= max_depth then
                 depth_capped = true
             else
                 expansions = expansions + 1
                 if expansions > max_expansions then
                     return false, aic.STATUS_SEARCH_CAPPED
                 end
-                local current = current_path.nodes[#current_path.nodes]
+                local current = current_path.node
                 local need_strong = current_path.last_link == "weak"
                 for _, next in ipairs(find_next_nodes(prop, current, need_strong, counts)) do
-                    if not chain_contains(current_path.nodes, next) then
-                        local nodes = {}
-                        for i = 1, #current_path.nodes do
-                            nodes[i] = current_path.nodes[i]
-                        end
-                        nodes[#nodes + 1] = next
+                    if not chain_contains(current_path, next) then
                         local new_path = {
-                            nodes = nodes,
+                            node = next,
+                            start = current_path.start,
+                            parent = current_path,
+                            depth = current_path.depth + 1,
                             last_link = need_strong and "strong" or "weak",
                         }
-                        if new_path.last_link == "strong" and #new_path.nodes >= 4 then
-                            if find_eliminations(prop, path, new_path.nodes) then
+                        if new_path.last_link == "strong" and new_path.depth >= 4 then
+                            if find_eliminations(prop, path, new_path) then
                                 return true
                             end
                         end

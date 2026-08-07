@@ -114,6 +114,20 @@ describe("core.techniques.aic", function()
             end
         end)
 
+        it("reconstructs each chain without duplicate candidate nodes on the " .. name .. " puzzle", function()
+            local s = solver.new(board.from_string(puzzle), { techniques = flags.ALTERNATING_INFERENCE_CHAIN })
+            local path = solve_path.new()
+            s:propagate(path)
+            for _, step in ipairs(aic_steps(path)) do
+                local seen = {}
+                for _, node in ipairs(step.pattern.nodes) do
+                    local key = node.r .. ":" .. node.c .. ":" .. node.val
+                    assert.is_nil(seen[key])
+                    seen[key] = true
+                end
+            end
+        end)
+
         it("does not alter the givens on the " .. name .. " puzzle", function()
             local original = board.from_string(puzzle)
             local s = solver.new(board.from_string(puzzle), { techniques = flags.ALTERNATING_INFERENCE_CHAIN })
