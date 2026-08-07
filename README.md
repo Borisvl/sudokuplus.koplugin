@@ -14,6 +14,7 @@ sudoku/
 ├── third_party/rustoku  # pinned rustoku reference for the core port (gitignored)
 ├── dev.sh               # build + launch emulator, or run tests (`./dev.sh test`)
 ├── env.sh               # Homebrew PATH setup (required by KOReader builds)
+├── tools/               # headless benchmarks and development utilities
 ├── AGENTS.md            # project rules (test-first, milestone planning)
 ├── PLAN.md              # milestone plan and design decisions
 └── .luacheckrc          # lint config (mirrors KOReader's own)
@@ -103,6 +104,32 @@ The meson runner needs its setup the first time and can appear to hang
 then; subsequent runs are fast (< 1 s per test file). Pattern matching
 uses meson's `suite:test` names, so plain filenames (`util_spec.lua`) do
 not work with the default runner.
+
+### Propagation benchmark
+
+`tools/bench_propagation.lua` measures solver setup and constraint propagation
+with KOReader's bundled LuaJIT. It runs the existing technique fixtures plus
+deterministic, valid partial boards with 17, 25, 35, and 45 clues. The output
+includes p50/p95/maximum timings, AIC cap counts, and a per-technique profile.
+
+From the project root, a quick smoke run is:
+
+```sh
+third_party/koreader/base/build/arm64-apple-darwin25.5.0-debug/luajit \
+    tools/bench_propagation.lua --quick
+```
+
+For a larger sample:
+
+```sh
+third_party/koreader/base/build/arm64-apple-darwin25.5.0-debug/luajit \
+    tools/bench_propagation.lua --iterations=5 --generated=20
+```
+
+On a device, run the same script with KOReader's bundled `luajit`. The script
+derives the project root from its own path, so it does not depend on the
+current working directory. Generated boards are propagation stress cases; the
+benchmark does not yet include the M3 puzzle-generation retry loop.
 
 ### Linting and formatting
 

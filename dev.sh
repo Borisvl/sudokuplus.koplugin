@@ -26,12 +26,12 @@ link_plugin() {
 
 case "${1:-}" in
     lint)
-        luacheck sudoku.koplugin/ tests/
-        stylua --check sudoku.koplugin/ tests/
+        luacheck sudoku.koplugin/ tests/ tools/
+        stylua --check sudoku.koplugin/ tests/ tools/
         exit 0
         ;;
     fmt)
-        stylua sudoku.koplugin/ tests/
+        stylua sudoku.koplugin/ tests/ tools/
         exit 0
         ;;
 esac
