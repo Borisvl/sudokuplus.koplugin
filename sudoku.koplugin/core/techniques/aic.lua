@@ -59,40 +59,72 @@ local function is_weak_link(n1, n2)
     return v1 == v2 and units.sees(r1, c1, r2, c2)
 end
 
-local function unit_candidate_count(prop, cells, val_bit)
-    local count = 0
-    for _, cell in ipairs(cells) do
-        local r, c = cell[1], cell[2]
-        if board_is_empty(prop.board, r, c) and bit.band(cand_get(prop.candidates, r, c), val_bit) ~= 0 then
-            count = count + 1
-        end
-    end
-    return count
+local function zero_counts()
+    return { 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 end
 
-local function is_strong_link(prop, n1, n2)
+local function build_link_counts(prop)
+    local cell_counts = {}
+    local row_counts = {}
+    local col_counts = {}
+    local box_counts = {}
+
+    for i = 1, 9 do
+        row_counts[i] = zero_counts()
+        col_counts[i] = zero_counts()
+        box_counts[i] = zero_counts()
+    end
+
+    for r = 0, 8 do
+        cell_counts[r + 1] = {}
+        for c = 0, 8 do
+            local mask = cand_get(prop.candidates, r, c)
+            cell_counts[r + 1][c + 1] = flags.count(mask)
+            if board_is_empty(prop.board, r, c) then
+                local box_idx = math.floor(r / 3) * 3 + math.floor(c / 3)
+                for v = 1, 9 do
+                    local val_bit = bit.lshift(1, v - 1)
+                    if bit.band(mask, val_bit) ~= 0 then
+                        row_counts[r + 1][v] = row_counts[r + 1][v] + 1
+                        col_counts[c + 1][v] = col_counts[c + 1][v] + 1
+                        box_counts[box_idx + 1][v] = box_counts[box_idx + 1][v] + 1
+                    end
+                end
+            end
+        end
+    end
+
+    return {
+        cell = cell_counts,
+        row = row_counts,
+        col = col_counts,
+        box = box_counts,
+    }
+end
+
+local function is_strong_link(n1, n2, counts)
     local r1, c1, v1 = decode(n1)
     local r2, c2, v2 = decode(n2)
     if r1 == r2 and c1 == c2 then
-        return v1 ~= v2 and flags.count(cand_get(prop.candidates, r1, c1)) == 2
+        return v1 ~= v2 and counts.cell[r1 + 1][c1 + 1] == 2
     end
     if v1 ~= v2 then
         return false
     end
-    local val_bit = bit.lshift(1, v1 - 1)
-    if r1 == r2 and unit_candidate_count(prop, units.row_cells(r1), val_bit) == 2 then
+    if r1 == r2 and counts.row[r1 + 1][v1] == 2 then
         return true
     end
-    if c1 == c2 and unit_candidate_count(prop, units.col_cells(c1), val_bit) == 2 then
+    if c1 == c2 and counts.col[c1 + 1][v1] == 2 then
         return true
     end
     if math.floor(r1 / 3) == math.floor(r2 / 3) and math.floor(c1 / 3) == math.floor(c2 / 3) then
-        return unit_candidate_count(prop, units.box_cells(math.floor(r1 / 3) * 3 + math.floor(c1 / 3)), val_bit) == 2
+        local box_idx = math.floor(r1 / 3) * 3 + math.floor(c1 / 3)
+        return counts.box[box_idx + 1][v1] == 2
     end
     return false
 end
 
-local function find_next_nodes(prop, current, need_strong)
+local function find_next_nodes(prop, current, need_strong, counts)
     local cr, cc, cv = decode(current)
     local next_nodes = {}
     local seen = {}
@@ -106,7 +138,7 @@ local function find_next_nodes(prop, current, need_strong)
     for v = 1, 9 do
         if v ~= cv and bit.band(mask, bit.lshift(1, v - 1)) ~= 0 then
             local next = encode(cr, cc, v)
-            if not need_strong or is_strong_link(prop, current, next) then
+            if not need_strong or is_strong_link(current, next, counts) then
                 push(next)
             end
         end
@@ -115,7 +147,7 @@ local function find_next_nodes(prop, current, need_strong)
     for c = 0, 8 do
         if c ~= cc and bit.band(cand_get(prop.candidates, cr, c), val_bit) ~= 0 then
             local next = encode(cr, c, cv)
-            if not need_strong or is_strong_link(prop, current, next) then
+            if not need_strong or is_strong_link(current, next, counts) then
                 push(next)
             end
         end
@@ -123,7 +155,7 @@ local function find_next_nodes(prop, current, need_strong)
     for r = 0, 8 do
         if r ~= cr and bit.band(cand_get(prop.candidates, r, cc), val_bit) ~= 0 then
             local next = encode(r, cc, cv)
-            if not need_strong or is_strong_link(prop, current, next) then
+            if not need_strong or is_strong_link(current, next, counts) then
                 push(next)
             end
         end
@@ -133,7 +165,7 @@ local function find_next_nodes(prop, current, need_strong)
         local r, c = cell[1], cell[2]
         if (r ~= cr or c ~= cc) and bit.band(cand_get(prop.candidates, r, c), val_bit) ~= 0 then
             local next = encode(r, c, cv)
-            if not need_strong or is_strong_link(prop, current, next) then
+            if not need_strong or is_strong_link(current, next, counts) then
                 push(next)
             end
         end
@@ -198,24 +230,25 @@ end
 -- A chain's first outbound link is always strong, so a candidate that is not
 -- part of any strong link can never start a valid chain. Filtering the BFS
 -- starts this way prunes dense boards soundly (same result, far less work).
-local function is_strong_linked(prop, node)
+local function is_strong_linked(node, counts)
     local r, c, v = decode(node)
-    if flags.count(cand_get(prop.candidates, r, c)) == 2 then
+    if counts.cell[r + 1][c + 1] == 2 then
         return true
     end
-    local val_bit = bit.lshift(1, v - 1)
-    if unit_candidate_count(prop, units.row_cells(r), val_bit) == 2 then
+    if counts.row[r + 1][v] == 2 then
         return true
     end
-    if unit_candidate_count(prop, units.col_cells(c), val_bit) == 2 then
+    if counts.col[c + 1][v] == 2 then
         return true
     end
-    return unit_candidate_count(prop, units.box_cells(math.floor(r / 3) * 3 + math.floor(c / 3)), val_bit) == 2
+    local box_idx = math.floor(r / 3) * 3 + math.floor(c / 3)
+    return counts.box[box_idx + 1][v] == 2
 end
 
 function aic.apply(prop, path)
     local max_depth = prop.aic_max_depth or aic.MAX_DEPTH
     local max_expansions = prop.aic_max_expansions or aic.MAX_EXPANSIONS
+    local counts = build_link_counts(prop)
     local starts = {}
     for r = 0, 8 do
         for c = 0, 8 do
@@ -223,7 +256,7 @@ function aic.apply(prop, path)
             for v = 1, 9 do
                 if bit.band(mask, bit.lshift(1, v - 1)) ~= 0 then
                     local node = encode(r, c, v)
-                    if is_strong_linked(prop, node) then
+                    if is_strong_linked(node, counts) then
                         starts[#starts + 1] = node
                     end
                 end
@@ -247,7 +280,7 @@ function aic.apply(prop, path)
                 end
                 local current = current_path.nodes[#current_path.nodes]
                 local need_strong = current_path.last_link == "weak"
-                for _, next in ipairs(find_next_nodes(prop, current, need_strong)) do
+                for _, next in ipairs(find_next_nodes(prop, current, need_strong, counts)) do
                     if not chain_contains(current_path.nodes, next) then
                         local nodes = {}
                         for i = 1, #current_path.nodes do

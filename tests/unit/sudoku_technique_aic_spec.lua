@@ -35,6 +35,35 @@ local function is_in_values(values, v)
     return false
 end
 
+local FIRST_PASS_TRACES = {
+    x_chain = {
+        { 6, 5, 6 },
+    },
+    xy_chain = {
+        { 2, 0, 6 },
+        { 7, 2, 6 },
+    },
+    dnl = {
+        { 3, 0, 3 },
+        { 3, 0, 5 },
+        { 3, 0, 6 },
+        { 3, 0, 8 },
+    },
+}
+
+local function first_pass_trace(puzzle)
+    local s = solver.new(board.from_string(puzzle), { techniques = 0 })
+    local p = propagator.new(s.board, s.masks, s.candidates, 0)
+    local path = solve_path.new()
+    assert.is_true(aic.apply(p, path))
+
+    local trace = {}
+    for _, step in ipairs(path.steps) do
+        trace[#trace + 1] = { step.row, step.col, step.value }
+    end
+    return trace
+end
+
 local function capped_propagator()
     local c = candidates.new()
     for r = 0, 8 do
@@ -100,6 +129,12 @@ describe("core.techniques.aic", function()
             end
         end)
     end
+
+    it("preserves the exact first-pass elimination trace", function()
+        for _, entry in ipairs({ { "x_chain", X_CHAIN }, { "xy_chain", XY_CHAIN }, { "dnl", DNL } }) do
+            assert.are.same(FIRST_PASS_TRACES[entry[1]], first_pass_trace(entry[2]), entry[1])
+        end
+    end)
 
     it("reports expansion-cap status separately from no-chain", function()
         local no_chain_prop = propagator.new(board.new(), masks.new(), candidates.new(), 0)
