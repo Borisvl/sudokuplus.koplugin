@@ -28,6 +28,23 @@ local path_push = solve_path.push
 local path_placement = solve_path.placement_step
 local path_snapshot = solve_path.snapshot
 
+local function validate_board_shape(b)
+    if type(b) ~= "table" then
+        return nil, "board must be a table"
+    end
+    for i = 1, 81 do
+        if rawget(b, i) == nil then
+            return nil, "board must contain exactly 81 cells"
+        end
+    end
+    for key in pairs(b) do
+        if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > 81 then
+            return nil, "board must contain exactly 81 cells"
+        end
+    end
+    return true
+end
+
 local function clone_masks(m)
     local copy = { row = {}, col = {}, box = {} }
     for i = 1, 9 do
@@ -49,10 +66,18 @@ local function clone_state(state)
 end
 
 function solver.validate(b)
+    local valid, shape_err = validate_board_shape(b)
+    if not valid then
+        return nil, shape_err
+    end
+
     local m = masks.new()
     for r = 0, 8 do
         for col = 0, 8 do
             local num = board_get(b, r, col)
+            if type(num) ~= "number" or num % 1 ~= 0 then
+                return nil, "cell value must be an integer"
+            end
             if num ~= 0 then
                 if num < 1 or num > 9 then
                     return nil, "cell value out of range"

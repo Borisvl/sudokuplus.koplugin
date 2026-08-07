@@ -3,6 +3,12 @@ local board = {}
 local SIZE = 81
 
 local function index(r, c)
+    if type(r) ~= "number" or r % 1 ~= 0 or r < 0 or r > 8 then
+        return nil, "row must be an integer in the range 0..8"
+    end
+    if type(c) ~= "number" or c % 1 ~= 0 or c < 0 or c > 8 then
+        return nil, "column must be an integer in the range 0..8"
+    end
     return r * 9 + c + 1
 end
 
@@ -15,6 +21,9 @@ function board.new()
 end
 
 function board.from_string(s)
+    if type(s) ~= "string" then
+        return nil, "input must be a string"
+    end
     if #s ~= SIZE then
         return nil, "input string must be exactly 81 characters long"
     end
@@ -41,15 +50,34 @@ function board.to_string(b)
 end
 
 function board.get(b, r, c)
-    return b[index(r, c)]
+    if type(b) ~= "table" then
+        return nil, "board must be a table"
+    end
+    local i, err = index(r, c)
+    if not i then
+        return nil, err
+    end
+    return b[i]
 end
 
 function board.set(b, r, c, value)
-    b[index(r, c)] = value
+    if type(b) ~= "table" then
+        return nil, "board must be a table"
+    end
+    local i, err = index(r, c)
+    if not i then
+        return nil, err
+    end
+    b[i] = value
+    return true
 end
 
 function board.is_empty(b, r, c)
-    return b[index(r, c)] == 0
+    local value, err = board.get(b, r, c)
+    if err then
+        return nil, err
+    end
+    return value == 0
 end
 
 function board.clone(b)

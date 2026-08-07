@@ -24,6 +24,16 @@ describe("core.board", function()
         assert.is_string(err)
     end)
 
+    it("rejects non-string input without throwing", function()
+        local b, err = board.from_string(nil)
+        assert.is_nil(b)
+        assert.is_string(err)
+
+        local b2, err2 = board.from_string(123)
+        assert.is_nil(b2)
+        assert.is_string(err2)
+    end)
+
     it("rejects input with invalid characters", function()
         local b, err =
             board.from_string("53007000060019500009800006080006000340080300170002000606000028000041900500008007X")
@@ -66,6 +76,22 @@ describe("core.board", function()
         board.set(b, 0, 0, 1)
         assert.are.equal(1, board.get(b, 0, 0))
         assert.are.equal(2, board.count_clues(b))
+    end)
+
+    it("rejects coordinates outside the board", function()
+        local b = board.new()
+        local value, get_err = board.get(b, -1, 0)
+        assert.is_nil(value)
+        assert.is_string(get_err)
+
+        local set_result, set_err = board.set(b, 9, 0, 1)
+        assert.is_nil(set_result)
+        assert.is_string(set_err)
+        assert.are.equal(0, board.count_clues(b))
+
+        local empty, empty_err = board.is_empty(b, 0, 9)
+        assert.is_nil(empty)
+        assert.is_string(empty_err)
     end)
 
     it("clone is independent of the original", function()

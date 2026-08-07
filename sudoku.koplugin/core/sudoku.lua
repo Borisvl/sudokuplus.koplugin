@@ -32,9 +32,9 @@ function sudoku.solve_all(puzzle, opts)
 end
 
 function sudoku.solutions_count(puzzle, opts)
-    local sols = sudoku.solve_all(puzzle, opts)
+    local sols, err = sudoku.solve_all(puzzle, opts)
     if not sols then
-        return nil
+        return nil, err
     end
     return #sols
 end
@@ -44,7 +44,10 @@ function sudoku.is_solved(puzzle)
     if not b then
         return false, err
     end
-    local s = solver.new(b)
+    local s, solver_err = solver.new(b)
+    if not s then
+        return false, solver_err
+    end
     return s:is_solved()
 end
 

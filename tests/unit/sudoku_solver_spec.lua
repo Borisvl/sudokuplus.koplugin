@@ -24,6 +24,38 @@ describe("core.solver", function()
         assert.is_string(err)
     end)
 
+    it("rejects malformed board shapes and cell types without throwing", function()
+        local nil_solver, nil_err = solver.new(nil)
+        assert.is_nil(nil_solver)
+        assert.is_string(nil_err)
+
+        local cases = {}
+
+        cases[#cases + 1] = {}
+
+        local sparse = board.new()
+        sparse[40] = nil
+        cases[#cases + 1] = sparse
+
+        local text_cell = board.new()
+        text_cell[1] = "1"
+        cases[#cases + 1] = text_cell
+
+        local fractional = board.new()
+        fractional[1] = 1.5
+        cases[#cases + 1] = fractional
+
+        local extra = board.new()
+        extra[82] = 0
+        cases[#cases + 1] = extra
+
+        for _, malformed in ipairs(cases) do
+            local s, err = solver.new(malformed)
+            assert.is_nil(s)
+            assert.is_string(err)
+        end
+    end)
+
     it("rejects cell values out of range", function()
         local b10 = board.new()
         board.set(b10, 0, 0, 10)
@@ -186,5 +218,15 @@ describe("core.sudoku facade", function()
     it("checks solved boards via the facade", function()
         assert.is_true(sudoku.is_solved(UNIQUE_SOLUTION))
         assert.is_false(sudoku.is_solved(UNIQUE_PUZZLE))
+    end)
+
+    it("preserves facade errors for invalid puzzles", function()
+        local solved, solved_err = sudoku.is_solved(DUPLICATES)
+        assert.is_false(solved)
+        assert.is_string(solved_err)
+
+        local count, count_err = sudoku.solutions_count(DUPLICATES)
+        assert.is_nil(count)
+        assert.is_string(count_err)
     end)
 end)
