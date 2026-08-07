@@ -63,6 +63,7 @@ describe("core.techniques.naked_singles", function()
         local path = solve_path.new()
         s:propagate(path)
         assert.are.equal(81, board.count_clues(s.board))
+        assert.is_not_nil(solver.validate(s.board))
         assert.are.equal(1, #path.steps)
 
         local s2 = solver.new(board.new(), { techniques = flags.NAKED_SINGLES })

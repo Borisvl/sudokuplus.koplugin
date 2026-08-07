@@ -88,6 +88,21 @@ describe("core.candidates", function()
         )
     end)
 
+    it("preserves logical eliminations when updating after a placement", function()
+        local b = board.new()
+        local m = masks.new()
+        local c = candidates.new()
+        candidates.set(c, 0, 1, 0x1FF)
+
+        candidates.set(c, 0, 1, bit.band(candidates.get(c, 0, 1), bit.bnot(bit_of(1))))
+        board.set(b, 0, 0, 2)
+        masks.add_number(m, 0, 0, 2)
+        candidates.update_affected_cells_for(c, 0, 0, m, b, 2)
+
+        assert.are.equal(0, bit.band(candidates.get(c, 0, 1), bit_of(1)))
+        assert.are.equal(0, bit.band(candidates.get(c, 0, 1), bit_of(2)))
+    end)
+
     it("updates affected cells on removal", function()
         local b = board.new()
         local m = masks.new()

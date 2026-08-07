@@ -17,12 +17,13 @@ local masks_add = masks.add_number
 local masks_remove = masks.remove_number
 local masks_is_safe = masks.is_safe
 local masks_compute = masks.compute_candidates_mask_for_cell
+local cand_clone = candidates.clone
 local cand_get = candidates.get
 local cand_set = candidates.set
 local cand_count = candidates.count
 local cand_from_mask = candidates.from_mask
+local cand_restore = candidates.restore
 local cand_update_for = candidates.update_affected_cells_for
-local cand_update = candidates.update_affected_cells
 local path_push = solve_path.push
 local path_placement = solve_path.placement_step
 local path_snapshot = solve_path.snapshot
@@ -78,7 +79,6 @@ end
 local function remove_number(state, r, col, num)
     board_set(state.board, r, col, 0)
     masks_remove(state.masks, r, col, num)
-    cand_update(state.candidates, r, col, state.masks, state.board)
 end
 
 local function find_next_empty_cell(state)
@@ -114,11 +114,13 @@ local function solve_until_recursive(state, solutions, path, bound)
     state.rng:shuffle(nums)
     for _, num in ipairs(nums) do
         if masks_is_safe(state.masks, r, col, num) then
+            local candidates_before = cand_clone(state.candidates)
             place_number(state, r, col, num)
             path_push(path, path_placement(r, col, num))
             solve_until_recursive(state, solutions, path, bound)
             path.steps[#path.steps] = nil
             remove_number(state, r, col, num)
+            cand_restore(state.candidates, candidates_before)
             if bound > 0 and #solutions >= bound then
                 return
             end

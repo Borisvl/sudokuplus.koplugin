@@ -1,6 +1,8 @@
 package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 
+local bit = require("bit")
 local board = require("core.board")
+local candidates = require("core.candidates")
 local prng = require("core.prng")
 local solver = require("core.solver")
 local sudoku = require("core.sudoku")
@@ -137,6 +139,16 @@ describe("core.solver", function()
         local s = solver.new(b)
         s:solve_all()
         assert.are.equal(before, board.to_string(b))
+    end)
+
+    it("preserves logical eliminations while backtracking", function()
+        local s = solver.new(board.new())
+        local bit1 = bit.lshift(1, 0)
+        candidates.set(s.candidates, 0, 0, bit.bor(bit.lshift(1, 1), bit.lshift(1, 2)))
+        candidates.set(s.candidates, 0, 1, bit.band(0x1FF, bit.bnot(bit1)))
+
+        assert.is_not_nil(s:solve_any())
+        assert.are.equal(0, bit.band(candidates.get(s.candidates, 0, 1), bit1))
     end)
 end)
 

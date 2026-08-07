@@ -9,6 +9,7 @@ local flags = require("core.techniques.flags")
 
 -- HoDoKu X-Wing example: https://hodoku.sourceforge.net/en/show_example.php?file=bf201&tech=X-Wing
 local HODOKU = "000000000760003002002640009403900070000004903005000020010560000370090041000000060"
+local EXPECTED_SOLUTION = "841729635769153482532648719423985176687214953195376824214567398376892541958431267"
 local techniques = bit.bor(flags.EASY, flags.MEDIUM, flags.X_WING)
 
 local function is_in_lines(lines, r, c)
@@ -109,5 +110,7 @@ describe("core.techniques.x_wing", function()
         local path = solve_path.new()
         assert.is_true(s:propagate(path))
         assert.are.equal(81, board.count_clues(s.board))
+        assert.is_not_nil(solver.validate(s.board))
+        assert.are.equal(EXPECTED_SOLUTION, board.to_string(s.board))
     end)
 end)

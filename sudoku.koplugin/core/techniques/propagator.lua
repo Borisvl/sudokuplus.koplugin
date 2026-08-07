@@ -13,7 +13,9 @@ local board_set = board.set
 local board_is_empty = board.is_empty
 local masks_add = masks.add_number
 local masks_remove = masks.remove_number
+local cand_clone = candidates.clone
 local cand_get = candidates.get
+local cand_restore = candidates.restore
 local cand_set = candidates.set
 local cand_update_for = candidates.update_affected_cells_for
 local cand_update = candidates.update_affected_cells
@@ -58,6 +60,7 @@ function propagator.new(b, m, c, techniques)
         masks = m,
         candidates = c,
         techniques = techniques or 0,
+        candidate_snapshots = {},
     }, mt)
 end
 
@@ -119,6 +122,7 @@ function mt:count_candidates_eliminated(r, c, num)
 end
 
 function mt:place_and_update(r, c, num, technique_flags, path, pattern)
+    local candidates_before = cand_clone(self.candidates)
     board_set(self.board, r, c, num)
     masks_add(self.masks, r, c, num)
 
@@ -132,6 +136,7 @@ function mt:place_and_update(r, c, num, technique_flags, path, pattern)
     step.related_cell_count = affected
     step.difficulty_point = flags.difficulty_point(technique_flags)
     path_push(path, step)
+    self.candidate_snapshots[step] = candidates_before
 end
 
 function mt:eliminate_candidate(r, c, candidate_bit, technique_flags, path, pattern)
@@ -191,7 +196,13 @@ function mt:rollback(path, initial_path_len)
         if step.type == "place" then
             board_set(self.board, step.row, step.col, 0)
             masks_remove(self.masks, step.row, step.col, step.value)
-            cand_update(self.candidates, step.row, step.col, self.masks, self.board)
+            local snapshot = self.candidate_snapshots[step]
+            if snapshot then
+                cand_restore(self.candidates, snapshot)
+                self.candidate_snapshots[step] = nil
+            else
+                cand_update(self.candidates, step.row, step.col, self.masks, self.board)
+            end
         else
             local m = cand_get(self.candidates, step.row, step.col)
             cand_set(self.candidates, step.row, step.col, bit.bor(m, bit.lshift(1, step.value - 1)))

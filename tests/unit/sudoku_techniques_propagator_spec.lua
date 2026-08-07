@@ -46,6 +46,18 @@ local EXPERT_PUZZLES = {
     { "aic", "....8.2....5....4..2...5........7......21..971.4....3...........973..52...8.5136." },
 }
 
+local function assert_valid_completion(puzzle, completed, label)
+    assert.are.equal(81, board.count_clues(completed), label .. " should be complete")
+    assert.is_not_nil(solver.validate(completed), label .. " should be a valid Sudoku")
+
+    local givens = board.from_string(puzzle)
+    for i = 1, 81 do
+        if givens[i] ~= 0 then
+            assert.are.equal(givens[i], completed[i], label .. " should preserve givens")
+        end
+    end
+end
+
 describe("core.techniques.propagator", function()
     it("does nothing when no techniques are enabled", function()
         local s = solver.new(board.from_string(NAKED_SINGLE_PUZZLE))
@@ -58,7 +70,7 @@ describe("core.techniques.propagator", function()
         local s = solver.new(board.from_string(NAKED_SINGLE_PUZZLE), { techniques = flags.NAKED_SINGLES })
         local path = solve_path.new()
         assert.is_true(s:propagate(path))
-        assert.are.equal(81, board.count_clues(s.board))
+        assert_valid_completion(NAKED_SINGLE_PUZZLE, s.board, "naked single")
         assert.are.equal(1, #path.steps)
         assert.are.equal(flags.NAKED_SINGLES, path.steps[1].flags)
         assert.is_not_nil(path.steps[1].pattern)
@@ -229,7 +241,7 @@ describe("core.techniques.propagator", function()
             local s = solver.new(board.from_string(puzzle), { techniques = all_implemented })
             local path = solve_path.new()
             assert.is_true(s:propagate(path), name .. " propagation should not dead-end")
-            assert.are.equal(81, board.count_clues(s.board), name .. " should solve guess-free")
+            assert_valid_completion(puzzle, s.board, name)
             local used_target = false
             for _, step in ipairs(path.steps) do
                 if step.pattern and step.pattern.kind == name then
@@ -296,5 +308,24 @@ describe("core.techniques.propagator", function()
         assert.are.equal(0, #path.steps)
         assert.are.equal(before0, p:cand(0, 0))
         assert.are.equal(before32, p:cand(3, 2))
+    end)
+
+    it("keeps earlier eliminations when rolling back a later placement", function()
+        local s = solver.new(board.new(), { techniques = 0 })
+        local p = propagator.new(s.board, s.masks, s.candidates, 0)
+        local path = solve_path.new()
+        local bit1 = bit.lshift(1, 0)
+
+        p:eliminate_candidate(0, 1, bit1, flags.NAKED_SINGLES, path, { kind = "test" })
+        local checkpoint = #path.steps
+        p:place_and_update(0, 0, 2, flags.NAKED_SINGLES, path, { kind = "test" })
+
+        assert.are.equal(0, bit.band(p:cand(0, 1), bit1))
+        p:rollback(path, checkpoint)
+
+        assert.are.equal(checkpoint, #path.steps)
+        assert.are.equal(0, s.board[1])
+        assert.are.equal(0, bit.band(p:cand(0, 1), bit1))
+        assert.are.equal(bit.lshift(1, 1), bit.band(p:cand(0, 1), bit.lshift(1, 1)))
     end)
 end)
