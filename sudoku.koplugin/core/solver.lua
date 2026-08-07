@@ -18,11 +18,13 @@ local masks_remove = masks.remove_number
 local masks_is_safe = masks.is_safe
 local masks_compute = masks.compute_candidates_mask_for_cell
 local cand_clone = candidates.clone
+local cand_new_trail = candidates.new_trail
+local cand_mark = candidates.mark
 local cand_get = candidates.get
 local cand_set = candidates.set
 local cand_count = candidates.count
 local cand_from_mask = candidates.from_mask
-local cand_restore = candidates.restore
+local cand_rollback = candidates.rollback
 local cand_update_for = candidates.update_affected_cells_for
 local path_push = solve_path.push
 local path_placement = solve_path.placement_step
@@ -60,6 +62,7 @@ local function clone_state(state)
         board = board_clone(state.board),
         masks = clone_masks(state.masks),
         candidates = cand_clone(state.candidates),
+        candidate_trail = cand_new_trail(),
         rng = prng.new(state.rng.state),
         techniques = state.techniques,
     }
@@ -109,6 +112,7 @@ function solver.new(b, opts)
         board = board_clone(b),
         masks = m,
         candidates = c,
+        candidate_trail = cand_new_trail(),
         rng = (opts or {}).rng or prng.new(),
         techniques = (opts or {}).techniques or 0,
     }
@@ -118,7 +122,7 @@ end
 local function place_number(state, r, col, num)
     board_set(state.board, r, col, num)
     masks_add(state.masks, r, col, num)
-    cand_update_for(state.candidates, r, col, state.masks, state.board, num)
+    cand_update_for(state.candidates, r, col, state.masks, state.board, num, state.candidate_trail)
 end
 
 local function remove_number(state, r, col, num)
@@ -159,13 +163,13 @@ local function solve_until_recursive(state, solutions, path, bound)
     state.rng:shuffle(nums)
     for _, num in ipairs(nums) do
         if masks_is_safe(state.masks, r, col, num) then
-            local candidates_before = cand_clone(state.candidates)
+            local candidate_marker = cand_mark(state.candidate_trail)
             place_number(state, r, col, num)
             path_push(path, path_placement(r, col, num))
             solve_until_recursive(state, solutions, path, bound)
             path.steps[#path.steps] = nil
             remove_number(state, r, col, num)
-            cand_restore(state.candidates, candidates_before)
+            cand_rollback(state.candidates, state.candidate_trail, candidate_marker)
             if bound > 0 and #solutions >= bound then
                 return
             end
@@ -187,11 +191,11 @@ local function count_solutions_recursive(state, count, limit)
     state.rng:shuffle(nums)
     for _, num in ipairs(nums) do
         if masks_is_safe(state.masks, r, col, num) then
-            local candidates_before = cand_clone(state.candidates)
+            local candidate_marker = cand_mark(state.candidate_trail)
             place_number(state, r, col, num)
             count = count_solutions_recursive(state, count, limit)
             remove_number(state, r, col, num)
-            cand_restore(state.candidates, candidates_before)
+            cand_rollback(state.candidates, state.candidate_trail, candidate_marker)
             if limit > 0 and count >= limit then
                 return count
             end

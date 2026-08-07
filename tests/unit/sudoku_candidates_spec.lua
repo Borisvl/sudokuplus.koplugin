@@ -56,6 +56,24 @@ describe("core.candidates", function()
         assert.are.equal(3, candidates.count(bit.bor(bit_of(2), bit.bor(bit_of(4), bit_of(7)))))
     end)
 
+    it("restores changed cells with a reversible trail", function()
+        local c = candidates.new()
+        candidates.set(c, 0, 0, bit_of(1))
+        candidates.set(c, 0, 1, bit_of(2))
+        local trail = candidates.new_trail()
+        local marker = candidates.mark(trail)
+
+        candidates.set(c, 0, 0, bit_of(3), trail)
+        candidates.set(c, 0, 1, bit_of(4), trail)
+        candidates.set(c, 0, 2, bit_of(5), trail)
+        candidates.rollback(c, trail, marker)
+
+        assert.are.equal(bit_of(1), candidates.get(c, 0, 0))
+        assert.are.equal(bit_of(2), candidates.get(c, 0, 1))
+        assert.are.equal(0, candidates.get(c, 0, 2))
+        assert.are.equal(marker, candidates.mark(trail))
+    end)
+
     it("expands a mask to numbers", function()
         assert.are.same({}, candidates.from_mask(0))
         assert.are.same({ 1, 2, 3, 4, 5, 6, 7, 8, 9 }, candidates.from_mask(0x1FF))
@@ -101,6 +119,26 @@ describe("core.candidates", function()
 
         assert.are.equal(0, bit.band(candidates.get(c, 0, 1), bit_of(1)))
         assert.are.equal(0, bit.band(candidates.get(c, 0, 1), bit_of(2)))
+    end)
+
+    it("restores all affected cells after a trailed placement update", function()
+        local b = board.new()
+        local m = masks.new()
+        local c = candidates.new()
+        local trail = candidates.new_trail()
+        for r = 0, 8 do
+            for col = 0, 8 do
+                candidates.set(c, r, col, 0x1FF)
+            end
+        end
+        local before = candidates.clone(c)
+
+        board.set(b, 0, 0, 1)
+        masks.add_number(m, 0, 0, 1)
+        candidates.update_affected_cells_for(c, 0, 0, m, b, 1, trail)
+        candidates.rollback(c, trail, 0)
+
+        assert.are.same(before, c)
     end)
 
     it("updates affected cells on removal", function()

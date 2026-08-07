@@ -14,9 +14,10 @@ local board_set = board.set
 local board_is_empty = board.is_empty
 local masks_add = masks.add_number
 local masks_remove = masks.remove_number
-local cand_clone = candidates.clone
+local cand_new_trail = candidates.new_trail
+local cand_mark = candidates.mark
 local cand_get = candidates.get
-local cand_restore = candidates.restore
+local cand_rollback = candidates.rollback
 local cand_set = candidates.set
 local cand_update_for = candidates.update_affected_cells_for
 local cand_update = candidates.update_affected_cells
@@ -77,7 +78,8 @@ function propagator.new(b, m, c, techniques)
         masks = m,
         candidates = c,
         techniques = techniques or 0,
-        candidate_snapshots = {},
+        candidate_trail = cand_new_trail(),
+        candidate_step_markers = {},
         search_status = nil,
     }, mt)
 end
@@ -148,27 +150,28 @@ function mt:count_candidates_eliminated(r, c, num)
 end
 
 function mt:place_and_update(r, c, num, technique_flags, path, pattern)
-    local candidates_before = cand_clone(self.candidates)
+    local candidate_marker = cand_mark(self.candidate_trail)
     board_set(self.board, r, c, num)
     masks_add(self.masks, r, c, num)
 
     local affected = self:count_affected_cells(r, c)
     local eliminated = self:count_candidates_eliminated(r, c, num)
 
-    cand_update_for(self.candidates, r, c, self.masks, self.board, num)
+    cand_update_for(self.candidates, r, c, self.masks, self.board, num, self.candidate_trail)
 
     local step = path_placement(r, c, num, technique_flags, pattern)
     step.candidates_eliminated = eliminated
     step.related_cell_count = affected
     step.difficulty_point = flags.difficulty_point(technique_flags)
     path_push(path, step)
-    self.candidate_snapshots[step] = candidates_before
+    self.candidate_step_markers[step] = candidate_marker
 end
 
 function mt:eliminate_candidate(r, c, candidate_bit, technique_flags, path, pattern)
+    local candidate_marker = cand_mark(self.candidate_trail)
     local initial = cand_get(self.candidates, r, c)
     local refined = bit.band(initial, bit.bnot(candidate_bit))
-    cand_set(self.candidates, r, c, refined)
+    cand_set(self.candidates, r, c, refined, self.candidate_trail)
 
     if initial ~= refined then
         local num = flags.lowest_bit(candidate_bit) + 1
@@ -177,15 +180,17 @@ function mt:eliminate_candidate(r, c, candidate_bit, technique_flags, path, patt
         step.related_cell_count = 1
         step.difficulty_point = flags.difficulty_point(technique_flags)
         path_push(path, step)
+        self.candidate_step_markers[step] = candidate_marker
     end
 
     return initial ~= refined
 end
 
 function mt:eliminate_multiple_candidates(r, c, elimination_mask, technique_flags, path, pattern)
+    local candidate_marker = cand_mark(self.candidate_trail)
     local initial = cand_get(self.candidates, r, c)
     local refined = bit.band(initial, bit.bnot(elimination_mask))
-    cand_set(self.candidates, r, c, refined)
+    cand_set(self.candidates, r, c, refined, self.candidate_trail)
 
     local eliminated_mask = bit.band(initial, elimination_mask)
 
@@ -197,6 +202,7 @@ function mt:eliminate_multiple_candidates(r, c, elimination_mask, technique_flag
             step.related_cell_count = 1
             step.difficulty_point = flags.difficulty_point(technique_flags)
             path_push(path, step)
+            self.candidate_step_markers[step] = candidate_marker
         end
     end
 
@@ -248,19 +254,30 @@ local function has_dead_end(self)
 end
 
 function mt:rollback(path, initial_path_len)
+    local first_step = path.steps[initial_path_len + 1]
+    local candidate_marker = first_step and self.candidate_step_markers[first_step]
+
+    if candidate_marker ~= nil then
+        while #path.steps > initial_path_len do
+            local step = path.steps[#path.steps]
+            path.steps[#path.steps] = nil
+            if step.type == "place" then
+                board_set(self.board, step.row, step.col, 0)
+                masks_remove(self.masks, step.row, step.col, step.value)
+            end
+            self.candidate_step_markers[step] = nil
+        end
+        cand_rollback(self.candidates, self.candidate_trail, candidate_marker)
+        return
+    end
+
     while #path.steps > initial_path_len do
         local step = path.steps[#path.steps]
         path.steps[#path.steps] = nil
         if step.type == "place" then
             board_set(self.board, step.row, step.col, 0)
             masks_remove(self.masks, step.row, step.col, step.value)
-            local snapshot = self.candidate_snapshots[step]
-            if snapshot then
-                cand_restore(self.candidates, snapshot)
-                self.candidate_snapshots[step] = nil
-            else
-                cand_update(self.candidates, step.row, step.col, self.masks, self.board)
-            end
+            cand_update(self.candidates, step.row, step.col, self.masks, self.board)
         else
             local m = cand_get(self.candidates, step.row, step.col)
             cand_set(self.candidates, step.row, step.col, bit.bor(m, bit.lshift(1, step.value - 1)))

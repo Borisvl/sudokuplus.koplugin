@@ -24,6 +24,21 @@ function candidates.clone(c)
     return copy
 end
 
+function candidates.new_trail()
+    return { size = 0, rows = {}, cols = {}, values = {} }
+end
+
+function candidates.mark(trail)
+    return trail.size
+end
+
+function candidates.rollback(c, trail, marker)
+    for index = trail.size, marker + 1, -1 do
+        c[trail.rows[index] + 1][trail.cols[index] + 1] = trail.values[index]
+    end
+    trail.size = marker
+end
+
 function candidates.restore(c, snapshot)
     for r = 1, 9 do
         for col = 1, 9 do
@@ -36,8 +51,24 @@ function candidates.get(c, r, col)
     return c[r + 1][col + 1]
 end
 
-function candidates.set(c, r, col, mask)
-    c[r + 1][col + 1] = mask
+function candidates.set(c, r, col, mask, trail)
+    local row = c[r + 1]
+    local column = col + 1
+    local previous = row[column]
+    if previous == mask then
+        return false
+    end
+
+    if trail then
+        local index = trail.size + 1
+        trail.size = index
+        trail.rows[index] = r
+        trail.cols[index] = col
+        trail.values[index] = previous
+    end
+
+    row[column] = mask
+    return true
 end
 
 function candidates.from_mask(mask)
@@ -58,17 +89,17 @@ function candidates.count(mask)
     return flags.count(mask)
 end
 
-function candidates.update_affected_cells(c, r, col, m, b)
-    candidates.update_affected_cells_for(c, r, col, m, b, nil)
+function candidates.update_affected_cells(c, r, col, m, b, trail)
+    candidates.update_affected_cells_for(c, r, col, m, b, nil, trail)
 end
 
-function candidates.update_affected_cells_for(c, r, col, m, b, placed_num)
+function candidates.update_affected_cells_for(c, r, col, m, b, placed_num, trail)
     local preserve_eliminations = placed_num ~= nil
 
     if board.is_empty(b, r, col) then
-        candidates.set(c, r, col, masks.compute_candidates_mask_for_cell(m, r, col))
+        candidates.set(c, r, col, masks.compute_candidates_mask_for_cell(m, r, col), trail)
     else
-        candidates.set(c, r, col, 0)
+        candidates.set(c, r, col, 0, trail)
     end
 
     local function update_cell(cell_r, cell_col)
@@ -76,7 +107,7 @@ function candidates.update_affected_cells_for(c, r, col, m, b, placed_num)
         if preserve_eliminations then
             legal = bit.band(candidates.get(c, cell_r, cell_col), legal)
         end
-        candidates.set(c, cell_r, cell_col, legal)
+        candidates.set(c, cell_r, cell_col, legal, trail)
     end
 
     for i = 0, 8 do
