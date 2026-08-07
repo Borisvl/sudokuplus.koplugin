@@ -1,3 +1,4 @@
+local bit = require("bit")
 local board = require("core.board")
 local candidates = require("core.candidates")
 local masks = require("core.masks")
@@ -29,6 +30,8 @@ local cand_update_for = candidates.update_affected_cells_for
 local path_push = solve_path.push
 local path_placement = solve_path.placement_step
 local path_snapshot = solve_path.snapshot
+
+local FULL_CANDIDATE_MASK = 0x1FF
 
 local function validate_board_shape(b)
     if type(b) ~= "table" then
@@ -65,7 +68,54 @@ local function clone_state(state)
         candidate_trail = cand_new_trail(),
         rng = prng.new(state.rng.state),
         techniques = state.techniques,
+        aic_max_depth = state.aic_max_depth,
+        aic_max_expansions = state.aic_max_expansions,
     }
+end
+
+local function new_propagator(state)
+    return propagator.new(state.board, state.masks, state.candidates, state.techniques, {
+        aic_max_depth = state.aic_max_depth,
+        aic_max_expansions = state.aic_max_expansions,
+    })
+end
+
+local function validate_candidate_cache(c, b, m)
+    if type(c) ~= "table" then
+        return nil, "candidates must be a 9x9 table"
+    end
+    for row = 1, 9 do
+        if type(c[row]) ~= "table" then
+            return nil, "candidates must be a 9x9 table"
+        end
+        for col = 1, 9 do
+            local mask = c[row][col]
+            if type(mask) ~= "number" or mask % 1 ~= 0 or mask < 0 or mask > FULL_CANDIDATE_MASK then
+                return nil, "candidate masks must be integers in the range 0..511"
+            end
+        end
+    end
+
+    for key in pairs(c) do
+        if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > 9 then
+            return nil, "candidates must be a 9x9 table"
+        end
+    end
+
+    for r = 0, 8 do
+        for col = 0, 8 do
+            local mask = c[r + 1][col + 1]
+            if board_is_empty(b, r, col) then
+                local legal = masks_compute(m, r, col)
+                if bit.band(mask, bit.bnot(legal)) ~= 0 then
+                    return nil, "candidate cache contains an illegal candidate"
+                end
+            elseif mask ~= 0 then
+                return nil, "given cells must not have candidates"
+            end
+        end
+    end
+    return true
 end
 
 function solver.validate(b)
@@ -100,11 +150,21 @@ function solver.new(b, opts)
     if not m then
         return nil, err
     end
-    local c = candidates.new()
-    for r = 0, 8 do
-        for col = 0, 8 do
-            if board_is_empty(b, r, col) then
-                cand_set(c, r, col, masks_compute(m, r, col))
+    local options = opts or {}
+    local c
+    if options.candidates ~= nil then
+        local valid_candidates, candidates_err = validate_candidate_cache(options.candidates, b, m)
+        if not valid_candidates then
+            return nil, candidates_err
+        end
+        c = cand_clone(options.candidates)
+    else
+        c = candidates.new()
+        for r = 0, 8 do
+            for col = 0, 8 do
+                if board_is_empty(b, r, col) then
+                    cand_set(c, r, col, masks_compute(m, r, col))
+                end
             end
         end
     end
@@ -113,8 +173,10 @@ function solver.new(b, opts)
         masks = m,
         candidates = c,
         candidate_trail = cand_new_trail(),
-        rng = (opts or {}).rng or prng.new(),
-        techniques = (opts or {}).techniques or 0,
+        rng = options.rng or prng.new(),
+        techniques = options.techniques or 0,
+        aic_max_depth = options.aic_max_depth,
+        aic_max_expansions = options.aic_max_expansions,
     }
     return setmetatable(state, mt)
 end
@@ -219,7 +281,7 @@ function mt:solve_until(bound)
     local path = solve_path.new()
     local state = clone_state(self)
     if state.techniques ~= 0 then
-        local prop = propagator.new(state.board, state.masks, state.candidates, state.techniques)
+        local prop = new_propagator(state)
         if not prop:propagate_constraints(path, 0) then
             return solutions
         end
@@ -230,8 +292,66 @@ end
 
 function mt:propagate(path)
     local initial_path_len = #path.steps
-    local prop = propagator.new(self.board, self.masks, self.candidates, self.techniques)
+    local prop = new_propagator(self)
     return prop:propagate_constraints(path, initial_path_len)
+end
+
+function mt:propagate_next(path)
+    local initial_path_len = #path.steps
+    local state = clone_state(self)
+    local prop = new_propagator(state)
+    return prop:propagate_constraints(path, initial_path_len, true)
+end
+
+function mt:apply_action(action)
+    if type(action) ~= "table" then
+        return nil, "action must be a table"
+    end
+    if action.type ~= "place" and action.type ~= "elim" then
+        return nil, "action type must be 'place' or 'elim'"
+    end
+    if
+        type(action.row) ~= "number"
+        or action.row % 1 ~= 0
+        or action.row < 0
+        or action.row > 8
+        or type(action.col) ~= "number"
+        or action.col % 1 ~= 0
+        or action.col < 0
+        or action.col > 8
+        or type(action.value) ~= "number"
+        or action.value % 1 ~= 0
+        or action.value < 1
+        or action.value > 9
+    then
+        return nil, "action coordinates and value are out of range"
+    end
+    if not board_is_empty(self.board, action.row, action.col) then
+        return nil, "action target must be empty"
+    end
+
+    local value_bit = bit.lshift(1, action.value - 1)
+    if bit.band(cand_get(self.candidates, action.row, action.col), value_bit) == 0 then
+        return nil, "action value is not a candidate"
+    end
+    if action.type == "place" and not masks_is_safe(self.masks, action.row, action.col, action.value) then
+        return nil, "action value violates Sudoku constraints"
+    end
+
+    local path = solve_path.new()
+    local prop = propagator.new(self.board, self.masks, self.candidates, 0)
+    if action.type == "place" then
+        local placed, place_err = prop:place_and_update(action.row, action.col, action.value, 0, path)
+        if not placed then
+            return nil, place_err
+        end
+    else
+        local eliminated, eliminate_err = prop:eliminate_candidate(action.row, action.col, value_bit, 0, path)
+        if not eliminated then
+            return nil, eliminate_err or "action candidate is already absent"
+        end
+    end
+    return true
 end
 
 function mt:solve_any()
@@ -255,7 +375,7 @@ function mt:count_solutions(limit)
     local state = clone_state(self)
     local path = solve_path.new()
     if state.techniques ~= 0 then
-        local prop = propagator.new(state.board, state.masks, state.candidates, state.techniques)
+        local prop = new_propagator(state)
         if not prop:propagate_constraints(path, 0) then
             return 0
         end

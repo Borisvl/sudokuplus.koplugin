@@ -184,7 +184,7 @@ Copy the `sudoku.koplugin/` folder onto the Kobo's
 - [x] M2: techniques (easy → expert, per tier, test-first)
 - [~] M3: solve path, difficulty, generation (implementation complete; full
       repository test gate is blocked by the KOReader version target)
-- [ ] M4: hint engine
+- [~] M4: hint engine (core; implementation complete, full repository test gate blocked by KOReader version target)
 - [ ] M5: game state machine + storage
 - [ ] M6: game UI (e-ink first)
 - [ ] M7: menus, hint display, stats screen

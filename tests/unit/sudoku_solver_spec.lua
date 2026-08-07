@@ -70,6 +70,33 @@ describe("core.solver", function()
         assert.is_string(err15)
     end)
 
+    it("accepts a legal candidate cache override", function()
+        local b = board.from_string(UNIQUE_PUZZLE)
+        local initial = assert(solver.new(b))
+        local override = candidates.clone(initial.candidates)
+        local before = candidates.get(override, 0, 2)
+        local removed = bit.band(before, bit.bnot(bit.lshift(1, 3)))
+        candidates.set(override, 0, 2, removed)
+
+        local restored = assert(solver.new(b, { candidates = override }))
+
+        assert.are.equal(removed, candidates.get(restored.candidates, 0, 2))
+    end)
+
+    it("rejects illegal candidate cache overrides", function()
+        local b = board.from_string(UNIQUE_PUZZLE)
+        local initial = assert(solver.new(b))
+        local override = candidates.clone(initial.candidates)
+        local legal = candidates.get(override, 0, 2)
+        local illegal = bit.band(bit.bnot(legal), 0x1FF)
+        candidates.set(override, 0, 2, bit.lshift(1, flags.lowest_bit(illegal)))
+
+        local invalid, err = solver.new(b, { candidates = override })
+
+        assert.is_nil(invalid)
+        assert.is_string(err)
+    end)
+
     it("solves a unique puzzle to its known solution", function()
         local s = solver.new(board.from_string(UNIQUE_PUZZLE))
         local solution = s:solve_any()

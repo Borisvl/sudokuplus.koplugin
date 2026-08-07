@@ -263,6 +263,58 @@ describe("core.techniques.propagator", function()
         assert.are.equal(NAKED_SINGLE_PUZZLE:sub(1, 80) .. "6", board.to_string(sol.board))
     end)
 
+    it("can stop after the first technique makes progress", function()
+        local techniques = bit.bor(flags.NAKED_SINGLES, flags.HIDDEN_SINGLES)
+        local next_solver = solver.new(board.from_string(HIDDEN_SINGLE_PUZZLE), { techniques = techniques })
+        local next_path = solve_path.new()
+        local before_board = board.clone(next_solver.board)
+        local before_candidates = candidates.clone(next_solver.candidates)
+        local ok = next_solver:propagate_next(next_path)
+
+        assert.is_true(ok)
+        assert.is_true(#next_path.steps > 0)
+        assert.are.same(before_board, next_solver.board)
+        assert.are.same(before_candidates, next_solver.candidates)
+        local first_flags = next_path.steps[1].flags
+        for _, step in ipairs(next_path.steps) do
+            assert.are.equal(first_flags, step.flags)
+        end
+
+        local full_solver = solver.new(board.from_string(HIDDEN_SINGLE_PUZZLE), { techniques = techniques })
+        local full_path = solve_path.new()
+        assert.is_true(full_solver:propagate(full_path))
+        local used_later_technique = false
+        for _, step in ipairs(full_path.steps) do
+            if step.flags ~= first_flags then
+                used_later_technique = true
+                break
+            end
+        end
+        assert.is_true(used_later_technique)
+    end)
+
+    it("rejects unsafe placements and multi-bit single eliminations", function()
+        local occupied = solver.new(board.from_string(NAKED_SINGLE_PUZZLE), { techniques = 0 })
+        local occupied_prop = propagator.new(occupied.board, occupied.masks, occupied.candidates, 0)
+        local occupied_path = solve_path.new()
+        local occupied_ok, occupied_err = occupied_prop:place_and_update(0, 0, 1, 0, occupied_path)
+
+        assert.is_nil(occupied_ok)
+        assert.is_string(occupied_err)
+        assert.are.equal(0, #occupied_path.steps)
+
+        local empty = solver.new(board.new(), { techniques = 0 })
+        local empty_prop = propagator.new(empty.board, empty.masks, empty.candidates, 0)
+        local empty_path = solve_path.new()
+        local multi_bit = bit.bor(bit.lshift(1, 0), bit.lshift(1, 1))
+        local eliminated, elimination_err = empty_prop:eliminate_candidate(0, 0, multi_bit, 0, empty_path)
+
+        assert.is_nil(eliminated)
+        assert.is_string(elimination_err)
+        assert.are.equal(0, #empty_path.steps)
+        assert.are.equal(0x1FF, empty_prop:cand(0, 0))
+    end)
+
     it("solve_until returns no solutions when propagation dead-ends", function()
         local s = solver.new(board.from_string(INCONSISTENT), { techniques = flags.NAKED_SINGLES })
         assert.is_nil(s:solve_any())

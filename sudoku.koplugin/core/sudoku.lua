@@ -1,5 +1,6 @@
 local board = require("core.board")
 local generator = require("core.generator")
+local hints = require("core.hints")
 local solver = require("core.solver")
 
 local sudoku = {}
@@ -62,6 +63,10 @@ end
 
 function sudoku.generate(opts)
     return generator.generate(opts)
+end
+
+function sudoku.next_hint(state, opts)
+    return hints.next(state, opts)
 end
 
 return sudoku

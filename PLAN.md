@@ -216,12 +216,39 @@ on the Kobo Aura One emulator profile.
 
 ### M4 — Hint engine (core)
 
-- [ ] `hints.lua`: next applicable technique for current board state
-- [ ] Progressive levels: ① name → ② pattern cells → ③ apply
-- [ ] Missed-strategy classification (hint requested ⇒ technique missed)
+- [x] `hints.lua`: next applicable technique for current board state
+- [x] Complete hint result; UI-owned progressive reveal: ① name → ② pattern
+      cells → ③ apply
+- [x] Missed-strategy classification (hint requested ⇒ technique missed)
 
-**Exit criteria**: hints verified against HoDoKu examples; level semantics
-tested; stats feed point defined.
+The final M4 API is stateless:
+
+```lua
+hints.next({
+    board = board,
+    notes = candidate_masks,
+    solution = solution, -- optional; enables solution-candidate validation
+    revision = revision,
+}, opts)
+```
+
+`notes` are authoritative candidate masks, initialized from board-legal
+candidates and updated by the game layer. The core returns one complete
+deduction with technique, pattern, action, revision, and stable hint ID; it
+does not accept or track a reveal level. The UI owns progressive display of
+the technique name, pattern cells, and action. Candidate eliminations already
+absent from `notes` are skipped, while empty/illegal masks and removal of a
+known solution candidate return `note_error` results and block deduction.
+Notes on given cells are also errors. A candidate removal that is not the
+solution value is accepted as user state, even when the user cannot justify
+it; callers that need solution-aware validation must provide `solution`.
+Without `solution`, deduction and structural contradiction checks still run,
+but the engine cannot detect removal of the correct candidate. Missing,
+illegal, or empty note masks are malformed state and return an error result.
+
+**Exit criteria**: hints and note-state semantics verified against HoDoKu
+examples; complete-result/UI-reveal contract documented; stats feed point
+defined.
 
 ### M5 — Game state machine + storage (UI-free, testable)
 

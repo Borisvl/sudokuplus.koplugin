@@ -17,6 +17,7 @@ local masks_remove = masks.remove_number
 local cand_new_trail = candidates.new_trail
 local cand_mark = candidates.mark
 local cand_get = candidates.get
+local cand_count = candidates.count
 local cand_rollback = candidates.rollback
 local cand_set = candidates.set
 local cand_update_for = candidates.update_affected_cells_for
@@ -72,7 +73,7 @@ end
 
 local technique_order, loaded_technique_names = load_techniques()
 
-function propagator.new(b, m, c, techniques)
+function propagator.new(b, m, c, techniques, options)
     return setmetatable({
         board = b,
         masks = m,
@@ -81,6 +82,8 @@ function propagator.new(b, m, c, techniques)
         candidate_trail = cand_new_trail(),
         candidate_step_markers = {},
         search_status = nil,
+        aic_max_depth = options and options.aic_max_depth,
+        aic_max_expansions = options and options.aic_max_expansions,
     }, mt)
 end
 
@@ -150,6 +153,20 @@ function mt:count_candidates_eliminated(r, c, num)
 end
 
 function mt:place_and_update(r, c, num, technique_flags, path, pattern)
+    if not board_is_empty(self.board, r, c) then
+        return nil, "placement target must be empty"
+    end
+    if type(num) ~= "number" or num % 1 ~= 0 or num < 1 or num > 9 then
+        return nil, "placement value must be an integer in the range 1..9"
+    end
+    if not masks.is_safe(self.masks, r, c, num) then
+        return nil, "placement value violates Sudoku constraints"
+    end
+    local value_bit = bit.lshift(1, num - 1)
+    if bit.band(cand_get(self.candidates, r, c), value_bit) == 0 then
+        return nil, "placement value is not a candidate"
+    end
+
     local candidate_marker = cand_mark(self.candidate_trail)
     board_set(self.board, r, c, num)
     masks_add(self.masks, r, c, num)
@@ -165,9 +182,23 @@ function mt:place_and_update(r, c, num, technique_flags, path, pattern)
     step.difficulty_point = flags.difficulty_point(technique_flags)
     path_push(path, step)
     self.candidate_step_markers[step] = candidate_marker
+    return true
 end
 
 function mt:eliminate_candidate(r, c, candidate_bit, technique_flags, path, pattern)
+    if
+        type(candidate_bit) ~= "number"
+        or candidate_bit % 1 ~= 0
+        or candidate_bit < 1
+        or candidate_bit > bit.lshift(1, 8)
+        or cand_count(candidate_bit) ~= 1
+    then
+        return nil, "candidate_bit must contain exactly one candidate"
+    end
+    if not board_is_empty(self.board, r, c) then
+        return nil, "elimination target must be empty"
+    end
+
     local candidate_marker = cand_mark(self.candidate_trail)
     local initial = cand_get(self.candidates, r, c)
     local refined = bit.band(initial, bit.bnot(candidate_bit))
@@ -285,7 +316,7 @@ function mt:rollback(path, initial_path_len)
     end
 end
 
-function mt:propagate_constraints(path, initial_path_len)
+function mt:propagate_constraints(path, initial_path_len, stop_after_change)
     while true do
         local changed = false
         for _, tech in ipairs(technique_order) do
@@ -304,6 +335,10 @@ function mt:propagate_constraints(path, initial_path_len)
         if has_dead_end(self) then
             self:rollback(path, initial_path_len)
             return false, self.search_status
+        end
+
+        if changed and stop_after_change then
+            return true, self.search_status
         end
 
         if not changed then
