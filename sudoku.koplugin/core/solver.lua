@@ -173,6 +173,43 @@ local function solve_until_recursive(state, solutions, path, bound)
     end
 end
 
+local function count_solutions_recursive(state, count, limit)
+    if limit > 0 and count >= limit then
+        return count
+    end
+
+    local r, col = find_next_empty_cell(state)
+    if not r then
+        return count + 1
+    end
+
+    local nums = cand_from_mask(cand_get(state.candidates, r, col))
+    state.rng:shuffle(nums)
+    for _, num in ipairs(nums) do
+        if masks_is_safe(state.masks, r, col, num) then
+            local candidates_before = cand_clone(state.candidates)
+            place_number(state, r, col, num)
+            count = count_solutions_recursive(state, count, limit)
+            remove_number(state, r, col, num)
+            cand_restore(state.candidates, candidates_before)
+            if limit > 0 and count >= limit then
+                return count
+            end
+        end
+    end
+    return count
+end
+
+local function validate_solution_limit(limit)
+    if limit == nil then
+        return 0
+    end
+    if type(limit) ~= "number" or limit % 1 ~= 0 or limit < 0 then
+        return nil, "solution limit must be a non-negative integer"
+    end
+    return limit
+end
+
 function mt:solve_until(bound)
     local solutions = {}
     local path = solve_path.new()
@@ -197,8 +234,29 @@ function mt:solve_any()
     return self:solve_until(1)[1]
 end
 
-function mt:solve_all()
-    return self:solve_until(0)
+function mt:solve_all(limit)
+    local normalized_limit, err = validate_solution_limit(limit)
+    if not normalized_limit then
+        return nil, err
+    end
+    return self:solve_until(normalized_limit)
+end
+
+function mt:count_solutions(limit)
+    local normalized_limit, err = validate_solution_limit(limit)
+    if not normalized_limit then
+        return nil, err
+    end
+
+    local state = clone_state(self)
+    local path = solve_path.new()
+    if state.techniques ~= 0 then
+        local prop = propagator.new(state.board, state.masks, state.candidates, state.techniques)
+        if not prop:propagate_constraints(path, 0) then
+            return 0
+        end
+    end
+    return count_solutions_recursive(state, 0, normalized_limit)
 end
 
 function mt:is_solved()

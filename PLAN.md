@@ -127,9 +127,10 @@ metatable).
       duplicate values, injects rng; `solve_until(bound)` (DFS + MRV via
       candidate counts, rng-shuffled candidates, path recording),
       `solve_any`, `solve_all` (= `solve_until(0)`; rustoku's rayon split is
-      not ported), `is_solved`; technique-phase hook point reserved for M2
+      not ported), count-only `count_solutions(limit)`, `is_solved`;
+      technique-phase hook point reserved for M2
 - [x] `core/sudoku.lua` — minimal facade (`from_string`, `solve_any`,
-      `solve_all`, `solutions_count`, `is_solved`)
+      `solve_all(limit)`, count-only `solutions_count(limit)`, `is_solved`)
 - [x] Specs `sudoku_{prng,board,masks,candidates,solver}_spec.lua` — port
       rustoku's tests (board.rs, masks.rs, candidates.rs, mod.rs core: known
       puzzle→solution, unsolvable, `solve_until` bound semantics, 1/2/6
