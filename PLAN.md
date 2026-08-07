@@ -195,14 +195,24 @@ tier); determinism with seeded PRNG.
 
 ### M3 — Solve path, difficulty, generation
 
-- [ ] Difficulty classification: hardest technique used in solve path
-- [ ] `generator.lua`: solved-board sampling → clue removal preserving unique
+Refined plan: `solve_path.classify(path)` returns the hardest flagged tier,
+whether the path contains a flagless backtracking placement, the hardest flag,
+and its step number. `generator.generate(opts)` returns a puzzle board or
+`nil, message`; it accepts an injected PRNG, samples a solved board, and
+removes stable symmetry groups only while preserving uniqueness and the
+minimum clue target. Supported symmetry modes match rustoku. Difficulty
+targets use rustoku's clue ranges and require an exact no-guessing human solve.
+
+- [x] Difficulty classification: hardest technique used in solve path
+- [x] `generator.lua`: solved-board sampling → clue removal preserving unique
       solution (`solve_until(2)`), symmetry modes, difficulty-targeted retry
       loop
-- [ ] Performance sanity in emulator: generation ≤ a few seconds worst case
+- [x] Performance sanity in emulator: generation ≤ a few seconds worst case
 
 **Exit criteria**: property tests — unique solutions; Easy never needs more
-than easy techniques; Hard needs (e.g.) skyscraper-level; clue-count ranges.
+than easy techniques; Hard needs (e.g.) skyscraper-level; clue-count ranges;
+and the fixed-seed generation benchmark stays below three seconds per sample
+on the Kobo Aura One emulator profile.
 
 ### M4 — Hint engine (core)
 

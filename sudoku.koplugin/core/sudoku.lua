@@ -1,4 +1,5 @@
 local board = require("core.board")
+local generator = require("core.generator")
 local solver = require("core.solver")
 
 local sudoku = {}
@@ -57,6 +58,10 @@ function sudoku.is_solved(puzzle)
         return false, solver_err
     end
     return s:is_solved()
+end
+
+function sudoku.generate(opts)
+    return generator.generate(opts)
 end
 
 return sudoku

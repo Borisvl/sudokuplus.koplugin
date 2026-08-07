@@ -1,5 +1,6 @@
 package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 
+local flags = require("core.techniques.flags")
 local solve_path = require("core.solve_path")
 
 describe("core.solve_path", function()
@@ -82,5 +83,42 @@ describe("core.solve_path", function()
 
         path.steps[1].pattern.cells[1][2] = 7
         assert.are.equal(1, snap.steps[1].pattern.cells[1][2])
+    end)
+
+    it("classifies an empty path as an easy path", function()
+        local result = solve_path.classify(solve_path.new())
+
+        assert.are.equal("easy", result.difficulty)
+        assert.is_false(result.requires_guessing)
+        assert.are.equal(0, result.hardest_flags)
+        assert.is_nil(result.hardest_step_number)
+    end)
+
+    it("classifies the hardest flagged technique in a path", function()
+        local path = solve_path.new()
+        solve_path.push(path, solve_path.placement_step(0, 0, 1, flags.NAKED_SINGLES))
+        solve_path.push(path, solve_path.elimination_step(0, 1, 2, flags.NAKED_PAIRS))
+        solve_path.push(path, solve_path.elimination_step(0, 2, 3, flags.SKYSCRAPER))
+        solve_path.push(path, solve_path.elimination_step(0, 3, 4, flags.W_WING))
+
+        local result = solve_path.classify(path)
+
+        assert.are.equal("expert", result.difficulty)
+        assert.is_false(result.requires_guessing)
+        assert.are.equal(flags.W_WING, result.hardest_flags)
+        assert.are.equal(3, result.hardest_step_number)
+    end)
+
+    it("marks flagless placements as requiring guessing", function()
+        local path = solve_path.new()
+        solve_path.push(path, solve_path.placement_step(0, 0, 1, flags.NAKED_SINGLES))
+        solve_path.push(path, solve_path.placement_step(0, 1, 2))
+
+        local result = solve_path.classify(path)
+
+        assert.are.equal("easy", result.difficulty)
+        assert.is_true(result.requires_guessing)
+        assert.are.equal(flags.NAKED_SINGLES, result.hardest_flags)
+        assert.are.equal(0, result.hardest_step_number)
     end)
 end)

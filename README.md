@@ -129,7 +129,29 @@ third_party/koreader/base/build/arm64-apple-darwin25.5.0-debug/luajit \
 On a device, run the same script with KOReader's bundled `luajit`. The script
 derives the project root from its own path, so it does not depend on the
 current working directory. Generated boards are propagation stress cases; the
-benchmark does not yet include the M3 puzzle-generation retry loop.
+propagation benchmark does not include the M3 puzzle-generation retry loop.
+
+### Generation benchmark
+
+`tools/bench_generation.lua` measures seeded puzzle generation across the six
+symmetry modes and the Easy through Expert difficulty retry loops. It reports
+p50/p95/maximum generation time and clue-count ranges, and fails if any sample
+exceeds the three-second local sanity limit.
+
+```sh
+third_party/koreader/base/build/arm64-apple-darwin25.5.0-debug/luajit \
+    tools/bench_generation.lua --quick
+```
+
+For a larger sample:
+
+```sh
+third_party/koreader/base/build/arm64-apple-darwin25.5.0-debug/luajit \
+    tools/bench_generation.lua
+```
+
+The benchmark uses `os.clock()` only in development tooling. Repeat it with
+KOReader's bundled `luajit` on the target reader for meaningful device timing.
 
 ### Linting and formatting
 
@@ -159,8 +181,9 @@ Copy the `sudoku.koplugin/` folder onto the Kobo's
 - [x] M0: test harness (specs symlinked, `./dev.sh test`), rustoku pinned
 - [x] M1: core foundations (board, masks, candidates, MRV solver, PRNG,
       solve path, facade) — fully tested
-- [ ] M2: techniques (easy → expert, per tier, test-first)
-- [ ] M3: solve path, difficulty, generation
+- [x] M2: techniques (easy → expert, per tier, test-first)
+- [~] M3: solve path, difficulty, generation (implementation complete; full
+      repository test gate is blocked by the KOReader version target)
 - [ ] M4: hint engine
 - [ ] M5: game state machine + storage
 - [ ] M6: game UI (e-ink first)
