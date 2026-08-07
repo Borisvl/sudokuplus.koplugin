@@ -6,6 +6,7 @@ local candidates = require("core.candidates")
 local prng = require("core.prng")
 local solver = require("core.solver")
 local sudoku = require("core.sudoku")
+local flags = require("core.techniques.flags")
 
 local UNIQUE_PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
 local UNIQUE_SOLUTION = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
@@ -13,6 +14,7 @@ local TWO_PUZZLE = "295743861431865900876192543387459216612387495549216738763504
 local SIX_PUZZLE = "295743001431865900876192543387459216612387495549216738763500000000000000000000000"
 local UNSOLVABLE = "078002609030008020002000083000000040043090000007300090200001036001840902050003007"
 local DUPLICATES = "530070000600195000098000060800060003400803001700020006060000280000419005500080079"
+local X_WING_PUZZLE = "000000000760003002002640009403900070000004903005000020010560000370090041000000060"
 
 describe("core.solver", function()
     it("rejects boards with duplicate initial values", function()
@@ -118,6 +120,23 @@ describe("core.solver", function()
         assert.are.equal(1, #bounded)
         assert.are.equal(1, #all)
         assert.are.equal(board.to_string(bounded[1].board), board.to_string(all[1].board))
+    end)
+
+    it("repeats techniques-enabled solves with complete paths", function()
+        local techniques = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, flags.X_WING))
+        local s = solver.new(board.from_string(X_WING_PUZZLE), {
+            techniques = techniques,
+            rng = prng.new(42),
+        })
+        local first = s:solve_any()
+        local second = s:solve_any()
+
+        assert.is_not_nil(first)
+        assert.is_not_nil(second)
+        assert.is_true(#first.solve_path.steps > 0)
+        assert.are.equal(board.to_string(first.board), board.to_string(second.board))
+        assert.are.same(first.solve_path.steps, second.solve_path.steps)
+        assert.are.equal(X_WING_PUZZLE, board.to_string(s.board))
     end)
 
     it("records placement steps with increasing step numbers", function()

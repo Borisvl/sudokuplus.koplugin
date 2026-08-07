@@ -28,6 +28,26 @@ local path_push = solve_path.push
 local path_placement = solve_path.placement_step
 local path_snapshot = solve_path.snapshot
 
+local function clone_masks(m)
+    local copy = { row = {}, col = {}, box = {} }
+    for i = 1, 9 do
+        copy.row[i] = m.row[i]
+        copy.col[i] = m.col[i]
+        copy.box[i] = m.box[i]
+    end
+    return copy
+end
+
+local function clone_state(state)
+    return {
+        board = board_clone(state.board),
+        masks = clone_masks(state.masks),
+        candidates = cand_clone(state.candidates),
+        rng = prng.new(state.rng.state),
+        techniques = state.techniques,
+    }
+end
+
 function solver.validate(b)
     local m = masks.new()
     for r = 0, 8 do
@@ -131,13 +151,14 @@ end
 function mt:solve_until(bound)
     local solutions = {}
     local path = solve_path.new()
-    if self.techniques ~= 0 then
-        local prop = propagator.new(self.board, self.masks, self.candidates, self.techniques)
+    local state = clone_state(self)
+    if state.techniques ~= 0 then
+        local prop = propagator.new(state.board, state.masks, state.candidates, state.techniques)
         if not prop:propagate_constraints(path, 0) then
             return solutions
         end
     end
-    solve_until_recursive(self, solutions, path, bound)
+    solve_until_recursive(state, solutions, path, bound)
     return solutions
 end
 
