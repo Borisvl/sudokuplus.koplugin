@@ -174,9 +174,10 @@ duplication).
       rustoku's x-chain / xy-chain / nice-loop examples; all six solve
       guess-free with the seventeen implemented techniques). Divergences from
       rustoku: AIC nodes are encoded as integers and the BFS is bounded by a
-      `MAX_EXPANSIONS` cap (rustoku explores unbounded; a dense board without
-      eliminations takes multiple seconds otherwise) — a capped pass gives up
-      on that state, classifying the puzzle as requiring a guess; AIC BFS
+      `MAX_EXPANSIONS` cap and a `MAX_DEPTH` of 14 nodes (rustoku explores
+      unbounded; a dense board without eliminations takes multiple seconds
+      otherwise) — a capped pass reports `search_capped` and gives up on that
+      state, classifying the puzzle as requiring a guess; AIC BFS
       starts are filtered to candidates with a strong link (sound, chains
       always start strong). Wing patterns carry `pivot`/`pincers` (+ W-Wing
       `bridge` cells and `bridge_value`); AIC patterns carry the chain

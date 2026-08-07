@@ -3,6 +3,9 @@ package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 local bit = require("bit")
 local board = require("core.board")
 local candidates = require("core.candidates")
+local masks = require("core.masks")
+local aic = require("core.techniques.aic")
+local propagator = require("core.techniques.propagator")
 local solve_path = require("core.solve_path")
 local solver = require("core.solver")
 local flags = require("core.techniques.flags")
@@ -30,6 +33,18 @@ local function is_in_values(values, v)
         end
     end
     return false
+end
+
+local function capped_propagator()
+    local c = candidates.new()
+    for r = 0, 8 do
+        for col = 0, 8 do
+            candidates.set(c, r, col, 0x1FF)
+        end
+    end
+    candidates.set(c, 0, 0, bit.bor(bit.lshift(1, 0), bit.lshift(1, 1)))
+    local p = propagator.new(board.new(), masks.new(), c, flags.ALTERNATING_INFERENCE_CHAIN)
+    return p
 end
 
 describe("core.techniques.aic", function()
@@ -85,4 +100,41 @@ describe("core.techniques.aic", function()
             end
         end)
     end
+
+    it("reports expansion-cap status separately from no-chain", function()
+        local no_chain_prop = propagator.new(board.new(), masks.new(), candidates.new(), 0)
+        local no_chain_changed, no_chain_status = aic.apply(no_chain_prop, solve_path.new())
+        assert.is_false(no_chain_changed)
+        assert.is_nil(no_chain_status)
+
+        local p = capped_propagator()
+        p.aic_max_expansions = 0
+        local path = solve_path.new()
+        local changed, status = aic.apply(p, path)
+
+        assert.is_false(changed)
+        assert.are.equal("search_capped", status)
+        assert.are.equal(14, aic.MAX_DEPTH)
+        assert.are.equal(10000, aic.MAX_EXPANSIONS)
+    end)
+
+    it("reports depth-cap status", function()
+        local p = capped_propagator()
+        p.aic_max_depth = 1
+        local path = solve_path.new()
+        local changed, status = aic.apply(p, path)
+
+        assert.is_false(changed)
+        assert.are.equal("search_capped", status)
+    end)
+
+    it("exposes a capped AIC pass through the propagator", function()
+        local p = capped_propagator()
+        p.aic_max_expansions = 0
+        local path = solve_path.new()
+        local ok, status = p:propagate_constraints(path, 0)
+
+        assert.is_true(ok)
+        assert.are.equal("search_capped", status)
+    end)
 end)

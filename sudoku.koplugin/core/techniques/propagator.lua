@@ -62,6 +62,7 @@ function propagator.new(b, m, c, techniques)
         candidates = c,
         techniques = techniques or 0,
         candidate_snapshots = {},
+        search_status = nil,
     }, mt)
 end
 
@@ -248,7 +249,11 @@ function mt:propagate_constraints(path, initial_path_len)
         local changed = false
         for _, tech in ipairs(technique_order) do
             if bit.band(self.techniques, tech.flags()) ~= 0 then
-                changed = tech.apply(self, path)
+                local status
+                changed, status = tech.apply(self, path)
+                if status then
+                    self.search_status = status
+                end
                 if changed then
                     break
                 end
@@ -257,14 +262,14 @@ function mt:propagate_constraints(path, initial_path_len)
 
         if has_dead_end(self) then
             self:rollback(path, initial_path_len)
-            return false
+            return false, self.search_status
         end
 
         if not changed then
             break
         end
     end
-    return true
+    return true, self.search_status
 end
 
 return propagator

@@ -15,7 +15,12 @@ local units = require("core.techniques.units")
 -- allocates no per-node tables; the pattern metadata decodes them back.
 local aic = {}
 
+-- Maximum number of nodes explored in one chain.
 local MAX_DEPTH = 14
+
+aic.MAX_DEPTH = MAX_DEPTH
+aic.MAX_EXPANSIONS = 10000
+aic.STATUS_SEARCH_CAPPED = "search_capped"
 
 -- Bounds the worst-case BFS cost of a single AIC pass. A dense board with no
 -- reachable elimination would otherwise explore every chain to full depth
@@ -24,8 +29,6 @@ local MAX_DEPTH = 14
 -- Divergence from rustoku: rustoku explores without bound. A capped pass
 -- returns false without eliminations, so deep chains on pathological boards
 -- are skipped (the puzzle then classifies as needing a guess).
-local MAX_EXPANSIONS = 10000
-
 local board_is_empty = board.is_empty
 local cand_get = candidates.get
 
@@ -211,6 +214,8 @@ local function is_strong_linked(prop, node)
 end
 
 function aic.apply(prop, path)
+    local max_depth = prop.aic_max_depth or aic.MAX_DEPTH
+    local max_expansions = prop.aic_max_expansions or aic.MAX_EXPANSIONS
     local starts = {}
     for r = 0, 8 do
         for c = 0, 8 do
@@ -226,16 +231,19 @@ function aic.apply(prop, path)
         end
     end
     local expansions = 0
+    local depth_capped = false
     for _, start in ipairs(starts) do
         local queue = { { nodes = { start }, last_link = "weak" } }
         local head = 1
         while head <= #queue do
             local current_path = queue[head]
             head = head + 1
-            if #current_path.nodes < MAX_DEPTH then
+            if #current_path.nodes >= max_depth then
+                depth_capped = true
+            else
                 expansions = expansions + 1
-                if expansions > MAX_EXPANSIONS then
-                    return false
+                if expansions > max_expansions then
+                    return false, aic.STATUS_SEARCH_CAPPED
                 end
                 local current = current_path.nodes[#current_path.nodes]
                 local need_strong = current_path.last_link == "weak"
@@ -260,6 +268,9 @@ function aic.apply(prop, path)
                 end
             end
         end
+    end
+    if depth_capped then
+        return false, aic.STATUS_SEARCH_CAPPED
     end
     return false
 end
