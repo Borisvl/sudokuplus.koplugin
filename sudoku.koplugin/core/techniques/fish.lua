@@ -11,13 +11,6 @@ local units = require("core.techniques.units")
 -- lines as `base` and the crossing lines as `cover`.
 local fish = {}
 
-local function line_cells(unit_type, index)
-    if unit_type == "row" then
-        return units.row_cells(index)
-    end
-    return units.col_cells(index)
-end
-
 local function line_unit(unit_type, index)
     if unit_type == "row" then
         return units.row_unit(index)
@@ -63,12 +56,16 @@ local function process_orientation(prop, path, candidate_bit, unit_type, size, t
                 base = base_units,
                 cover = cover_units,
             }
-            for _, index in ipairs(base_lines) do
-                for _, cell in ipairs(line_cells(unit_type, index)) do
-                    local r, c = cell[1], cell[2]
-                    if prop:is_empty(r, c) and bit.band(prop:cand(r, c), candidate_bit) ~= 0 then
-                        pattern.cells[#pattern.cells + 1] = { r, c }
+            for _, i in ipairs(combo) do
+                local entry = eligible[i]
+                for _, position in ipairs(entry[2]) do
+                    local r, c
+                    if unit_type == "row" then
+                        r, c = entry[1], position
+                    else
+                        r, c = position, entry[1]
                     end
+                    pattern.cells[#pattern.cells + 1] = { r, c }
                 end
             end
             for position = 0, 8 do

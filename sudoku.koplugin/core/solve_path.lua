@@ -1,5 +1,26 @@
 local solve_path = {}
 
+-- Step metrics describe direct effects of a step, not all cells in its pattern.
+-- Elimination steps remove one candidate value; placement steps count all peer
+-- candidates removed and peer cells directly affected by that placement.
+
+local function deep_copy(value, seen)
+    if type(value) ~= "table" then
+        return value
+    end
+    seen = seen or {}
+    if seen[value] then
+        return seen[value]
+    end
+
+    local copy = {}
+    seen[value] = copy
+    for key, nested in pairs(value) do
+        copy[deep_copy(key, seen)] = deep_copy(nested, seen)
+    end
+    return copy
+end
+
 function solve_path.new()
     return { steps = {} }
 end
@@ -39,8 +60,9 @@ end
 
 function solve_path.snapshot(path)
     local steps = {}
+    local seen = {}
     for i = 1, #path.steps do
-        steps[i] = path.steps[i]
+        steps[i] = deep_copy(path.steps[i], seen)
     end
     return { steps = steps }
 end

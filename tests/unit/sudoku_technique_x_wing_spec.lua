@@ -3,6 +3,9 @@ package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 local bit = require("bit")
 local board = require("core.board")
 local candidates = require("core.candidates")
+local masks = require("core.masks")
+local fish = require("core.techniques.fish")
+local propagator = require("core.techniques.propagator")
 local solve_path = require("core.solve_path")
 local solver = require("core.solver")
 local flags = require("core.techniques.flags")
@@ -102,6 +105,24 @@ describe("core.techniques.x_wing", function()
                     assert.are.equal(orig, board.get(s.board, r, c))
                 end
             end
+        end
+    end)
+
+    it("preserves all defining cells in overlapping fish metadata", function()
+        local c = candidates.new()
+        local candidate_bit = bit.lshift(1, 0)
+        for r = 0, 2 do
+            for col = 0, 1 do
+                candidates.set(c, r, col, candidate_bit)
+            end
+        end
+
+        local p = propagator.new(board.new(), masks.new(), c, 0)
+        local path = solve_path.new()
+        assert.is_true(fish.apply(p, path, 2, flags.X_WING, "x_wing"))
+        assert.is_true(#path.steps > 0)
+        for _, step in ipairs(path.steps) do
+            assert.are.equal(4, #step.pattern.cells)
         end
     end)
 

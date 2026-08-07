@@ -163,13 +163,12 @@ function mt:eliminate_multiple_candidates(r, c, elimination_mask, technique_flag
     cand_set(self.candidates, r, c, refined)
 
     local eliminated_mask = bit.band(initial, elimination_mask)
-    local eliminated_count = flags.count(eliminated_mask)
 
     for num = 1, 9 do
         local num_bit = bit.lshift(1, num - 1)
         if bit.band(eliminated_mask, num_bit) ~= 0 then
             local step = path_elimination(r, c, num, technique_flags, pattern)
-            step.candidates_eliminated = eliminated_count
+            step.candidates_eliminated = 1
             step.related_cell_count = 1
             step.difficulty_point = flags.difficulty_point(technique_flags)
             path_push(path, step)

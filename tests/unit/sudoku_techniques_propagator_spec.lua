@@ -342,8 +342,21 @@ describe("core.techniques.propagator", function()
         assert.are.equal(0, bit.band(p:cand(3, 2), two))
         for _, step in ipairs(path.steps) do
             assert.are.equal("elim", step.type)
-            assert.are.equal(2, step.candidates_eliminated)
+            assert.are.equal(1, step.candidates_eliminated)
+            assert.are.equal(1, step.related_cell_count)
         end
+        assert.are.equal(2, path.steps[1].candidates_eliminated + path.steps[2].candidates_eliminated)
+    end)
+
+    it("records placement metrics for direct peer effects", function()
+        local s = solver.new(board.new(), { techniques = 0 })
+        local p = propagator.new(s.board, s.masks, s.candidates, 0)
+        local path = solve_path.new()
+
+        p:place_and_update(0, 0, 1, 0, path)
+
+        assert.are.equal(20, path.steps[1].candidates_eliminated)
+        assert.are.equal(20, path.steps[1].related_cell_count)
     end)
 
     it("rollback restores eliminated candidates", function()

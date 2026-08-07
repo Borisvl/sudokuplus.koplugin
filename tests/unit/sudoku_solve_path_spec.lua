@@ -57,4 +57,30 @@ describe("core.solve_path", function()
         path.steps[1] = nil
         assert.are.equal(1, #snap.steps)
     end)
+
+    it("snapshots deep-copy nested pattern metadata", function()
+        local pattern = {
+            kind = "fish",
+            cells = { { 0, 1 } },
+            values = { 5 },
+            unit = { type = "row", index = 0 },
+            base = { { type = "row", index = 0 } },
+        }
+        local path = solve_path.new()
+        solve_path.push(path, solve_path.elimination_step(0, 2, 5, 1, pattern))
+        local snap = solve_path.snapshot(path)
+
+        snap.steps[1].pattern.cells[1][1] = 8
+        snap.steps[1].pattern.values[1] = 9
+        snap.steps[1].pattern.unit.index = 8
+        snap.steps[1].pattern.base[1].type = "col"
+
+        assert.are.equal(0, path.steps[1].pattern.cells[1][1])
+        assert.are.equal(5, path.steps[1].pattern.values[1])
+        assert.are.equal(0, path.steps[1].pattern.unit.index)
+        assert.are.equal("row", path.steps[1].pattern.base[1].type)
+
+        path.steps[1].pattern.cells[1][2] = 7
+        assert.are.equal(1, snap.steps[1].pattern.cells[1][2])
+    end)
 end)
