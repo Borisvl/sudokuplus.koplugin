@@ -4,13 +4,25 @@ local prng = {}
 local mt = {}
 
 local DEFAULT_SEED = 0x9E3779B9
+local UINT32_MASK = 0xFFFFFFFF
+
+local function normalize_seed(seed)
+    if seed == nil then
+        seed = DEFAULT_SEED
+    end
+    if type(seed) ~= "number" or seed % 1 ~= 0 then
+        error("seed must be an integer")
+    end
+
+    local state = bit.band(seed, UINT32_MASK)
+    if state == 0 then
+        state = bit.band(DEFAULT_SEED, UINT32_MASK)
+    end
+    return state
+end
 
 function prng.new(seed)
-    local state = seed or DEFAULT_SEED
-    if state == 0 then
-        state = DEFAULT_SEED
-    end
-    return setmetatable({ state = bit.band(state, 0xFFFFFFFF) }, { __index = mt })
+    return setmetatable({ state = normalize_seed(seed) }, { __index = mt })
 end
 
 function mt:next()
@@ -26,6 +38,9 @@ function mt:next()
 end
 
 function mt:int(n)
+    if type(n) ~= "number" or n % 1 ~= 0 or n <= 0 then
+        error("n must be a positive integer")
+    end
     return 1 + (self:next() % n)
 end
 

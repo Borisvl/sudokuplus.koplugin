@@ -1,5 +1,10 @@
+package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
+
+local sudoku = require("core.sudoku")
+
 describe("sudoku test harness", function()
-    it("runs specs from the sudoku repo's tests/unit directory", function()
-        assert.is_true(true)
+    it("loads the plugin core facade", function()
+        assert.is_table(sudoku)
+        assert.is_function(sudoku.solve_any)
     end)
 end)

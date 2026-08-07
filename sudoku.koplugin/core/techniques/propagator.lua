@@ -24,9 +24,8 @@ local path_push = solve_path.push
 local path_placement = solve_path.placement_step
 local path_elimination = solve_path.elimination_step
 
--- Fixed technique order (rustoku parity). Modules are required lazily so the
--- propagator works while a tier is only partially ported; each technique spec
--- exercises its own technique through this same loop.
+-- Fixed technique order (rustoku parity). All modules are loaded eagerly so a
+-- deployment or porting error cannot silently change the enabled technique set.
 local TECHNIQUE_NAMES = {
     "naked_singles",
     "hidden_singles",
@@ -47,13 +46,30 @@ local TECHNIQUE_NAMES = {
     "aic",
 }
 
-local technique_order = {}
-for _, name in ipairs(TECHNIQUE_NAMES) do
-    local ok, mod = pcall(require, "core.techniques." .. name)
-    if ok and mod then
-        technique_order[#technique_order + 1] = mod
+local function load_techniques()
+    local order = {}
+    local names = {}
+
+    for _, name in ipairs(TECHNIQUE_NAMES) do
+        local ok, mod_or_error = pcall(require, "core.techniques." .. name)
+        if not ok then
+            error("failed to load Sudoku technique '" .. name .. "': " .. tostring(mod_or_error))
+        end
+        if
+            type(mod_or_error) ~= "table"
+            or type(mod_or_error.apply) ~= "function"
+            or type(mod_or_error.flags) ~= "function"
+        then
+            error("Sudoku technique '" .. name .. "' did not return a valid technique module")
+        end
+        order[#order + 1] = mod_or_error
+        names[#names + 1] = name
     end
+
+    return order, names
 end
+
+local technique_order, loaded_technique_names = load_techniques()
 
 function propagator.new(b, m, c, techniques)
     return setmetatable({
@@ -64,6 +80,14 @@ function propagator.new(b, m, c, techniques)
         candidate_snapshots = {},
         search_status = nil,
     }, mt)
+end
+
+function propagator.technique_names()
+    local names = {}
+    for i, name in ipairs(loaded_technique_names) do
+        names[i] = name
+    end
+    return names
 end
 
 function mt:is_empty(r, c)

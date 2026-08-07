@@ -3,6 +3,7 @@ package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 local bit = require("bit")
 local board = require("core.board")
 local candidates = require("core.candidates")
+local prng = require("core.prng")
 local solve_path = require("core.solve_path")
 local solver = require("core.solver")
 local flags = require("core.techniques.flags")
@@ -58,7 +59,37 @@ local function assert_valid_completion(puzzle, completed, label)
     end
 end
 
+local function copy_list(list)
+    local copy = {}
+    for i, value in ipairs(list) do
+        copy[i] = value
+    end
+    return copy
+end
+
 describe("core.techniques.propagator", function()
+    it("loads every configured technique", function()
+        assert.are.same({
+            "naked_singles",
+            "hidden_singles",
+            "naked_pairs",
+            "hidden_pairs",
+            "locked_candidates",
+            "naked_triples",
+            "hidden_triples",
+            "x_wing",
+            "naked_quads",
+            "hidden_quads",
+            "swordfish",
+            "jellyfish",
+            "skyscraper",
+            "w_wing",
+            "xy_wing",
+            "xyz_wing",
+            "aic",
+        }, propagator.technique_names())
+    end)
+
     it("does nothing when no techniques are enabled", function()
         local s = solver.new(board.from_string(NAKED_SINGLE_PUZZLE))
         local path = solve_path.new()
@@ -417,5 +448,54 @@ describe("core.techniques.propagator", function()
         assert.are.equal(before_board, board.to_string(s.board))
         assert.are.equal(bit.lshift(1, 0), p:cand(0, 0))
         assert.are.equal(bit.lshift(1, 0), p:cand(1, 1))
+    end)
+
+    it("preserves randomized candidate state across branch rollback", function()
+        local solution =
+            board.from_string("534678912672195348198342567859761423426853791713924856961537284287419635345286179")
+        local rng = prng.new(91)
+
+        for _ = 1, 12 do
+            local puzzle = board.clone(solution)
+            for _ = 1, 35 do
+                local index = rng:int(81)
+                puzzle[index] = 0
+            end
+
+            local s = assert(solver.new(puzzle, { techniques = 0 }))
+            local before_board = board.clone(s.board)
+            local before_masks = {
+                row = copy_list(s.masks.row),
+                col = copy_list(s.masks.col),
+                box = copy_list(s.masks.box),
+            }
+            local before_candidates = candidates.clone(s.candidates)
+            local p = propagator.new(s.board, s.masks, s.candidates, 0)
+            local path = solve_path.new()
+
+            for _ = 1, 8 do
+                local empty = board.iter_empty_cells(s.board)
+                if #empty == 0 then
+                    break
+                end
+                local cell = empty[rng:int(#empty)]
+                local mask = p:cand(cell[1], cell[2])
+                local values = candidates.from_mask(mask)
+                if #values == 0 then
+                    break
+                end
+
+                if rng:int(2) == 1 then
+                    p:eliminate_candidate(cell[1], cell[2], bit.lshift(1, values[rng:int(#values)] - 1), 0, path)
+                else
+                    p:place_and_update(cell[1], cell[2], values[rng:int(#values)], 0, path)
+                end
+            end
+
+            p:rollback(path, 0)
+            assert.are.same(before_board, s.board)
+            assert.are.same(before_masks, s.masks)
+            assert.are.same(before_candidates, s.candidates)
+        end
     end)
 end)

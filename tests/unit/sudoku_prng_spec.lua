@@ -43,6 +43,19 @@ describe("core.prng", function()
         assert.are.same(sequence(nil, 10), sequence(nil, 10))
     end)
 
+    it("normalizes the seed before replacing a zero state", function()
+        assert.are.same(sequence(nil, 10), sequence(0x100000000, 10))
+    end)
+
+    it("rejects non-integer seeds", function()
+        for _, seed in ipairs({ 1.5, "42" }) do
+            local ok = pcall(function()
+                prng.new(seed)
+            end)
+            assert.is_false(ok, "new() should reject " .. tostring(seed))
+        end
+    end)
+
     it("next() returns values in the u32 range", function()
         local rng = prng.new(7)
         for _ = 1, 1000 do
@@ -60,6 +73,15 @@ describe("core.prng", function()
         for _ = 1, 1000 do
             local v = rng:int(81)
             assert.is_true(v >= 1 and v <= 81)
+        end
+    end)
+
+    it("rejects non-positive and fractional int bounds", function()
+        for _, n in ipairs({ 0, -1, 1.5 }) do
+            local ok = pcall(function()
+                prng.new(7):int(n)
+            end)
+            assert.is_false(ok, "int() should reject " .. tostring(n))
         end
     end)
 
