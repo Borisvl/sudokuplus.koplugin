@@ -4,6 +4,7 @@ local candidates = require("core.candidates")
 local masks = require("core.masks")
 local solve_path = require("core.solve_path")
 local flags = require("core.techniques.flags")
+local units = require("core.techniques.units")
 
 local propagator = {}
 local mt = {}
@@ -178,6 +179,28 @@ function mt:eliminate_multiple_candidates(r, c, elimination_mask, technique_flag
     return initial ~= refined
 end
 
+local function unit_has_dead_end(self, cells, used)
+    for num = 1, 9 do
+        local num_bit = bit.lshift(1, num - 1)
+        if bit.band(used, num_bit) == 0 then
+            local has_position = false
+            for _, cell in ipairs(cells) do
+                if
+                    board_is_empty(self.board, cell[1], cell[2])
+                    and bit.band(cand_get(self.candidates, cell[1], cell[2]), num_bit) ~= 0
+                then
+                    has_position = true
+                    break
+                end
+            end
+            if not has_position then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function has_dead_end(self)
     for r = 0, 8 do
         for col = 0, 8 do
@@ -186,6 +209,17 @@ local function has_dead_end(self)
             end
         end
     end
+
+    for i = 0, 8 do
+        if
+            unit_has_dead_end(self, units.row_cells(i), self.masks.row[i + 1])
+            or unit_has_dead_end(self, units.col_cells(i), self.masks.col[i + 1])
+            or unit_has_dead_end(self, units.box_cells(i), self.masks.box[i + 1])
+        then
+            return true
+        end
+    end
+
     return false
 end
 

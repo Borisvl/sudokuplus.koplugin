@@ -122,6 +122,60 @@ describe("core.techniques.propagator", function()
         assert.are.equal(bit.lshift(1, 0), candidates.get(s.candidates, 1, 1))
     end)
 
+    it("detects missing candidate positions in rows, columns, and boxes", function()
+        local bit1 = bit.lshift(1, 0)
+        local unit_cells = {
+            {
+                { 0, 0 },
+                { 0, 1 },
+                { 0, 2 },
+                { 0, 3 },
+                { 0, 4 },
+                { 0, 5 },
+                { 0, 6 },
+                { 0, 7 },
+                { 0, 8 },
+            },
+            {
+                { 0, 0 },
+                { 1, 0 },
+                { 2, 0 },
+                { 3, 0 },
+                { 4, 0 },
+                { 5, 0 },
+                { 6, 0 },
+                { 7, 0 },
+                { 8, 0 },
+            },
+            {
+                { 0, 0 },
+                { 0, 1 },
+                { 0, 2 },
+                { 1, 0 },
+                { 1, 1 },
+                { 1, 2 },
+                { 2, 0 },
+                { 2, 1 },
+                { 2, 2 },
+            },
+        }
+
+        for _, cells in ipairs(unit_cells) do
+            local s = solver.new(board.new(), { techniques = 0 })
+            local p = propagator.new(s.board, s.masks, s.candidates, 0)
+            local path = solve_path.new()
+            for _, cell in ipairs(cells) do
+                assert.is_true(p:eliminate_candidate(cell[1], cell[2], bit1, flags.NAKED_SINGLES, path))
+            end
+
+            assert.is_false(p:propagate_constraints(path, 0))
+            assert.are.equal(0, #path.steps)
+            for _, cell in ipairs(cells) do
+                assert.are_not.equal(0, bit.band(p:cand(cell[1], cell[2]), bit1))
+            end
+        end
+    end)
+
     it("is deterministic for a seeded solver", function()
         local function propagate()
             local s = solver.new(board.from_string(HIDDEN_SINGLE_PUZZLE), {
@@ -327,5 +381,28 @@ describe("core.techniques.propagator", function()
         assert.are.equal(0, s.board[1])
         assert.are.equal(0, bit.band(p:cand(0, 1), bit1))
         assert.are.equal(bit.lshift(1, 1), bit.band(p:cand(0, 1), bit.lshift(1, 1)))
+    end)
+
+    it("preserves caller-owned steps at a nonzero propagation checkpoint", function()
+        local s = solver.new(board.from_string(INCONSISTENT), { techniques = flags.NAKED_SINGLES })
+        local p = propagator.new(s.board, s.masks, s.candidates, flags.NAKED_SINGLES)
+        local path = solve_path.new()
+        local prior_mask = p:cand(3, 2)
+        local prior_num = flags.lowest_bit(prior_mask) + 1
+
+        p:place_and_update(3, 2, prior_num, flags.NAKED_SINGLES, path, { kind = "prior" })
+        local checkpoint = #path.steps
+        local before_board = board.to_string(s.board)
+
+        assert.is_false(s:propagate(path))
+        assert.are.equal(checkpoint, #path.steps)
+        assert.are.equal("place", path.steps[1].type)
+        assert.are.equal(3, path.steps[1].row)
+        assert.are.equal(2, path.steps[1].col)
+        assert.are.equal(prior_num, path.steps[1].value)
+        assert.are.equal(prior_num, board.get(s.board, 3, 2))
+        assert.are.equal(before_board, board.to_string(s.board))
+        assert.are.equal(bit.lshift(1, 0), p:cand(0, 0))
+        assert.are.equal(bit.lshift(1, 0), p:cand(1, 1))
     end)
 end)

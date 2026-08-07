@@ -142,8 +142,9 @@ function mt:solve_until(bound)
 end
 
 function mt:propagate(path)
+    local initial_path_len = #path.steps
     local prop = propagator.new(self.board, self.masks, self.candidates, self.techniques)
-    return prop:propagate_constraints(path, 0)
+    return prop:propagate_constraints(path, initial_path_len)
 end
 
 function mt:solve_any()
