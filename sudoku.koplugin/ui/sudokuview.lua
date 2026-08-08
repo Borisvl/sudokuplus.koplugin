@@ -59,6 +59,7 @@ function SudokuView:init()
     self._dirty_cells = {}
     self._dirty_tool_row = false
     self._painted = false
+    self._undo_state = { can_undo = false, can_redo = false }
 
     self.ges_events.Tap = {
         GestureRange:new {
@@ -69,13 +70,15 @@ function SudokuView:init()
     self.key_events.Close = { { Device.input.group.Back } }
 end
 
--- E-ink refresh strategy: in-game updates are flash-free "partial" refreshes
--- limited to the cells that actually changed (KOReader promotes a "partial"
--- to a flashing refresh every FULL_REFRESH_COUNT refreshes, so ghosting is
--- cleared periodically); "full" is reserved for the first paint and for
--- wake/resize, and leaving the game stays a "flashui" close. Affected cells
--- refresh individually (never as one big rectangle), except when so many
--- cells change at once that per-cell refreshes would cost more than one.
+-- E-ink refresh strategy: in-game updates use "ui" refreshes limited to the
+-- cells that actually changed. "ui" is flash-free AND, unlike "partial",
+-- never promoted by UIManager to a flashing refresh (which would block the
+-- UI thread while the waveform runs, and flash the region); ghosting stays
+-- bounded because every changed cell is repainted fresh. Nearby cells merge
+-- into one update (clusters stay within a 2x2 cell block) so a tap costs a
+-- single EPD update whenever possible — on mxcfb, consecutive updates are
+-- serialized, each waiting for the previous one. "full" is reserved for the
+-- first paint and wake/resize; leaving the game stays a "flashui" close.
 local MAX_REGIONS = 8
 
 function SudokuView:refresh()
@@ -97,18 +100,18 @@ function SudokuView:refresh()
         self._dirty_tool_row = false
     end
     for _, rect in ipairs(regions) do
-        UIManager:setDirty(self, "partial", Geom:new(rect))
+        UIManager:setDirty(self, "ui", Geom:new(rect))
     end
 end
 
 -- Full-screen flash-free refresh for state changes that move too much to
--- track precisely (undo/redo, check reveals, closing the pause menu).
+-- track precisely (closing the pause menu).
 function SudokuView:refreshCoarse()
     if not self._painted then
         UIManager:setDirty(self, "full")
         return
     end
-    UIManager:setDirty(self, "partial")
+    UIManager:setDirty(self, "ui")
 end
 
 function SudokuView:refreshFull()
@@ -127,6 +130,17 @@ end
 
 function SudokuView:markToolRow()
     self._dirty_tool_row = true
+end
+
+-- Marks the tool row only when the undo/redo button state actually changed,
+-- so moves that leave it untouched do not pay for an extra EPD update.
+function SudokuView:markToolRowIfChanged()
+    local can_undo = self.game:can_undo()
+    local can_redo = self.game:can_redo()
+    if can_undo ~= self._undo_state.can_undo or can_redo ~= self._undo_state.can_redo then
+        self._undo_state = { can_undo = can_undo, can_redo = can_redo }
+        self:markToolRow()
+    end
 end
 
 function SudokuView:paintGrid(bb)
@@ -249,7 +263,7 @@ function SudokuView:onTap(ev_args, ges)
                 ok, err = self.game:place(self.selected.row, self.selected.col, hit.id)
             end
         end
-        self:markToolRow()
+        self:markToolRowIfChanged()
     elseif hit.id == "erase" then
         local value = self.game:get(self.selected.row, self.selected.col)
         if value ~= 0 then
@@ -259,18 +273,18 @@ function SudokuView:onTap(ev_args, ges)
             self:markCell(self.selected.row, self.selected.col)
             ok, err = self.game:clear_notes(self.selected.row, self.selected.col)
         end
-        self:markToolRow()
+        self:markToolRowIfChanged()
     elseif hit.id == "undo" then
         ok, err = self.game:undo()
         if not (ok == false or (ok == nil and err ~= nil)) then
             self:markCells(self.game:undo_affected_cells())
-            self:markToolRow()
+            self:markToolRowIfChanged()
         end
     elseif hit.id == "redo" then
         ok, err = self.game:redo()
         if not (ok == false or (ok == nil and err ~= nil)) then
             self:markCells(self.game:redo_affected_cells())
-            self:markToolRow()
+            self:markToolRowIfChanged()
         end
     elseif hit.id == "notes" then
         self.notes_mode = not self.notes_mode

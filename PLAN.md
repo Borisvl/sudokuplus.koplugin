@@ -447,6 +447,37 @@ and by making check and undo/redo precise instead of coarse:
 **Exit criteria**: specs green, `./dev.sh lint` clean, emulator boot smoke on
 `kobo-aura-one` with no errors, PLAN.md + README updated, commit.
 
+### M6.3 — One refresh per tap (on-device latency/flicker feedback)
+
+Planned: on device, selection felt laggy and digit entries flickered. Root
+cause (verified in the pinned checkout's `ffi/framebuffer_mxcfb.lua`): every
+GC16/"partial" refresh waits for the *previous* update to complete, so the
+M6.2 per-cell regions (2–4 updates per tap) serialized into ~2×–4× the
+latency — and UIManager's periodic promotion of "partial" to a flashing
+refresh (~every 5th) ran the full waveform on the UI thread, blocking input
+for hundreds of ms and flashing the cell. Fixes:
+
+- [x] `ui/sudokuview.lua`: in-game refreshes use `"ui"` mode — flash-free,
+      and never promoted to a flashing refresh by UIManager (so no flicker
+      and no UI-thread block); `closeMenu`'s coarse refresh is `"ui"` too
+- [x] `ui/layout.lua`: `cells_regions` clusters cells so nearby cells merge
+      into one update (cluster bounding boxes stay within a 2×2 cell block),
+      keeping scattered cells separate but making a tap a *single* EPD
+      update whenever possible (mxcfb serializes consecutive updates)
+- [x] `ui/sudokuview.lua`: the tool row only refreshes when the undo/redo
+      button state actually flips (`markToolRowIfChanged`), so moves after
+      the first no longer pay for an extra update
+- [x] Specs: layout cluster tests (2×2 bound, gaps stay separate), view
+      mode `"ui"` assertions, tool-row-skip-on-second-move test
+
+Ghosting note: `"ui"` refreshes are never promoted, so there is no periodic
+flash to scrub residue; residue stays bounded because every changed cell is
+repainted fresh, and first paint / wake / resize / leaving the game still
+refresh fully.
+
+**Exit criteria**: specs green, `./dev.sh lint` clean, emulator boot smoke on
+`kobo-aura-one` with no errors, PLAN.md + README updated, commit.
+
 ### M7 — Menus, hint display, stats screen
 
 - [ ] Tools menu: New Game (difficulty picker), Continue, Statistics

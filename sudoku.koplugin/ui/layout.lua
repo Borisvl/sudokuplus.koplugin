@@ -138,45 +138,53 @@ function layout.cells_region(l, cell_keys)
     return { x = min_x, y = min_y, w = max_x - min_x, h = max_y - min_y }
 end
 
--- One rect per cell (a set keyed row * 9 + col), merging only cells that are
--- horizontally adjacent in the same row into strips (borders included), so a
--- scattered selection never turns into one large rectangle; ordered by row,
--- then by column. Returns {} when the set holds no valid cells.
+-- One rect per cluster of cells (a set keyed row * 9 + col): cells merge
+-- into a cluster only while its bounding box stays within a 2x2 cell block,
+-- so nearby cells refresh together in a single update while a scattered
+-- selection never turns into one large rectangle. Ordered by row, then by
+-- column. Returns {} when the set holds no valid cells.
 function layout.cells_regions(l, cell_keys)
-    local rows = {}
+    local cells = {}
     for key in pairs(cell_keys) do
         local row = math.floor(key / 9)
         local col = key % 9
         if row >= 0 and row <= 8 and col >= 0 and col <= 8 then
-            local cols = rows[row]
-            if not cols then
-                cols = {}
-                rows[row] = cols
+            cells[#cells + 1] = { row, col }
+        end
+    end
+    table.sort(cells, function(a, b)
+        return a[1] < b[1] or (a[1] == b[1] and a[2] < b[2])
+    end)
+    local clusters = {}
+    for _, cell in ipairs(cells) do
+        local row, col = cell[1], cell[2]
+        local placed = false
+        for _, cluster in ipairs(clusters) do
+            local min_row = math.min(cluster[1], row)
+            local max_row = math.max(cluster[2], row)
+            local min_col = math.min(cluster[3], col)
+            local max_col = math.max(cluster[4], col)
+            if max_row - min_row <= 1 and max_col - min_col <= 1 then
+                cluster[1], cluster[2] = min_row, max_row
+                cluster[3], cluster[4] = min_col, max_col
+                placed = true
+                break
             end
-            cols[#cols + 1] = col
+        end
+        if not placed then
+            clusters[#clusters + 1] = { row, row, col, col }
         end
     end
     local regions = {}
-    for row = 0, 8 do
-        local cols = rows[row]
-        if cols then
-            table.sort(cols)
-            local start = cols[1]
-            local prev = cols[1]
-            for i = 2, #cols do
-                local col = cols[i]
-                if col ~= prev + 1 then
-                    local first = layout.cell_rect(l, row, start)
-                    local last = layout.cell_rect(l, row, prev)
-                    regions[#regions + 1] = { x = first.x, y = first.y, w = last.x + last.w - first.x, h = first.h }
-                    start = col
-                end
-                prev = col
-            end
-            local first = layout.cell_rect(l, row, start)
-            local last = layout.cell_rect(l, row, prev)
-            regions[#regions + 1] = { x = first.x, y = first.y, w = last.x + last.w - first.x, h = first.h }
-        end
+    for _, cluster in ipairs(clusters) do
+        local first = layout.cell_rect(l, cluster[1], cluster[3])
+        local last = layout.cell_rect(l, cluster[2], cluster[4])
+        regions[#regions + 1] = {
+            x = first.x,
+            y = first.y,
+            w = last.x + last.w - first.x,
+            h = last.y + last.h - first.y,
+        }
     end
     return regions
 end
