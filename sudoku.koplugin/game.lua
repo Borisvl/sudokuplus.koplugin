@@ -178,22 +178,38 @@ local function remove_note_digit(self, cr, cc, value)
     end
 end
 
-local function restore_auto_clean(self, r, c, value)
-    local restored = {}
-    local value_bit = digit_bit(value)
-    each_peer(r, c, function(cr, cc)
-        local index = cell_index(cr, cc)
-        local cell_manual_removed = self.manual_removed[cr + 1][cc + 1]
-        if
-            self.board[index] == 0
-            and bit.band(cell_manual_removed, value_bit) == 0
-            and is_safe_board(self.board, cr, cc, value)
-            and bit.band(self.notes[cr + 1][cc + 1], value_bit) == 0
-        then
-            self.notes[cr + 1][cc + 1] = bit.bor(self.notes[cr + 1][cc + 1], value_bit)
-            restored[#restored + 1] = { cr, cc, value }
+-- The most recent placement in (r, c): the entry that set the value
+-- currently occupying the cell (or the one whose undo an erase mirrors).
+local function last_place_entry(self, r, c)
+    for i = self.undo_ptr, 1, -1 do
+        local entry = self.history[i]
+        if entry.kind == "place" and entry.r == r and entry.c == c then
+            return entry
         end
-    end)
+    end
+    return nil
+end
+
+-- Re-adds exactly the notes the last placement in (r, c) auto-cleaned (what
+-- an undo of that placement would restore). Peers the user never noted are
+-- left untouched.
+local function restored_cleaned(self, r, c)
+    local entry = last_place_entry(self, r, c)
+    local restored = {}
+    if entry then
+        for _, cell in ipairs(entry.cleaned or {}) do
+            local cr, cc, value = cell[1], cell[2], cell[3]
+            if
+                self.board[cell_index(cr, cc)] == 0
+                and bit.band(self.manual_removed[cr + 1][cc + 1], digit_bit(value)) == 0
+                and is_safe_board(self.board, cr, cc, value)
+                and bit.band(self.notes[cr + 1][cc + 1], digit_bit(value)) == 0
+            then
+                self.notes[cr + 1][cc + 1] = bit.bor(self.notes[cr + 1][cc + 1], digit_bit(value))
+                restored[#restored + 1] = { cr, cc, value }
+            end
+        end
+    end
     return restored
 end
 
@@ -415,7 +431,7 @@ function mt:place(r, c, value)
     self.board[index] = 0
     local restored = {}
     if old ~= 0 then
-        restored = restore_auto_clean(self, r, c, old)
+        restored = restored_cleaned(self, r, c)
     end
     self.board[index] = value
     local cleaned = auto_clean(self, r, c, value)
@@ -439,18 +455,10 @@ end
 
 -- The note mask the cell had before its current value was placed (what an
 -- undo of that placement would restore), or 0 when it was untouched.
-local function previous_notes_for(self, r, c)
-    for i = self.undo_ptr, 1, -1 do
-        local entry = self.history[i]
-        if entry.kind == "place" and entry.r == r and entry.c == c then
-            return entry.old_notes
-        end
-    end
-    return 0
-end
-
 local function restored_cell_notes(self, r, c)
-    return bit.band(previous_notes_for(self, r, c), legal_mask_for(self.board, r, c))
+    local entry = last_place_entry(self, r, c)
+    local previous = entry and entry.old_notes or 0
+    return bit.band(previous, legal_mask_for(self.board, r, c))
 end
 
 function mt:erase(r, c)
@@ -471,7 +479,7 @@ function mt:erase(r, c)
 
     local old = self.board[index]
     self.board[index] = 0
-    local restored = restore_auto_clean(self, r, c, old)
+    local restored = restored_cleaned(self, r, c)
     self.notes[r + 1][c + 1] = restored_cell_notes(self, r, c)
 
     commit(self, { kind = "erase", r = r, c = c, old = old, restored = restored })
@@ -585,7 +593,7 @@ local function redo_entry(self, entry)
         auto_clean(self, entry.r, entry.c, entry.value)
     elseif entry.kind == "erase" then
         self.board[cell_index(entry.r, entry.c)] = 0
-        restore_auto_clean(self, entry.r, entry.c, entry.old)
+        restored_cleaned(self, entry.r, entry.c)
         self.notes[entry.r + 1][entry.c + 1] = restored_cell_notes(self, entry.r, entry.c)
     elseif entry.kind == "note" then
         local value_bit = digit_bit(entry.value)

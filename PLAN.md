@@ -338,6 +338,15 @@ the M5 section for the resulting notes/hint semantics (empty notes by
 default, erase restores the previous note state, `game:hint()` substitutes
 board-legal candidates for untouched cells, empty note masks are no longer
 `note_error`).
+M6 addendum (playtest round): the selection is now a **bold outline** that
+never hides the cell content (no more inverted black cell); pressing a
+digit button again **erases** that digit from the selected cell (notes
+already toggle); erasing or replacing a digit **no longer re-adds phantom
+notes** to peers the user never noted (restoration is driven by the
+placement history instead of re-seeding all legal candidates); the timer
+is formatted **HH:MM:SS**; closing the view (quit / give up / win) forces
+a full **flashui** refresh so no ghosted board remains on the reader
+behind it.
 
 - [x] `ui/layout.lua` + `sudoku_layout_spec.lua` — geometry, hit-testing,
       grid-line positions across 6" (Glo/Clara), 7.8" (Aura One), and

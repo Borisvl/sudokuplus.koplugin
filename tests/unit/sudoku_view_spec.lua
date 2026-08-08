@@ -156,7 +156,7 @@ describe("sudoku view", function()
         bb:free()
     end)
 
-    it("selects the tapped cell and paints the selection inverted", function()
+    it("selects the tapped cell and outlines it without hiding its content", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
         tap_cell(view, 0, 4)
         assert.are.equal(0, view.selected.row)
@@ -165,10 +165,18 @@ describe("sudoku view", function()
         bb:fill(Blitbuffer.COLOR_WHITE)
         view:paintTo(bb, 0, 0)
         local rect = layout.cell_rect(view.layout, 0, 4)
-        assert.are.equal(0x00, tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a))
+        assert.are.equal(
+            tonumber(theme.digit.a),
+            tonumber(bb:getPixel(rect.x + 1, rect.y + 1).a),
+            "selection outline on the cell border"
+        )
         tap_cell(view, 1, 4)
         view:paintTo(bb, 0, 0)
-        assert.are.equal(0xFF, tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a))
+        assert.are.equal(
+            tonumber(theme.background.a),
+            tonumber(bb:getPixel(rect.x + 1, rect.y + 1).a),
+            "outline cleared when the selection moves"
+        )
         bb:free()
     end)
 
@@ -177,6 +185,15 @@ describe("sudoku view", function()
         tap_cell(view, 0, 3)
         tap_button(view, "number_row", 2)
         assert.are.equal(2, view.game:get(0, 3))
+    end)
+
+    it("removes a placed digit when its button is pressed again", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", 2)
+        assert.are.equal(2, view.game:get(0, 3))
+        tap_button(view, "number_row", 2)
+        assert.are.equal(0, view.game:get(0, 3))
     end)
 
     it("toggles notes in notes mode", function()

@@ -219,6 +219,22 @@ describe("game", function()
         assert.is_true(has_note(instance, 0, 3, 2))
     end)
 
+    it("never re-adds notes to peers the user did not write", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 2, 2))
+        assert.is_true(instance:place(0, 2, 5))
+        assert.are.equal(0, instance:get_notes(0, 3), "no phantom note when replacing a digit")
+        assert.are.equal(0, instance:get_notes(1, 2))
+        assert.are.equal(0, instance:get_notes(1, 1))
+        assert.is_true(instance:undo())
+
+        assert.is_true(instance:erase(0, 2))
+        assert.are.equal(0, instance:get_notes(0, 3), "no phantom note when erasing a digit")
+        assert.are.equal(0, instance:get_notes(1, 2))
+        assert.are.equal(0, instance:get_notes(1, 1))
+    end)
+
     it("erasing restores the cell's previous note state", function()
         local instance = new_game()
 

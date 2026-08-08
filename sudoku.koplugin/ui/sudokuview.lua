@@ -33,8 +33,9 @@ local SudokuView = InputContainer:extend {
 
 local function format_time(seconds)
     seconds = math.max(0, math.floor(seconds + 0.5))
-    local minutes = math.floor(seconds / 60)
-    return string.format("%d:%02d", minutes, seconds % 60)
+    local hours = math.floor(seconds / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
+    return string.format("%02d:%02d:%02d", hours, minutes, seconds % 60)
 end
 
 function SudokuView:init()
@@ -116,9 +117,7 @@ function SudokuView:paintCells(bb)
             local rect = layout.cell_rect(self.layout, row, col)
             local key = row * 9 + col
             local is_selected = self.selected ~= nil and self.selected.row == row and self.selected.col == col
-            if is_selected then
-                bb:invertRect(rect.x, rect.y, rect.w, rect.h)
-            elseif conflict_set[key] or revealed_set[key] then
+            if conflict_set[key] or revealed_set[key] then
                 bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.wrong_fill)
             end
 
@@ -129,8 +128,20 @@ function SudokuView:paintCells(bb)
             elseif self.game:get_notes(row, col) ~= 0 then
                 self:paintNotes(bb, rect, self.game:get_notes(row, col))
             end
+
+            if is_selected then
+                self:paintSelection(bb, rect)
+            end
         end
     end
+end
+
+function SudokuView:paintSelection(bb, rect)
+    local t = self.layout.thick
+    bb:paintRect(rect.x, rect.y, rect.w, t, theme.digit)
+    bb:paintRect(rect.x, rect.y + rect.h - t, rect.w, t, theme.digit)
+    bb:paintRect(rect.x, rect.y, t, rect.h, theme.digit)
+    bb:paintRect(rect.x + rect.w - t, rect.y, t, rect.h, theme.digit)
 end
 
 function SudokuView:paintTo(bb, x, y)
@@ -166,6 +177,8 @@ function SudokuView:onTap(ev_args, ges)
     if type(hit.id) == "number" then
         if self.notes_mode then
             ok, err = self.game:toggle_note(self.selected.row, self.selected.col, hit.id)
+        elseif self.game:get(self.selected.row, self.selected.col) == hit.id then
+            ok, err = self.game:erase(self.selected.row, self.selected.col)
         else
             ok, err = self.game:place(self.selected.row, self.selected.col, hit.id)
         end
@@ -241,7 +254,7 @@ function SudokuView:onWin()
             tostring(record.mistakes)
         ),
         dismiss_callback = function()
-            UIManager:close(self)
+            UIManager:close(self, "flashui")
         end,
     })
 end
@@ -257,7 +270,7 @@ function SudokuView:onGiveUp()
         self:persistStats()
     end
     self:deleteSave()
-    UIManager:close(self)
+    UIManager:close(self, "flashui")
 end
 
 function SudokuView:onQuit()
@@ -268,7 +281,7 @@ function SudokuView:onQuit()
             logger.warn("sudoku: failed to save game: " .. tostring(err))
         end
     end
-    UIManager:close(self)
+    UIManager:close(self, "flashui")
 end
 
 function SudokuView:onClose()
