@@ -34,12 +34,15 @@ local StatsView = InputContainer:extend {
     summary = nil,
 }
 
-local TITLE_DP = 30
-local HEADER_DP = 22
-local BODY_DP = 20
-local MARGIN_DP = 18
-local SPACING_DP = 10
-local SECTION_GAP_DP = 16
+-- dp sizes are passed to Font:getFace raw: it applies Screen:scaleBySize
+-- itself (KOReader convention, see ui/layout.lua). The geometry values below
+-- are scaled explicitly.
+local TITLE_DP = 24
+local HEADER_DP = 18
+local BODY_DP = 16
+local MARGIN_DP = 14
+local SPACING_DP = 8
+local SECTION_GAP_DP = 12
 
 function StatsView:init()
     self.width = self.width or Screen:getWidth()
@@ -49,9 +52,9 @@ function StatsView:init()
         return Screen:scaleBySize(dp)
     end
     self.faces = {
-        title = Font:getFace("cfont", scale(TITLE_DP)),
-        header = Font:getFace("cfont", scale(HEADER_DP)),
-        body = Font:getFace("cfont", scale(BODY_DP)),
+        title = Font:getFace("cfont", TITLE_DP),
+        header = Font:getFace("cfont", HEADER_DP),
+        body = Font:getFace("cfont", BODY_DP),
     }
     self.margin = scale(MARGIN_DP)
     self.spacing = scale(SPACING_DP)
@@ -86,25 +89,70 @@ function StatsView:init()
     self.key_events.Close = { { Device.input.group.Back } }
 end
 
--- Paints one text line at line_top and returns the next line top. Lines that
--- would spill past the frame bottom are skipped (no scrolling in v1).
+-- Splits `text` into lines that fit the frame's inner width, breaking on
+-- spaces (RenderText does not wrap for us).
+local function wrap_text(view, face, text)
+    local lines = {}
+    local current = ""
+    local current_width = 0
+    for word in text:gmatch("%S+") do
+        local word_width = RenderText:sizeUtf8Text(0, view.frame.inner_w, face, word, false, false).x
+        local space_width = current == "" and 0
+            or RenderText:sizeUtf8Text(0, view.frame.inner_w, face, " ", false, false).x
+        if current ~= "" and current_width + space_width + word_width > view.frame.inner_w then
+            lines[#lines + 1] = current
+            current = word
+            current_width = word_width
+        else
+            current = current ~= "" and current .. " " .. word or word
+            current_width = current_width + space_width + word_width
+        end
+    end
+    if current ~= "" then
+        lines[#lines + 1] = current
+    end
+    if #lines == 0 then
+        lines[1] = ""
+    end
+    return lines
+end
+
+-- Paints `text` (wrapped to the frame width) starting at line_top and
+-- returns the next line top. Lines that would spill past the frame bottom
+-- are skipped (no scrolling in v1).
 local function paint_line(bb, view, text, line_top, face, line_h, bold)
+    for _, line in ipairs(wrap_text(view, face, text)) do
+        if line_top + line_h <= view._bottom then
+            local size = RenderText:sizeUtf8Text(0, view.frame.inner_w, face, line, false, bold)
+            local baseline = line_top + math.floor((line_h + size.y_top - size.y_bottom) / 2)
+            RenderText:renderUtf8Text(
+                bb,
+                view.frame.inner_x,
+                baseline,
+                face,
+                line,
+                false,
+                bold,
+                theme.digit,
+                view.frame.inner_w
+            )
+        end
+        line_top = line_top + line_h
+    end
+    return line_top
+end
+
+-- Centered page title.
+local function paint_title(bb, view, text, line_top)
+    local face = view.faces.title
+    local line_h = view.line_heights.title
     if line_top + line_h > view._bottom then
         return line_top + line_h
     end
-    local size = RenderText:sizeUtf8Text(0, view.frame.inner_w, face, text, false, bold)
+    local size = RenderText:sizeUtf8Text(0, view.frame.inner_w, face, text, false, true)
     local baseline = line_top + math.floor((line_h + size.y_top - size.y_bottom) / 2)
-    RenderText:renderUtf8Text(
-        bb,
-        view.frame.inner_x,
-        baseline,
-        face,
-        text,
-        false,
-        bold,
-        theme.digit,
-        view.frame.inner_w
-    )
+    local x = view.frame.inner_x + math.floor((view.frame.inner_w - size.x) / 2)
+    RenderText:renderUtf8Text(bb, x, baseline, face, text, false, true, theme.digit, view.frame.inner_w)
     return line_top + line_h
 end
 
@@ -131,7 +179,7 @@ function StatsView:paintTo(bb, x, y)
     self._bottom = f.y + f.h - f.border - self.spacing
     local top = f.y + f.border + self.spacing
 
-    top = paint_line(bb, self, gettext("Sudoku statistics"), top, self.faces.title, self.line_heights.title, true)
+    top = paint_title(bb, self, gettext("Sudoku statistics"), top)
     top = top + self.section_gap
     top = paint_line(
         bb,

@@ -554,7 +554,12 @@ centered title, bold section headers with separator rules, clamped to the
 frame bottom). Follow-up: the stats page is shown with a `"full"` refresh —
 since the Tools menu (and the pause dialog) now stays open underneath
 (`keep_menu_open`), nothing else triggers a whole-screen update, so without
-it only the tapped menu-row slice reached the display.
+it only the tapped menu-row slice reached the display. Follow-up 2: the
+stats page fonts were **double-scaled** (`Font:getFace` applies
+`Screen:scaleBySize` itself, so passing pre-scaled sizes made the text huge
+and pushed long lines out of the frame); the view now passes raw dp sizes,
+centers the title, wraps long lines to the frame width, and uses smaller,
+more compact sizes.
 
 ### M8 — Polish, i18n, deployment
 
