@@ -366,6 +366,26 @@ function mt:get_notes(r, c)
     return self.notes[r + 1][c + 1]
 end
 
+-- Cells that show `value` anywhere: as a placed digit (given or entry) or as
+-- a candidate in the notes. Returned as a set keyed row * 9 + col. Drives the
+-- digit-match highlight when a digit cell is selected.
+function mt:digit_cells(value)
+    local value_ok, value_err = validate_value(value)
+    if not value_ok then
+        return nil, value_err
+    end
+    local set = {}
+    local v_bit = digit_bit(value)
+    for r = 0, 8 do
+        for c = 0, 8 do
+            if self.board[cell_index(r, c)] == value or bit.band(self.notes[r + 1][c + 1], v_bit) ~= 0 then
+                set[r * 9 + c] = true
+            end
+        end
+    end
+    return set
+end
+
 -- Empty cells whose notes the user cleared (ground truth): the hint engine
 -- cannot use them, so deduction may be blocked until notes are re-added.
 function mt:notes_needed()

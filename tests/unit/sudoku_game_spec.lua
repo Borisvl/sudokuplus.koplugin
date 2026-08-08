@@ -45,6 +45,14 @@ local function has_note(instance, r, c, v)
     return bit.band(instance:get_notes(r, c), digit_bit(v)) ~= 0
 end
 
+local function count_set(set)
+    local n = 0
+    for _ in pairs(set) do
+        n = n + 1
+    end
+    return n
+end
+
 describe("game", function()
     it("rejects invalid construction arguments", function()
         local now = function()
@@ -363,6 +371,46 @@ describe("game", function()
         assert.is_true(instance:place(0, 2, 2))
         assert.is_true(instance:erase(0, 2))
         assert.are.same({}, instance:notes_needed(), "erase restores the previous (empty) note state")
+    end)
+
+    it("lists cells holding a digit as a value or in notes", function()
+        local instance = new_game()
+
+        -- givens: 6 at (1,0), (2,7), (3,4), (5,8), (6,1)
+        local set = instance:digit_cells(6)
+        assert.are.equal(5, count_set(set))
+        assert.is_not_nil(set[1 * 9 + 0])
+        assert.is_not_nil(set[2 * 9 + 7])
+        assert.is_not_nil(set[3 * 9 + 4])
+        assert.is_not_nil(set[5 * 9 + 8])
+        assert.is_not_nil(set[6 * 9 + 1])
+        assert.is_nil(set[0 * 9 + 3], "empty cells without the digit in notes are excluded")
+
+        -- a note on an empty cell adds it to the set
+        assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.is_not_nil(instance:digit_cells(6)[0 * 9 + 3])
+        assert.are.equal(6, count_set(instance:digit_cells(6)))
+
+        -- placing the digit keeps the cell in the set (as a value now)
+        assert.is_true(instance:place(0, 3, 6))
+        assert.is_not_nil(instance:digit_cells(6)[0 * 9 + 3])
+        assert.are.equal(6, count_set(instance:digit_cells(6)))
+
+        -- undoing the placement restores the note state
+        assert.is_true(instance:undo())
+        assert.is_not_nil(instance:digit_cells(6)[0 * 9 + 3])
+        assert.are.equal(6, count_set(instance:digit_cells(6)))
+
+        -- erasing a note removes the cell again
+        assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.are.equal(5, count_set(instance:digit_cells(6)))
+    end)
+
+    it("validates the digit for digit_cells", function()
+        local instance = new_game()
+        assert.is_nil(instance:digit_cells(0))
+        assert.is_nil(instance:digit_cells(10))
+        assert.is_nil(instance:digit_cells("6"))
     end)
 
     it("undoes and redoes moves restoring notes exactly", function()

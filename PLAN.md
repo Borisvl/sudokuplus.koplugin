@@ -561,6 +561,15 @@ and pushed long lines out of the frame); the view now passes raw dp sizes,
 centers the title, wraps long lines to the frame width, and uses smaller,
 more compact sizes.
 
+M7 addendum (feature round): **digit-match highlight** — selecting a cell
+that holds a digit highlights every cell showing that digit, either as a
+placed value (given or entry) or as a candidate in its notes (`theme.match_fill`,
+a mid-gray distinct from hint/error fills; pure `game:digit_cells(value)`).
+Tapping the same digit cell again toggles the highlight off, selecting an
+empty cell clears it, moves keep the highlight in sync (recomputed after
+place/erase/undo/redo/notes), and requesting a hint clears it so the pattern
+highlight never clashes.
+
 ### M8 — Polish, i18n, deployment
 
 - [ ] gettext-marked strings, settings (e.g., notes on/off)

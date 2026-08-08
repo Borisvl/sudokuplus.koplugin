@@ -490,6 +490,82 @@ describe("sudoku view", function()
         assert.is_true(shown.text:find("(9, 1)", 1, true) ~= nil, "the message names the blocked cell")
     end)
 
+    it("highlights every cell holding the selected digit, values and notes", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        assert.is_true(g:toggle_note(0, 3, 6), "a note 6 on an empty cell")
+        local view = new_view(g)
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        tap_cell(view, 1, 0) -- a given 6
+        view:paintTo(bb, 0, 0)
+        local function match_pixel(r, c)
+            local rect = layout.cell_rect(view.layout, r, c)
+            return tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a)
+        end
+        -- the other 6 givens are highlighted
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(2, 7))
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(3, 4))
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(5, 8))
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(6, 1))
+        -- the cell whose notes hold 6 is highlighted too
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(0, 3))
+        -- a cell without the digit stays plain
+        assert.are.equal(tonumber(theme.background.a), match_pixel(0, 0))
+        -- the selected cell is inverted, not filled
+        assert.are.equal(0x00, match_pixel(1, 0))
+        bb:free()
+    end)
+
+    it("toggles the digit highlight off when the same cell is tapped again", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        local rect = layout.cell_rect(view.layout, 2, 7)
+        tap_cell(view, 1, 0)
+        view:paintTo(bb, 0, 0)
+        assert.are.equal(tonumber(theme.match_fill.a), tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a))
+        tap_cell(view, 1, 0)
+        view:paintTo(bb, 0, 0)
+        assert.are.equal(tonumber(theme.background.a), tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a))
+        bb:free()
+    end)
+
+    it("clears the digit highlight when an empty cell is selected", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        local rect = layout.cell_rect(view.layout, 2, 7)
+        tap_cell(view, 1, 0)
+        tap_cell(view, 0, 3) -- an empty cell
+        view:paintTo(bb, 0, 0)
+        assert.are.equal(tonumber(theme.background.a), tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a))
+        bb:free()
+    end)
+
+    it("keeps the digit highlight in sync after undo", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", 6) -- place a 6
+        tap_cell(view, 1, 0) -- select a given 6: highlight on
+        local rect = layout.cell_rect(view.layout, 0, 3)
+        view:paintTo(bb, 0, 0)
+        assert.are.equal(
+            tonumber(theme.match_fill.a),
+            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
+            "the placed 6 is highlighted"
+        )
+        tap_button(view, "tool_row", "undo")
+        view:paintTo(bb, 0, 0)
+        assert.are.equal(
+            tonumber(theme.background.a),
+            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
+            "the undone 6 is no longer highlighted"
+        )
+        bb:free()
+    end)
+
     it("gives up: records a give-up and clears the save", function()
         local s = stats.new()
         local view = new_view(new_game(PUZZLE, SOLUTION), {
@@ -684,25 +760,35 @@ describe("sudoku view", function()
             assert.are.equal("full", last_call().mode)
         end)
 
-        it("refreshes only the selected cell on selection", function()
+        it("refreshes only the selected cell on selection of an empty cell", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
-            tap_cell(view, 3, 4)
+            tap_cell(view, 0, 3) -- an empty cell: no digit to highlight
             local call = last_call()
             assert.are.equal("ui", call.mode)
-            assert_rect(call.region, layout.cell_rect(view.layout, 3, 4))
+            assert_rect(call.region, layout.cell_rect(view.layout, 0, 3))
         end)
 
         it("refreshes the old and new cell separately when the selection moves", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
-            tap_cell(view, 3, 4)
+            tap_cell(view, 0, 3) -- both cells empty: no digit highlight involved
             calls = {}
-            tap_cell(view, 5, 7)
+            tap_cell(view, 0, 5)
             local set = grid_region_set(view)
             assert.are.equal(2, #calls, "two separate cell refreshes, no bounding box")
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 3, 4))])
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 5, 7))])
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 3))])
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 5))])
+        end)
+
+        it("refreshes every matching cell when a digit cell is selected", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            tap_cell(view, 1, 0) -- a given 6: the match highlight turns on
+            local set = grid_region_set(view)
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 1, 0))], "the selected cell refreshes")
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 2, 7))], "a matching 6 refreshes")
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 6, 1))], "another matching 6 refreshes")
         end)
 
         it("refreshes each affected cell separately when placing a digit", function()

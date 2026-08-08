@@ -65,6 +65,8 @@ function SudokuView:init()
     self._hint_result = nil
     self._hint_stage = 0
     self._hint_cells = {}
+    self._match_value = nil
+    self._match_cells = {}
 
     self.ges_events.Tap = {
         GestureRange:new {
@@ -190,6 +192,76 @@ function SudokuView:_clearHintState()
     self:markBanner()
 end
 
+-- Digit-match highlight: selecting a cell that holds a digit highlights every
+-- cell showing that digit (as a value or in its notes), making naked-single
+-- style patterns easy to spot. Tapping the same digit cell again (or any
+-- empty cell) clears it; moves keep the highlight in sync.
+
+function SudokuView:_markMatchCells()
+    for key in pairs(self._match_cells) do
+        self._dirty_cells[key] = true
+    end
+end
+
+-- Replaces the highlighted set with `cells` (a set keyed row * 9 + col),
+-- marking the cells whose paint state changed.
+function SudokuView:_applyMatchCells(cells)
+    for key in pairs(cells) do
+        if not self._match_cells[key] then
+            self._dirty_cells[key] = true
+        end
+    end
+    for key in pairs(self._match_cells) do
+        if not cells[key] then
+            self._dirty_cells[key] = true
+        end
+    end
+    self._match_cells = cells
+end
+
+function SudokuView:_clearMatch()
+    if not self._match_value then
+        return
+    end
+    self:_markMatchCells()
+    self._match_value = nil
+    self._match_cells = {}
+end
+
+-- Recomputed after any board/notes change so the highlight follows the moves.
+function SudokuView:_refreshMatchAfterMove()
+    if self._match_value then
+        local cells = self.game:digit_cells(self._match_value)
+        if cells then
+            self:_applyMatchCells(cells)
+        end
+    end
+end
+
+-- Called after the selection changes: a digit cell selects that digit (or, if
+-- the same cell is tapped again, toggles the highlight off); an empty cell
+-- clears it.
+function SudokuView:_onSelectionChanged(previous)
+    local value = self.game:get(self.selected.row, self.selected.col)
+    if value == 0 then
+        self:_clearMatch()
+        return
+    end
+    if
+        previous
+        and previous.row == self.selected.row
+        and previous.col == self.selected.col
+        and value == self._match_value
+    then
+        self:_clearMatch()
+        return
+    end
+    if value ~= self._match_value then
+        self._match_value = value
+    end
+    self:_applyMatchCells(self.game:digit_cells(value))
+end
+
 function SudokuView:paintGrid(bb)
     local l = self.layout
     local grid = l.grid
@@ -250,6 +322,8 @@ function SudokuView:paintCells(bb)
                 bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.wrong_fill)
             elseif self._hint_stage == 2 and self._hint_cells[key] then
                 bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.hint_fill)
+            elseif self._match_cells[key] then
+                bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.match_fill)
             end
 
             local value = self.game:get(row, col)
@@ -294,11 +368,13 @@ function SudokuView:onTap(ev_args, ges)
     end
     if hit.kind == "cell" then
         self:_clearHintState()
-        if self.selected then
-            self:markCell(self.selected.row, self.selected.col)
+        local previous = self.selected
+        if previous then
+            self:markCell(previous.row, previous.col)
         end
         self.selected = { row = hit.row, col = hit.col }
         self:markCell(hit.row, hit.col)
+        self:_onSelectionChanged(previous)
         self:refresh()
         return true
     end
@@ -372,6 +448,7 @@ function SudokuView:onTap(ev_args, ges)
 end
 
 function SudokuView:afterMove()
+    self:_refreshMatchAfterMove()
     self:refresh()
     if self.game:is_won() then
         self:onWin()
@@ -428,6 +505,7 @@ function SudokuView:onHint()
                 self:markCell(action.row, action.col)
             end
             self:markToolRowIfChanged()
+            self:_refreshMatchAfterMove()
         elseif err then
             UIManager:show(Notification:new { text = err })
         end
@@ -443,6 +521,7 @@ function SudokuView:onHint()
     if result.status == "available" then
         self._hint_result = result
         self._hint_stage = 1
+        self:_clearMatch()
         self:markBanner()
     elseif result.status == "note_error" then
         UIManager:show(Notification:new {
