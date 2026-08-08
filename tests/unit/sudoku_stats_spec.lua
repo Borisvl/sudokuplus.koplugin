@@ -135,6 +135,17 @@ describe("stats", function()
         assert.are.same({ technique = "naked_pairs", count = 2 }, summary.most_missed)
     end)
 
+    it("counts hints from given-up games in the missed-strategy summary", function()
+        local s = stats.new()
+        stats.add(s, record({ hints = { "skyscraper" } }))
+        stats.add(s, record({ kind = "give_up", hints = { "skyscraper", "w_wing" } }))
+
+        local summary = stats.summary(s)
+        assert.are.equal(2, summary.hints_per_technique.skyscraper)
+        assert.are.equal(1, summary.hints_per_technique.w_wing)
+        assert.are.same({ technique = "skyscraper", count = 2 }, summary.most_missed)
+    end)
+
     it("breaks most-missed ties deterministically", function()
         local s = stats.new()
         stats.add(s, record({ hints = { "x_wing" } }))

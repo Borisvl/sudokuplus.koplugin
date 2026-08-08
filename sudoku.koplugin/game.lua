@@ -3,6 +3,7 @@ local board = require("core.board")
 local hints = require("core.hints")
 local masks = require("core.masks")
 local solver = require("core.solver")
+local util = require("core.util")
 
 local game = {}
 local mt = {}
@@ -10,13 +11,6 @@ mt.__index = mt
 
 local VERSION = 1
 local FULL_CANDIDATE_MASK = 0x1FF
-
-local DIFFICULTIES = {
-    easy = true,
-    medium = true,
-    hard = true,
-    expert = true,
-}
 
 local function new_mask_grid(value)
     local grid = {}
@@ -38,10 +32,6 @@ local function deep_copy(value)
         copy[key] = deep_copy(nested)
     end
     return copy
-end
-
-local function is_finite(value)
-    return value == value and value ~= math.huge and value ~= -math.huge
 end
 
 local function digit_bit(value)
@@ -295,7 +285,7 @@ function game.new(options)
         end
     end
 
-    if type(difficulty) ~= "string" or not DIFFICULTIES[difficulty] then
+    if type(difficulty) ~= "string" or not util.is_difficulty(difficulty) then
         return nil, "difficulty must be one of easy, medium, hard, expert"
     end
     if type(now) ~= "function" then
@@ -864,7 +854,11 @@ function mt:serialize()
 end
 
 local function validate_history_mask(mask)
-    return type(mask) == "number" and is_finite(mask) and mask % 1 == 0 and mask >= 0 and mask <= FULL_CANDIDATE_MASK
+    return type(mask) == "number"
+        and util.is_finite(mask)
+        and mask % 1 == 0
+        and mask >= 0
+        and mask <= FULL_CANDIDATE_MASK
 end
 
 local function validate_history_cells(cells, name)
@@ -905,7 +899,7 @@ local function validate_history(data)
             end
             if
                 type(entry.old) ~= "number"
-                or not is_finite(entry.old)
+                or not util.is_finite(entry.old)
                 or entry.old % 1 ~= 0
                 or entry.old < 0
                 or entry.old > 9
@@ -962,7 +956,7 @@ function game.restore(data, opts)
     if type(opts) ~= "table" or type(opts.now) ~= "function" then
         return nil, "opts.now must be a function returning the current time in seconds"
     end
-    if type(data.difficulty) ~= "string" or not DIFFICULTIES[data.difficulty] then
+    if type(data.difficulty) ~= "string" or not util.is_difficulty(data.difficulty) then
         return nil, "invalid difficulty"
     end
 
@@ -1085,10 +1079,12 @@ function game.restore(data, opts)
     if type(data.timer) ~= "table" or type(data.timer.running) ~= "boolean" then
         return nil, "invalid timer state"
     end
-    if type(data.timer.elapsed) ~= "number" or not is_finite(data.timer.elapsed) or data.timer.elapsed < 0 then
+    if type(data.timer.elapsed) ~= "number" or not util.is_finite(data.timer.elapsed) or data.timer.elapsed < 0 then
         return nil, "invalid timer state"
     end
-    if data.timer.started ~= nil and (type(data.timer.started) ~= "number" or not is_finite(data.timer.started)) then
+    if
+        data.timer.started ~= nil and (type(data.timer.started) ~= "number" or not util.is_finite(data.timer.started))
+    then
         return nil, "invalid timer state"
     end
     if type(data.hints) ~= "table" then
@@ -1130,13 +1126,11 @@ function game.restore(data, opts)
         finished = data.finished,
     }
     if data.timer.running then
-        instance.timer.running = true
-        if data.timer.started ~= nil then
-            instance.timer.started = data.timer.started
-        else
-            instance.timer.elapsed = 0
-            instance.timer.started = now() - data.timer.elapsed
+        if data.timer.started == nil then
+            return nil, "invalid timer state"
         end
+        instance.timer.running = true
+        instance.timer.started = data.timer.started
     end
     return setmetatable(instance, mt)
 end

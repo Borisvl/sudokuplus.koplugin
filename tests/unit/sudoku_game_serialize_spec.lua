@@ -240,6 +240,12 @@ describe("game serialization", function()
         assert.is_nil(restored)
         assert.is_string(err)
 
+        bad_timer = instance:serialize()
+        bad_timer.timer = { running = true, elapsed = 5 }
+        restored, err = game.restore(bad_timer, { now = now })
+        assert.is_nil(restored)
+        assert.is_string(err, "a running timer without a start time must be rejected")
+
         local bad_finished = instance:serialize()
         bad_finished.finished = "yes"
         restored, err = game.restore(bad_finished, { now = now })

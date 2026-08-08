@@ -1,21 +1,11 @@
 local hints = require("core.hints")
+local util = require("core.util")
 
 local stats = {}
 
 local VERSION = 1
 local MAX_FINISHED = 200
 local MAX_GIVEN_UP = 200
-
-local function is_finite(value)
-    return value == value and value ~= math.huge and value ~= -math.huge
-end
-
-local DIFFICULTIES = {
-    easy = true,
-    medium = true,
-    hard = true,
-    expert = true,
-}
 
 local TECHNIQUES = {}
 for _, technique in ipairs(hints.techniques() or {}) do
@@ -29,10 +19,10 @@ local function validate_record(record)
     if record.kind ~= "finished" and record.kind ~= "give_up" then
         return nil, "record kind must be 'finished' or 'give_up'"
     end
-    if type(record.difficulty) ~= "string" or not DIFFICULTIES[record.difficulty] then
+    if type(record.difficulty) ~= "string" or not util.is_difficulty(record.difficulty) then
         return nil, "record difficulty must be one of easy, medium, hard, expert"
     end
-    if type(record.duration) ~= "number" or not is_finite(record.duration) or record.duration < 0 then
+    if type(record.duration) ~= "number" or not util.is_finite(record.duration) or record.duration < 0 then
         return nil, "record duration must be a non-negative number"
     end
     if type(record.hints) ~= "table" then
@@ -51,7 +41,7 @@ local function validate_record(record)
     if type(record.check_errors) ~= "number" or record.check_errors % 1 ~= 0 or record.check_errors < 0 then
         return nil, "record check_errors must be a non-negative integer"
     end
-    if type(record.timestamp) ~= "number" or not is_finite(record.timestamp) then
+    if type(record.timestamp) ~= "number" or not util.is_finite(record.timestamp) then
         return nil, "record timestamp must be a number"
     end
     return {
@@ -122,6 +112,11 @@ function stats.summary(s)
             hints_per_technique[technique] = (hints_per_technique[technique] or 0) + 1
         end
     end
+    for _, record in ipairs(s.given_up) do
+        for _, technique in ipairs(record.hints) do
+            hints_per_technique[technique] = (hints_per_technique[technique] or 0) + 1
+        end
+    end
 
     local normalized_per_difficulty = {}
     for difficulty, bucket in pairs(per_difficulty) do
@@ -167,7 +162,7 @@ function stats.from_table(t)
     if t.version ~= VERSION then
         return nil, "unsupported stats version: " .. tostring(t.version)
     end
-    if type(t.streak) ~= "number" or not is_finite(t.streak) or t.streak % 1 ~= 0 or t.streak < 0 then
+    if type(t.streak) ~= "number" or not util.is_finite(t.streak) or t.streak % 1 ~= 0 or t.streak < 0 then
         return nil, "invalid streak"
     end
     if type(t.finished) ~= "table" or type(t.given_up) ~= "table" then

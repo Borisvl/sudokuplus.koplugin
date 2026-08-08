@@ -3,6 +3,7 @@ local board = require("core.board")
 local prng = require("core.prng")
 local solve_path = require("core.solve_path")
 local solver = require("core.solver")
+local util = require("core.util")
 local flags = require("core.techniques.flags")
 
 local generator = {}
@@ -115,7 +116,7 @@ local function validate_options(options)
     end
 
     local difficulty = options.difficulty
-    if difficulty ~= nil and not DIFFICULTY_RANGES[difficulty] then
+    if difficulty ~= nil and not util.is_difficulty(difficulty) then
         return nil, "unknown difficulty: " .. tostring(difficulty)
     end
 
