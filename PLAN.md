@@ -477,7 +477,8 @@ refresh fully.
 M6.3 addendum (on-device readability): notes ink darkened (`COLOR_DARK_GRAY`
 → `COLOR_GRAY_3`) and note font bumped 15→18 dp; bar button fonts bumped
 (label 16→20 dp, digits 24→26 dp); contrast/size invariants added to the
-theme and layout specs.
+theme and layout specs. Second round: board digits bumped (givens 32→38 dp,
+entries 28→34 dp) with layout-spec floors (given ≥ 36, user ≥ 32).
 
 **Exit criteria**: specs green, `./dev.sh lint` clean, emulator boot smoke on
 `kobo-aura-one` with no errors, PLAN.md + README updated, commit.
