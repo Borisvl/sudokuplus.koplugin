@@ -568,7 +568,12 @@ a mid-gray distinct from hint/error fills; pure `game:digit_cells(value)`).
 Tapping the same digit cell again toggles the highlight off, selecting an
 empty cell clears it, moves keep the highlight in sync (recomputed after
 place/erase/undo/redo/notes), and requesting a hint clears it so the pattern
-highlight never clashes.
+highlight never clashes. Fix: the **"Generating…" notification** was scheduled
+but never visible — generation runs synchronously on the UI thread, so the
+notification could only be drawn on the next UI tick, which never comes before
+the generation finishes. `main.lua` now calls `UIManager:forceRePaint()` after
+showing it, draining the paint/refresh queues immediately so the wait is
+actually announced on screen.
 
 ### M8 — Polish, i18n, deployment
 

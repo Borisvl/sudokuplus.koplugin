@@ -50,8 +50,12 @@ function Sudoku:startGame(difficulty)
     difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
     -- Generation (expert especially) can take a few seconds; the emulator
     -- and the device are single-threaded, so explain the wait up front.
+    -- forceRePaint() drains the paint/refresh queues immediately: without it
+    -- the notification would only be drawn on the next UI tick, which never
+    -- comes before the synchronous generation finishes.
     local generating = Notification:new { text = _("Generating…") }
     UIManager:show(generating)
+    UIManager:forceRePaint()
     local rng = prng.new(os.time() + UIManager:getTime())
     local payload, gen_err = generator.generate_game { difficulty = difficulty, rng = rng }
     UIManager:close(generating)

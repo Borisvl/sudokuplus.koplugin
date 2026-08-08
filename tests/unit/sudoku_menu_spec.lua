@@ -176,21 +176,28 @@ describe("sudoku plugin menu", function()
         local UIManager = require("ui/uimanager")
         local shown = {}
         local closed = {}
+        local repainted = false
         local original_show = UIManager.show
         local original_close = UIManager.close
+        local original_repaint = UIManager.forceRePaint
         UIManager.show = function(_, widget)
             shown[#shown + 1] = widget
         end
         UIManager.close = function(_, widget)
             closed[#closed + 1] = widget
         end
+        UIManager.forceRePaint = function()
+            repainted = true
+        end
         item_with("Hard").callback()
         UIManager.show = original_show
         UIManager.close = original_close
+        UIManager.forceRePaint = original_repaint
         generator.generate_game = original_generate
 
         assert.is_not_nil(shown[1], "a notification must be shown before generation")
         assert.are.equal("Generating…", shown[1].text)
+        assert.is_true(repainted, "the notification must be painted before the blocking generation")
         assert.is_not_nil(shown[2], "the failure must surface an error dialog")
         assert.are.equal(shown[1], closed[1], "the notification must be dismissed after generation")
     end)
