@@ -1,5 +1,4 @@
 local DataStorage = require("datastorage")
-local G_reader_settings = require("luasettings")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
