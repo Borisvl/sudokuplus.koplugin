@@ -11,6 +11,7 @@ local theme = {
     digit = Blitbuffer.COLOR_BLACK,
     note = Blitbuffer.COLOR_GRAY_3,
     wrong_fill = Blitbuffer.COLOR_GRAY,
+    hint_fill = Blitbuffer.COLOR_GRAY_D,
     disabled = Blitbuffer.COLOR_GRAY_7,
     -- Ink for digits/notes drawn on the inverted (black) selection cell
     invert_fg = Blitbuffer.COLOR_WHITE,

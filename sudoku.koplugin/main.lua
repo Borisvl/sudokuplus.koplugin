@@ -1,15 +1,19 @@
 local DataStorage = require("datastorage")
 local InfoMessage = require("ui/widget/infomessage")
+local Notification = require("ui/widget/notification")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
 local _ = require("gettext")
 
+local difficulties = require("ui.difficulties")
 local generator = require("core.generator")
 local game = require("game")
 local prng = require("core.prng")
 local stats = require("stats")
 local storage = require("storage")
+local util = require("core.util")
+local StatsView = require("ui.statsview")
 local SudokuView = require("ui.sudokuview")
 
 local Sudoku = WidgetContainer:extend {
@@ -38,13 +42,19 @@ function Sudoku:loadStats()
     return s
 end
 
-function Sudoku:startGame()
+function Sudoku:startGame(difficulty)
     -- core/ is deterministic; seed the PRNG from the wall clock and the
     -- UI timer in the plugin layer. A fresh game abandons any previous
     -- save, but only once a new puzzle exists: a failed generation must
     -- not destroy the saved game.
+    difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
+    -- Generation (expert especially) can take a few seconds; the emulator
+    -- and the device are single-threaded, so explain the wait up front.
+    local generating = Notification:new { text = _("Generating…") }
+    UIManager:show(generating)
     local rng = prng.new(os.time() + UIManager:getTime())
-    local payload, gen_err = generator.generate_game { difficulty = "easy", rng = rng }
+    local payload, gen_err = generator.generate_game { difficulty = difficulty, rng = rng }
+    UIManager:close(generating)
     if not payload then
         UIManager:show(InfoMessage:new {
             text = _("Failed to generate a Sudoku puzzle.") .. "\n" .. tostring(gen_err),
@@ -71,6 +81,12 @@ function Sudoku:startGame()
             stats = self:loadStats(),
             save_path = SAVE_PATH,
             stats_path = STATS_PATH,
+            new_game_cb = function(new_difficulty)
+                self:startGame(new_difficulty)
+            end,
+            show_stats_cb = function()
+                self:showStatistics()
+            end,
         },
         "full"
     )
@@ -104,13 +120,29 @@ function Sudoku:continueGame()
     )
 end
 
+function Sudoku:showStatistics()
+    local summary = stats.summary(self:loadStats())
+    UIManager:show(StatsView:new {
+        summary = summary,
+    })
+end
+
 function Sudoku:addToMainMenu(menu_items)
+    local new_game_items = {}
+    for _, entry in ipairs(difficulties.list()) do
+        new_game_items[#new_game_items + 1] = {
+            text = entry.label,
+            callback = function()
+                self:startGame(entry.id)
+            end,
+        }
+    end
     menu_items.sudoku = {
         text = _("Sudoku"),
         sorting_hint = "more_tools",
         sub_item_table = {
             {
-                text = _("Resume game"),
+                text = _("Continue"),
                 enabled_func = function()
                     local file = io.open(SAVE_PATH, "rb")
                     if file then
@@ -125,8 +157,12 @@ function Sudoku:addToMainMenu(menu_items)
             },
             {
                 text = _("New game"),
+                sub_item_table = new_game_items,
+            },
+            {
+                text = _("Statistics"),
                 callback = function()
-                    self:startGame()
+                    self:showStatistics()
                 end,
             },
             {

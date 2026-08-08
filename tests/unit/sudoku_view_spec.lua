@@ -14,6 +14,8 @@ describe("sudoku view", function()
 
     local PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
     local SOLUTION = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+    local NAKED_SINGLE_PUZZLE = "385421967194756328627983145571892634839645271246137589462579813918364752753218490"
+    local NAKED_SINGLE_SOLUTION = "385421967194756328627983145571892634839645271246137589462579813918364752753218496"
 
     local clock = { value = 1000 }
     local now = function()
@@ -354,6 +356,140 @@ describe("sudoku view", function()
         assert.is_nil(io.open(save_path, "rb"))
     end)
 
+    it("offers a new game and statistics on win", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local started, stats_requested
+        local view = new_view(new_game(puzzle, SOLUTION), {
+            new_game_cb = function(difficulty)
+                started = difficulty
+            end,
+            show_stats_cb = function()
+                stats_requested = true
+            end,
+        })
+        local dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.cancel_text then
+                dialog = widget
+            end
+        end
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 8, 0)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        UIManager.show = original_show
+        assert.is_not_nil(dialog, "win must show a dialog")
+        assert.is_true(dialog.text:find("Puzzle solved", 1, true) ~= nil)
+        assert.are.equal("New game", dialog.choice1_text)
+        assert.are.equal("Statistics", dialog.choice2_text)
+        assert.is_nil(started)
+        dialog.choice1_callback()
+        assert.are.equal("easy", started, "new game restarts at the same difficulty")
+        assert.is_nil(stats_requested)
+        dialog.choice2_callback()
+        assert.is_true(stats_requested, "statistics open from the win dialog")
+    end)
+
+    it("reveals a hint in three taps: name, pattern, apply", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        local banner = view.layout.banner
+        local action = { row = 4, col = 4, value = 5 }
+        local cell = layout.cell_rect(view.layout, action.row, action.col)
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(1, view._hint_stage)
+        assert.are.equal(1, #view.game:hints(), "the first tap records the missed strategy")
+        assert.are.equal(0, view.game:get(action.row, action.col), "nothing is applied yet")
+        view:paintTo(bb, 0, 0)
+        local ink = false
+        for y = banner.y + 2, banner.y + banner.h - 3 do
+            for x = banner.x + 2, banner.x + banner.w - 3 do
+                if tonumber(bb:getPixel(x, y).a) ~= tonumber(theme.background.a) then
+                    ink = true
+                end
+            end
+        end
+        assert.is_true(ink, "the banner shows the technique name")
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(2, view._hint_stage)
+        assert.are.equal(1, #view.game:hints(), "the missed strategy is recorded only once")
+        view:paintTo(bb, 0, 0)
+        assert.are.equal(
+            tonumber(theme.hint_fill.a),
+            tonumber(bb:getPixel(cell.x + 2, cell.y + 2).a),
+            "the pattern cell is highlighted"
+        )
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(0, view._hint_stage, "the reveal ends after applying")
+        assert.are.equal(action.value, view.game:get(action.row, action.col), "the third tap applies the placement")
+        view:paintTo(bb, 0, 0)
+        assert.are.equal(
+            tonumber(theme.background.a),
+            tonumber(bb:getPixel(cell.x + 2, cell.y + 2).a),
+            "the highlight is cleared after applying"
+        )
+        bb:free()
+
+        tap_button(view, "tool_row", "undo")
+        assert.are.equal(0, view.game:get(action.row, action.col), "the hint placement is undoable")
+    end)
+
+    it("cancels a hint reveal on any other interaction", function()
+        local view = new_view(new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION))
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        local cell = layout.cell_rect(view.layout, 8, 8)
+
+        tap_button(view, "tool_row", "hint")
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(2, view._hint_stage)
+        tap_cell(view, 0, 0)
+        assert.are.equal(0, view._hint_stage, "a cell tap cancels the reveal")
+        view:paintTo(bb, 0, 0)
+        assert.are.equal(
+            tonumber(theme.background.a),
+            tonumber(bb:getPixel(cell.x + 2, cell.y + 2).a),
+            "the highlight is cleared on cancel"
+        )
+        assert.are.equal(0, view.game:get(8, 8), "nothing was applied")
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(1, view._hint_stage)
+        tap_button(view, "number_row", 4)
+        assert.are.equal(0, view._hint_stage, "a move cancels the reveal")
+        assert.are.equal(0, view.game:get(8, 8))
+        bb:free()
+    end)
+
+    it("suggests re-adding notes when a cleared cell blocks the hint", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        assert.is_true(g:toggle_note(8, 0, 1))
+        assert.is_true(g:toggle_note(8, 0, 1), "cleared cell becomes ground truth")
+        g.hint = function()
+            return { status = "none", reason = "no_applicable_technique", revision = g:revision() }
+        end
+        local view = new_view(g)
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.text then
+                shown = widget
+            end
+        end
+        tap_button(view, "tool_row", "hint")
+        UIManager.show = original_show
+        assert.is_not_nil(shown, "a message must be shown")
+        assert.is_true(shown.text:find("notes", 1, true) ~= nil, "the message mentions notes")
+        assert.is_true(shown.text:find("(9, 1)", 1, true) ~= nil, "the message names the blocked cell")
+    end)
+
     it("gives up: records a give-up and clears the save", function()
         local s = stats.new()
         local view = new_view(new_game(PUZZLE, SOLUTION), {
@@ -592,6 +728,37 @@ describe("sudoku view", function()
             local call = last_call()
             assert.are.equal("ui", call.mode)
             assert.is_nil(call.region)
+        end)
+
+        it("refreshes the banner and pattern cells through the hint reveal", function()
+            local view = new_view(new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION))
+            paint_view(view)
+
+            tap_button(view, "tool_row", "hint")
+            local call = last_call()
+            assert.are.equal("ui", call.mode)
+            assert_rect(call.region, view.layout.banner)
+
+            calls = {}
+            tap_button(view, "tool_row", "hint")
+            local set = grid_region_set(view)
+            assert.is_not_nil(
+                set[rect_key(layout.cell_rect(view.layout, 8, 8))],
+                "the pattern cell refreshes when highlighted"
+            )
+            local banner_call
+            for _, c in ipairs(calls) do
+                if c.region and c.region.y == view.layout.banner.y then
+                    banner_call = c
+                end
+            end
+            assert.is_not_nil(banner_call, "the banner refreshes on stage 2")
+
+            calls = {}
+            tap_button(view, "tool_row", "hint")
+            set = grid_region_set(view)
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 8, 8))], "the applied cell refreshes")
+            assert.are.equal(1, count_set(set), "no coarse refresh for a hint placement")
         end)
 
         it("full-refreshes on resume", function()

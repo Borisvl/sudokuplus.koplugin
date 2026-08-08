@@ -2,7 +2,6 @@ local Device = require("device")
 local Font = require("ui/font")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
-local InfoMessage = require("ui/widget/infomessage")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local MultiConfirmBox = require("ui/widget/multiconfirmbox")
 local Notification = require("ui/widget/notification")
@@ -17,6 +16,7 @@ local numberbar = require("ui.numberbar")
 local stats = require("stats")
 local storage = require("storage")
 local theme = require("ui.theme")
+local util = require("core.util")
 
 local Screen = Device.screen
 
@@ -29,13 +29,12 @@ local SudokuView = InputContainer:extend {
     stats = nil,
     save_path = nil,
     stats_path = nil,
+    new_game_cb = nil,
+    show_stats_cb = nil,
 }
 
 local function format_time(seconds)
-    seconds = math.max(0, math.floor(seconds + 0.5))
-    local hours = math.floor(seconds / 3600)
-    local minutes = math.floor((seconds % 3600) / 60)
-    return string.format("%02d:%02d:%02d", hours, minutes, seconds % 60)
+    return util.format_time(seconds)
 end
 
 function SudokuView:init()
@@ -51,6 +50,7 @@ function SudokuView:init()
         given = Font:getFace(bold_name, self.layout.fonts.given),
         user = Font:getFace("cfont", self.layout.fonts.user),
         notes = Font:getFace("cfont", self.layout.fonts.notes),
+        label = Font:getFace("cfont", self.layout.fonts.label),
     }
 
     self.selected = nil
@@ -58,8 +58,12 @@ function SudokuView:init()
     self.menu_open = false
     self._dirty_cells = {}
     self._dirty_tool_row = false
+    self._dirty_banner = false
     self._painted = false
     self._undo_state = { can_undo = false, can_redo = false }
+    self._hint_result = nil
+    self._hint_stage = 0
+    self._hint_cells = {}
 
     self.ges_events.Tap = {
         GestureRange:new {
@@ -98,6 +102,11 @@ function SudokuView:refresh()
         local row = self.layout.tool_row
         regions[#regions + 1] = { x = row.x, y = row.y, w = row.w, h = row.h }
         self._dirty_tool_row = false
+    end
+    if self._dirty_banner then
+        local banner = self.layout.banner
+        regions[#regions + 1] = { x = banner.x, y = banner.y, w = banner.w, h = banner.h }
+        self._dirty_banner = false
     end
     for _, rect in ipairs(regions) do
         UIManager:setDirty(self, "ui", Geom:new(rect))
@@ -141,6 +150,43 @@ function SudokuView:markToolRowIfChanged()
         self._undo_state = { can_undo = can_undo, can_redo = can_redo }
         self:markToolRow()
     end
+end
+
+function SudokuView:markBanner()
+    self._dirty_banner = true
+end
+
+local function hint_cell_key(row, col)
+    return row * 9 + col
+end
+
+-- Marks the currently highlighted hint cells as dirty (they must be
+-- repainted when the highlight appears or disappears).
+function SudokuView:_markHintCells()
+    for key in pairs(self._hint_cells) do
+        self._dirty_cells[key] = true
+    end
+end
+
+function SudokuView:_setHintCells(cells)
+    self:_markHintCells()
+    self._hint_cells = {}
+    for _, cell in ipairs(cells or {}) do
+        self._hint_cells[hint_cell_key(cell[1], cell[2])] = true
+    end
+    self:_markHintCells()
+end
+
+-- Drops any in-progress hint reveal and marks the painted regions dirty.
+function SudokuView:_clearHintState()
+    if self._hint_stage == 0 then
+        return
+    end
+    self:_markHintCells()
+    self._hint_cells = {}
+    self._hint_result = nil
+    self._hint_stage = 0
+    self:markBanner()
 end
 
 function SudokuView:paintGrid(bb)
@@ -201,6 +247,8 @@ function SudokuView:paintCells(bb)
                 bb:invertRect(rect.x, rect.y, rect.w, rect.h)
             elseif conflict_set[key] or revealed_set[key] then
                 bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.wrong_fill)
+            elseif self._hint_stage == 2 and self._hint_cells[key] then
+                bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.hint_fill)
             end
 
             local value = self.game:get(row, col)
@@ -224,6 +272,17 @@ function SudokuView:paintTo(bb, x, y)
         can_undo = self.game:can_undo(),
         can_redo = self.game:can_redo(),
     })
+    if self._hint_stage >= 1 and self._hint_result then
+        local banner = self.layout.banner
+        bb:paintRect(banner.x, banner.y, banner.w, banner.h, theme.background)
+        local text
+        if self._hint_stage == 1 then
+            text = T(_("%1 — tap Hint for the pattern"), self._hint_result.technique.name)
+        else
+            text = T(_("%1 — tap Hint to apply"), self._hint_result.technique.name)
+        end
+        numberbar.render_centered(bb, self.faces.label, text, false, banner, theme.digit)
+    end
     self._painted = true
 end
 
@@ -233,6 +292,7 @@ function SudokuView:onTap(ev_args, ges)
         return true
     end
     if hit.kind == "cell" then
+        self:_clearHintState()
         if self.selected then
             self:markCell(self.selected.row, self.selected.col)
         end
@@ -251,6 +311,7 @@ function SudokuView:onTap(ev_args, ges)
 
     local ok, err
     if type(hit.id) == "number" then
+        self:_clearHintState()
         if self.notes_mode then
             self:markCell(self.selected.row, self.selected.col)
             ok, err = self.game:toggle_note(self.selected.row, self.selected.col, hit.id)
@@ -265,6 +326,7 @@ function SudokuView:onTap(ev_args, ges)
         end
         self:markToolRowIfChanged()
     elseif hit.id == "erase" then
+        self:_clearHintState()
         local value = self.game:get(self.selected.row, self.selected.col)
         if value ~= 0 then
             self:markCells(self.game:affected_cells(self.selected.row, self.selected.col, value))
@@ -275,24 +337,31 @@ function SudokuView:onTap(ev_args, ges)
         end
         self:markToolRowIfChanged()
     elseif hit.id == "undo" then
+        self:_clearHintState()
         ok, err = self.game:undo()
         if ok then
             self:markCells(self.game:undo_affected_cells())
             self:markToolRowIfChanged()
         end
     elseif hit.id == "redo" then
+        self:_clearHintState()
         ok, err = self.game:redo()
         if ok then
             self:markCells(self.game:redo_affected_cells())
             self:markToolRowIfChanged()
         end
     elseif hit.id == "notes" then
+        self:_clearHintState()
         self.notes_mode = not self.notes_mode
         self:markToolRow()
     elseif hit.id == "check" then
+        self:_clearHintState()
         self:onCheck()
     elseif hit.id == "menu" then
+        self:_clearHintState()
         self:openMenu()
+    elseif hit.id == "hint" then
+        self:onHint()
     end
     if not ok and err ~= nil then
         UIManager:show(Notification:new { text = err })
@@ -335,6 +404,72 @@ function SudokuView:markRevealedDiff(before)
     end
 end
 
+-- Progressive hint reveal: ① technique name in the banner, ② pattern cells
+-- highlighted, ③ the action applied (undoable, recorded by game:hint as the
+-- missed strategy). Any other interaction cancels the reveal.
+function SudokuView:onHint()
+    if self._hint_stage == 1 then
+        self._hint_stage = 2
+        self:_setHintCells(self._hint_result.pattern.cells)
+        self:markBanner()
+        self:refresh()
+        return true
+    end
+    if self._hint_stage == 2 then
+        local action = self._hint_result.action
+        local affected = self.game:affected_cells(action.row, action.col, action.value)
+        self:_clearHintState()
+        local ok, err = self.game:apply_action(action)
+        if ok then
+            if affected then
+                self:markCells(affected)
+            else
+                self:markCell(action.row, action.col)
+            end
+            self:markToolRowIfChanged()
+        elseif err then
+            UIManager:show(Notification:new { text = err })
+        end
+        self:refresh()
+        return true
+    end
+
+    local result, err = self.game:hint()
+    if not result then
+        UIManager:show(Notification:new { text = err })
+        return true
+    end
+    if result.status == "available" then
+        self._hint_result = result
+        self._hint_stage = 1
+        self:markBanner()
+    elseif result.status == "note_error" then
+        UIManager:show(Notification:new {
+            text = _("Some notes are inconsistent with the board. Fix them first."),
+        })
+    else
+        -- status == "none": the engine could not deduce anything. Cells the
+        -- user cleared of all candidates are ground truth the engine cannot
+        -- use; name them so the player can re-add their notes.
+        local needed = self.game:notes_needed()
+        if #needed > 0 then
+            local cells = {}
+            for i, cell in ipairs(needed) do
+                cells[i] = "(" .. (cell[1] + 1) .. ", " .. (cell[2] + 1) .. ")"
+            end
+            UIManager:show(Notification:new {
+                text = T(_("No hint available. Re-add notes to: %1"), table.concat(cells, ", ")),
+            })
+        elseif result.reason == "solved" then
+            UIManager:show(Notification:new { text = _("The puzzle is solved.") })
+        else
+            UIManager:show(Notification:new { text = _("No hint available.") })
+        end
+    end
+    self:refresh()
+    return true
+end
+
 function SudokuView:persistStats()
     local ok, err = storage.save(self.stats_path, stats.to_table(self.stats))
     if not ok then
@@ -363,14 +498,30 @@ function SudokuView:onWin()
         self:persistStats()
     end
     self:deleteSave()
-    UIManager:show(InfoMessage:new {
+    UIManager:show(MultiConfirmBox:new {
         text = T(
             _("Puzzle solved!\n\nTime: %1\nMistakes: %2"),
             format_time(record.duration),
             tostring(record.mistakes)
         ),
-        dismiss_callback = function()
+        cancel_text = _("Close"),
+        cancel_callback = function()
             UIManager:close(self, "flashui")
+        end,
+        choice1_text = _("New game"),
+        choice1_callback = function()
+            local difficulty = self.game:difficulty()
+            UIManager:close(self, "flashui")
+            if self.new_game_cb then
+                self.new_game_cb(difficulty)
+            end
+        end,
+        choice2_text = _("Statistics"),
+        choice2_callback = function()
+            UIManager:close(self, "flashui")
+            if self.show_stats_cb then
+                self.show_stats_cb()
+            end
         end,
     })
 end

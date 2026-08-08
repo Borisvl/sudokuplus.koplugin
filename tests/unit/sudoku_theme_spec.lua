@@ -13,6 +13,7 @@ describe("sudoku theme", function()
         assert.is_not_nil(theme.digit)
         assert.is_not_nil(theme.note)
         assert.is_not_nil(theme.wrong_fill)
+        assert.is_not_nil(theme.hint_fill)
         assert.is_not_nil(theme.disabled)
         assert.is_not_nil(theme.invert_fg)
     end)
@@ -31,6 +32,15 @@ describe("sudoku theme", function()
         end
         assert.is_true(luminance(theme.wrong_fill) > luminance(theme.grid_thick))
         assert.is_true(luminance(theme.disabled) > luminance(theme.digit))
+    end)
+
+    it("keeps the hint fill light enough to leave digits readable", function()
+        local function luminance(color)
+            return tonumber(color.a)
+        end
+        assert.is_true(luminance(theme.hint_fill) > luminance(theme.grid_thick), "hint cells keep dark ink readable")
+        assert.are_not.equal(theme.hint_fill, theme.background, "hint cells must be distinguishable from empty")
+        assert.are_not.equal(theme.hint_fill, theme.wrong_fill, "hints must not read as errors")
     end)
 
     it("keeps the notes ink dark enough to read", function()

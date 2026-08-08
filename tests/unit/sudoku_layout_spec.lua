@@ -46,14 +46,29 @@ describe("sudoku layout", function()
         end
     end)
 
-    it("keeps the number and tool bars on screen with a gap from the grid", function()
+    it("keeps the number and tool bars and hint banner on screen with gaps", function()
         local l = layout.compute(1072, 1448, scaler(CLARA))
         assert.is_true(l.number_row.y + l.number_row.h <= 1448)
         assert.is_true(l.tool_row.y + l.tool_row.h <= l.number_row.y)
-        assert.is_true(l.tool_row.y >= l.grid.y + l.grid.h)
-        assert.is_true(l.tool_row.y - (l.grid.y + l.grid.h) >= l.gap)
+        assert.is_true(l.banner.y + l.banner.h <= l.tool_row.y)
+        assert.is_true(l.banner.y >= l.grid.y + l.grid.h)
+        assert.is_true(l.banner.y - (l.grid.y + l.grid.h) >= l.gap)
+        assert.is_true(l.tool_row.y - (l.banner.y + l.banner.h) >= l.gap)
         assert.are.equal(#l.number_row.buttons, 10)
-        assert.are.equal(#l.tool_row.buttons, 5)
+        assert.are.equal(#l.tool_row.buttons, 6)
+    end)
+
+    it("keeps the portrait grid width-constrained with the banner reserved", function()
+        for _, spec in ipairs({
+            { 758, 1024, GLO },
+            { 1072, 1448, CLARA },
+            { 1404, 1872, AURA },
+        }) do
+            local l = layout.compute(spec[1], spec[2], scaler(spec[3]))
+            assert.is_true(l.banner.h > 0)
+            assert.is_true(l.grid.w <= spec[1] - 2 * l.margin)
+            assert.is_true(l.grid.y + l.grid.h + l.gap < l.banner.y, "the banner must not shrink the portrait grid")
+        end
     end)
 
     it("tiles bar buttons without overflow", function()
@@ -88,7 +103,7 @@ describe("sudoku layout", function()
     it("maps bar button centers to their ids", function()
         local l = layout.compute(1072, 1448, scaler(CLARA))
         local expected_numbers = { 1, 2, 3, 4, 5, 6, 7, 8, 9, "erase" }
-        local expected_tools = { "undo", "redo", "notes", "check", "menu" }
+        local expected_tools = { "undo", "redo", "notes", "check", "hint", "menu" }
         for i, button in ipairs(l.number_row.buttons) do
             local hit = layout.hit(l, button.x + math.floor(button.w / 2), button.y + math.floor(button.h / 2))
             assert.are.equal(hit.kind, "button")

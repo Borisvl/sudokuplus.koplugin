@@ -208,7 +208,7 @@ storage):
       boxes; precise check/undo/redo — no more rectangle flashes on device)
 - [x] M6.3: one refresh per tap (`"ui"` mode, no promotion flashes, clustered
       regions, tool row only on state change — no more lag/flicker)
-- [ ] M7: menus, hint display, stats screen
+- [x] M7: menus, hint display, stats screen
 - [ ] M8: polish, i18n, on-device testing
 
 See PLAN.md for milestone details and the project rules in AGENTS.md.

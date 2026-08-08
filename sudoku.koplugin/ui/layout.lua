@@ -6,6 +6,7 @@ local layout = {}
 local MARGIN_DP = 4
 local BAR_HEIGHT_DP = 50
 local BAR_GAP_DP = 4
+local HINT_BANNER_DP = 40
 local THICK_BORDER_DP = 3
 local THIN_BORDER_DP = 1
 local FONT_GIVEN_DP = 38
@@ -15,7 +16,7 @@ local FONT_DIGIT_DP = 26
 local FONT_LABEL_DP = 20
 
 local NUMBER_ROW = { 1, 2, 3, 4, 5, 6, 7, 8, 9, "erase" }
-local TOOL_ROW = { "undo", "redo", "notes", "check", "menu" }
+local TOOL_ROW = { "undo", "redo", "notes", "check", "hint", "menu" }
 
 local function default_scale(dp)
     return math.max(1, math.ceil(dp))
@@ -56,17 +57,22 @@ function layout.compute(width, height, scale)
     local margin = scale(MARGIN_DP)
     local bar_height = scale(BAR_HEIGHT_DP)
     local gap = scale(BAR_GAP_DP)
+    local banner_height = scale(HINT_BANNER_DP)
     local thin = math.max(1, scale(THIN_BORDER_DP))
     local thick = math.max(1, scale(THICK_BORDER_DP))
 
+    -- The hint banner is always reserved (it shows the hint technique name
+    -- during a progressive reveal); the grid yields only when vertical space
+    -- is too tight. On the target portrait screens the grid is
+    -- width-constrained, so reserving it costs nothing there.
+    local number_y = height - margin - bar_height
+    local tool_y = number_y - gap - bar_height
+    local banner_y = tool_y - gap - banner_height
     local grid_max_w = width - 2 * margin
-    local grid_max_h = height - 2 * margin - 2 * bar_height - 2 * gap
+    local grid_max_h = banner_y - gap - margin
     local side = math.max(0, math.min(grid_max_w, grid_max_h))
     local cell = math.max(0, math.floor((side - 6 * thin - 4 * thick) / 9))
     local grid_w = 9 * cell + 6 * thin + 4 * thick
-
-    local number_y = height - margin - bar_height
-    local tool_y = number_y - gap - bar_height
 
     return {
         width = width,
@@ -95,6 +101,12 @@ function layout.compute(width, height, scale)
         },
         number_row = bar_row(margin, number_y, width - 2 * margin, bar_height, NUMBER_ROW),
         tool_row = bar_row(margin, tool_y, width - 2 * margin, bar_height, TOOL_ROW),
+        banner = {
+            x = margin,
+            y = banner_y,
+            w = width - 2 * margin,
+            h = banner_height,
+        },
     }
 end
 

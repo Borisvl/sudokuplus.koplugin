@@ -13,6 +13,11 @@ describe("sudoku plugin menu", function()
             if item.text == text then
                 return item
             end
+            for _, sub in ipairs(item.sub_item_table or {}) do
+                if sub.text == text then
+                    return sub
+                end
+            end
         end
         error("no menu item " .. text)
     end
@@ -33,27 +38,80 @@ describe("sudoku plugin menu", function()
         os.remove(save_path)
     end)
 
-    it("registers a Sudoku submenu with resume, new-game and notes toggle", function()
+    it("registers a Sudoku submenu with continue, new-game, statistics and the notes toggle", function()
         assert.is_not_nil(menu_items.sudoku)
         assert.is_table(menu_items.sudoku.sub_item_table)
         local texts = {}
         for _, item in ipairs(menu_items.sudoku.sub_item_table) do
             texts[#texts + 1] = item.text
         end
-        assert.are.same({ "Resume game", "New game", "Auto-fill notes" }, texts)
+        assert.are.same({ "Continue", "New game", "Statistics", "Auto-fill notes" }, texts)
     end)
 
-    it("enables Resume game only when a save exists", function()
-        local resume = item_with("Resume game")
-        assert.is_false(resume.enabled_func())
+    it("offers all four difficulties under New game", function()
+        local new_game = item_with("New game")
+        assert.is_table(new_game.sub_item_table)
+        local labels = {}
+        for _, entry in ipairs(new_game.sub_item_table) do
+            labels[#labels + 1] = entry.text
+        end
+        assert.are.same({ "Easy", "Medium", "Hard", "Expert" }, labels)
+    end)
+
+    it("starts a game of the chosen difficulty", function()
+        local board = require("core.board")
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function(opts)
+            assert.are.equal("expert", opts.difficulty)
+            return {
+                board = board.from_string(
+                    "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+                ),
+                solution = board.from_string(
+                    "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+                ),
+                difficulty = "expert",
+                clues = 30,
+            }
+        end
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            shown = widget
+        end
+        item_with("Expert").callback()
+        UIManager.show = original_show
+        generator.generate_game = original_generate
+        assert.is_not_nil(shown, "New game must show the game view")
+        assert.are.equal("expert", shown.game:difficulty())
+    end)
+
+    it("shows the statistics view from the menu", function()
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            shown = widget
+        end
+        item_with("Statistics").callback()
+        UIManager.show = original_show
+        assert.is_not_nil(shown)
+        assert.are.equal("statsview", shown.name)
+    end)
+
+    it("enables Continue only when a save exists", function()
+        local continue = item_with("Continue")
+        assert.is_false(continue.enabled_func())
         local file = io.open(save_path, "wb")
         assert.is_not_nil(file)
         file:write("{}")
         file:close()
-        assert.is_true(resume.enabled_func())
+        assert.is_true(continue.enabled_func())
     end)
 
-    it("resumes the saved game from the menu item", function()
+    it("continues the saved game from the menu item", function()
         local board = require("core.board")
         local clock = { t = 1000 }
         local g = assert(game.new {
@@ -78,10 +136,10 @@ describe("sudoku plugin menu", function()
         UIManager.show = function(_, widget)
             shown = widget
         end
-        item_with("Resume game").callback()
+        item_with("Continue").callback()
         UIManager.show = original_show
 
-        assert.is_not_nil(shown, "Resume game must show the game view")
+        assert.is_not_nil(shown, "Continue must show the game view")
         assert.are.equal(2, shown.game:get(0, 2))
         assert.is_true(shown.game.timer.running, "resumed game must start its timer")
     end)
@@ -98,6 +156,35 @@ describe("sudoku plugin menu", function()
         assert.is_not_nil(shown, "New game must show the game view")
         local t = shown.game.now()
         assert.is_true(t >= os.time() - 2 and t <= os.time() + 2, "timer must use wall-clock seconds")
+    end)
+
+    it("shows a generating notification before generating and closes it after", function()
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function(opts)
+            assert.are.equal("hard", opts.difficulty)
+            return nil, "forced generation failure"
+        end
+        local UIManager = require("ui/uimanager")
+        local shown = {}
+        local closed = {}
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            shown[#shown + 1] = widget
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        item_with("Hard").callback()
+        UIManager.show = original_show
+        UIManager.close = original_close
+        generator.generate_game = original_generate
+
+        assert.is_not_nil(shown[1], "a notification must be shown before generation")
+        assert.are.equal("Generating…", shown[1].text)
+        assert.is_not_nil(shown[2], "the failure must surface an error dialog")
+        assert.are.equal(shown[1], closed[1], "the notification must be dismissed after generation")
     end)
 
     it("keeps the saved game when generating a new one fails", function()

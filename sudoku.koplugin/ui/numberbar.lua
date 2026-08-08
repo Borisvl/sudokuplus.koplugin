@@ -11,6 +11,7 @@ local LABELS = {
     redo = _("Redo"),
     notes = _("Notes"),
     check = _("Check"),
+    hint = _("Hint"),
     menu = _("Menu"),
 }
 

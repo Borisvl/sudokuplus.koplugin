@@ -366,6 +366,24 @@ function mt:get_notes(r, c)
     return self.notes[r + 1][c + 1]
 end
 
+-- Empty cells whose notes the user cleared (ground truth): the hint engine
+-- cannot use them, so deduction may be blocked until notes are re-added.
+function mt:notes_needed()
+    local result = {}
+    for r = 0, 8 do
+        for c = 0, 8 do
+            if
+                self.board[cell_index(r, c)] == 0
+                and self.notes[r + 1][c + 1] == 0
+                and self.manual_removed[r + 1][c + 1] ~= 0
+            then
+                result[#result + 1] = { r, c }
+            end
+        end
+    end
+    return result
+end
+
 function mt:conflicts()
     local result = {}
     for r = 0, 8 do

@@ -330,6 +330,41 @@ describe("game", function()
         assert.is_true(has_note(instance, 0, 3, 6))
     end)
 
+    it("reports cells that block deduction because the user cleared their notes", function()
+        local instance = new_game()
+
+        assert.are.same({}, instance:notes_needed(), "untouched cells never need notes")
+
+        -- the user removed a candidate: ground truth, deduction cannot use the cell
+        assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.are.same({ { 0, 3 } }, instance:notes_needed())
+
+        -- clearing non-empty notes also marks the cell as ground truth
+        assert.is_true(instance:toggle_note(8, 0, 1))
+        assert.is_true(instance:clear_notes(8, 0))
+        assert.are.same({ { 0, 3 }, { 8, 0 } }, instance:notes_needed())
+
+        -- filling the cell removes it from the list
+        assert.is_true(instance:place(0, 3, 6))
+        assert.are.same({ { 8, 0 } }, instance:notes_needed())
+
+        -- undoing the fill restores the cleared-notes state
+        assert.is_true(instance:undo())
+        assert.are.same({ { 0, 3 }, { 8, 0 } }, instance:notes_needed())
+    end)
+
+    it("does not treat an already-empty clear or a place/erase cycle as user-cleared", function()
+        local instance = new_game()
+
+        assert.is_true(instance:clear_notes(0, 3))
+        assert.are.same({}, instance:notes_needed(), "clearing an untouched empty cell is a no-op")
+
+        assert.is_true(instance:place(0, 2, 2))
+        assert.is_true(instance:erase(0, 2))
+        assert.are.same({}, instance:notes_needed(), "erase restores the previous (empty) note state")
+    end)
+
     it("undoes and redoes moves restoring notes exactly", function()
         local instance = new_game()
 

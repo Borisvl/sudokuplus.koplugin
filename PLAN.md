@@ -47,8 +47,11 @@ A Sudoku puzzle game for e-ink readers (KOReader plugin, target: Kobo).
    revealed by check are a separate counter.
 6. **Timer**: counts active play time only (pauses in menus / on suspend).
 7. **Streak**: consecutive solved games without using a hint.
-8. **v1 UI difficulties**: Easy, Medium, Hard; Expert puzzles behind a
-   setting (once AIC hints are solid).
+8. **v1 UI difficulties**: Easy, Medium, Hard, Expert. M7 divergence: the
+   original "Expert puzzles behind a setting" gate was dropped — Expert is
+   always offered in the picker (AIC hints have been solid since M4); the
+   synchronous generation wait is mitigated by a "Generating…"
+   notification.
 9. **Stats storage**: JSON files in KOReader's data dir (`sudoku_stats`,
    `sudoku_save`). M5 divergence from the original "via persist.lua" wording:
    persist.lua has no JSON codec (serpent/dump/bitser only), so the JSON
@@ -483,20 +486,58 @@ entries 28→34 dp) with layout-spec floors (given ≥ 36, user ≥ 32).
 **Exit criteria**: specs green, `./dev.sh lint` clean, emulator boot smoke on
 `kobo-aura-one` with no errors, PLAN.md + README updated, commit.
 
-### M7 — Menus, hint display, stats screen
+### M7 — Menus, hint display, stats screen (done)
 
-- [ ] Tools menu: New Game (difficulty picker), Continue, Statistics
-- [ ] Hint overlay with pattern highlighting (progressive reveal). Note:
-      `game:hint()` already derives engine notes (untouched cells are
-      substituted with board-legal candidates); a cell the user cleared of
-      all candidates is ground truth and may block deduction — surface a
-      friendly "notes needed" message instead of a bare "no hint"
-- [ ] `statsview.lua`: avg/best time per difficulty, hints per technique,
-      most missed strategies, streak, games played/given up
-- [ ] Expert difficulty behind a setting
+Refined plan (milestone planning decisions, documented like M2/M5/M6):
+**Expert is always offered** in the difficulty picker (no gating setting —
+resolves design decision #8 differently; AIC hints are solid since M4), but
+every generation starts with a **"Generating…" notification** (generation,
+expert especially, is synchronous and can take seconds on-device). The
+**"Resume game" entry is renamed "Continue"** and the menu becomes: Continue,
+New game (difficulty submenu Easy/Medium/Hard/Expert), Statistics,
+Auto-fill notes. The hint reveal is a strict **three-tap progression**
+(① name banner → ② pattern cells highlighted → ③ apply), and any other
+interaction cancels the reveal; the action is applied through the move
+machinery (undoable) with the revision guard rejecting stale actions. The
+hint banner is a **reserved strip** between the grid and the tool row (the
+grid only shrinks where vertical space is too tight; portrait layouts are
+unaffected). When deduction is blocked because the user cleared a cell's
+candidates, the view names those cells (`game:notes_needed()`, pure) instead
+of a bare "no hint". The **win dialog** gains "New game" (same difficulty)
+and "Statistics" buttons; the statistics screen stays reachable from the
+Tools menu only. `format_time` moved to `core/util.lua` (shared by the
+views, pure). Hint requests are recorded **per request** (no dedupe): every
+"available" result counts as a missed strategy.
+
+- [x] `ui/difficulties.lua` + `sudoku_difficulties_spec.lua` — ordered
+      id/label list for the picker and the stats screen
+- [x] `core/util.lua` `format_time` + spec (shared HH:MM:SS for the views)
+- [x] `game.lua`: `mt:notes_needed()` (empty cells with a non-empty
+      `manual_removed` mask) + `sudoku_game_spec` cases
+- [x] `ui/layout.lua`: tool row gains the `hint` button (6 buttons); a
+      reserved hint banner row sits between grid and tool row; layout-spec
+      gaps/banner/portrait-unchanged assertions
+- [x] `ui/theme.lua`: `hint_fill` (light ink, distinct from `wrong_fill`)
+      + theme-spec invariants
+- [x] `main.lua`: Continue / New game → Easy–Expert submenu / Statistics /
+      Auto-fill notes; `startGame(difficulty)` with the "Generating…"
+      notification; `new_game_cb`/`show_stats_cb` wired to the view;
+      `sudoku_menu_spec` updates
+- [x] `ui/sudokuview.lua`: three-tap hint reveal (banner, pattern
+      highlight, apply), cancel on any other interaction, notes-needed
+      message, win dialog with New game/Statistics; `sudoku_view_spec`
+      (pixel + refresh-region assertions)
+- [x] `ui/statsview.lua` + `sudoku_statsview_spec.lua` — fullscreen report
+      of `stats.summary()`: streak, played/finished/given-up, per-difficulty
+      count/avg/best, hints per technique (sorted), most missed; tap/Back
+      closes
+- [x] Emulator smoke check — plugin boots clean on `kobo-aura-one` with no
+      errors (the interactive loop is covered headlessly by the view, menu
+      and statsview specs; the checkout has no SDL input replay support)
 
 **Exit criteria**: complete loop — generate → play → hints → win → stats —
-in the emulator.
+in the emulator; all specs green, `./dev.sh lint` clean, PLAN.md + README
+updated, commit.
 
 ### M8 — Polish, i18n, deployment
 
