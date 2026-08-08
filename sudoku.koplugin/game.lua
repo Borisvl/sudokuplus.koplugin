@@ -587,11 +587,15 @@ function mt:is_won()
 end
 
 local function make_record(self, kind)
+    local hint_ids = {}
+    for i, entry in ipairs(self._hints) do
+        hint_ids[i] = entry.technique
+    end
     return {
         kind = kind,
         difficulty = self._difficulty,
         duration = self:elapsed(),
-        hints = self:hints(),
+        hints = hint_ids,
         mistakes = self._mistakes,
         check_errors = self._check_errors,
         timestamp = self.now(),
@@ -669,6 +673,9 @@ function mt:apply_action(action)
     end
     if self.finished then
         return nil, "game is finished"
+    end
+    if action.revision ~= nil and action.revision ~= self._revision then
+        return nil, "action is stale"
     end
 
     if action.type == "place" then
@@ -942,7 +949,7 @@ function game.restore(data, opts)
         solution = solution,
         board = current,
         notes = notes,
-        difficulty = data.difficulty,
+        _difficulty = data.difficulty,
         now = now,
         timer = { running = false, started = now(), elapsed = 0 },
         _revision = data.revision,

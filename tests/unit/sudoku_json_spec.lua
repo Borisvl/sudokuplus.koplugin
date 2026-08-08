@@ -52,6 +52,17 @@ describe("json", function()
         assert.are.same({ a = { b = { 1, 2 } } }, json.decode('{"a":{"b":[1,2]}}'))
     end)
 
+    it("decodes false values", function()
+        local value, err = json.decode("false")
+        assert.is_nil(err)
+        assert.is_false(value)
+
+        local nested, nested_err = json.decode('{"finished":false,"values":[true,false]}')
+        assert.is_nil(nested_err)
+        assert.is_false(nested.finished)
+        assert.are.same({ true, false }, nested.values)
+    end)
+
     it("rejects malformed JSON", function()
         local cases = {
             "",

@@ -237,7 +237,7 @@ local function decode_value(d, depth)
         end
         while true do
             local value, err = decode_value(d, depth + 1)
-            if not value then
+            if value == nil then
                 return nil, err
             end
             result[#result + 1] = value
@@ -274,7 +274,7 @@ local function decode_value(d, depth)
             end
             d.position = d.position + 1
             local value, value_err = decode_value(d, depth + 1)
-            if not value then
+            if value == nil then
                 return nil, value_err
             end
             result[key] = value
@@ -306,7 +306,7 @@ function json.decode(text)
     end
     local d = { text = text, position = 1, length = #text }
     local value, err = decode_value(d, 0)
-    if not value then
+    if value == nil then
         return nil, err
     end
     skip_whitespace(d)

@@ -70,6 +70,14 @@ describe("game serialization", function()
         assert.is_false(restored:is_finished())
     end)
 
+    it("preserves difficulty when restoring and reserializing", function()
+        local instance = new_game()
+        local restored = restore(instance:serialize(), { t = 1000 })
+
+        assert.are.equal("hard", restored:difficulty())
+        assert.are.equal("hard", restored:serialize().difficulty)
+    end)
+
     it("restores a playable history: undo and redo still work", function()
         local instance = new_game()
         assert.is_true(instance:place(0, 2, 2))

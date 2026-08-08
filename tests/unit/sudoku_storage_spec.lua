@@ -35,6 +35,18 @@ describe("storage", function()
         os.remove(path)
     end)
 
+    it("round-trips boolean values in persisted data", function()
+        local path = temp_path()
+        local payload = { finished = false, timer = { running = true } }
+
+        assert.is_true(storage.save(path, payload))
+        local loaded, err = storage.load(path)
+        os.remove(path)
+
+        assert.is_nil(err)
+        assert.are.same(payload, loaded)
+    end)
+
     it("writes valid JSON text", function()
         local path = temp_path()
         assert.is_true(storage.save(path, { b = 1, a = { 1, 2 } }))

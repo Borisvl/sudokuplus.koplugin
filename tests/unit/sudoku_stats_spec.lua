@@ -1,6 +1,11 @@
 package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 
+local board = require("core.board")
+local game = require("game")
 local stats = require("stats")
+
+local NAKED_SINGLE_PUZZLE = "385421967194756328627983145571892634839645271246137589462579813918364752753218490"
+local NAKED_SINGLE_SOLUTION = "385421967194756328627983145571892634839645271246137589462579813918364752753218496"
 
 local function record(overrides)
     local base = {
@@ -46,6 +51,22 @@ describe("stats", function()
         assert.are.equal(2, summary.games_played)
         assert.are.equal(1, summary.finished_count)
         assert.are.equal(1, summary.given_up_count)
+    end)
+
+    it("accepts records returned by a game that used a hint", function()
+        local instance = assert(game.new({
+            puzzle = board.from_string(NAKED_SINGLE_PUZZLE),
+            solution = board.from_string(NAKED_SINGLE_SOLUTION),
+            difficulty = "easy",
+            now = function()
+                return 1000
+            end,
+        }))
+        assert.are.equal("available", instance:hint().status)
+
+        local result = assert(stats.add(stats.new(), assert(instance:give_up())))
+        assert.are.equal(1, #result.given_up)
+        assert.are.equal("naked_singles", result.given_up[1].hints[1])
     end)
 
     it("rejects malformed records", function()

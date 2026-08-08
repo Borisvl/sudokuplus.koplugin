@@ -404,6 +404,18 @@ describe("game", function()
         assert.are.equal(1, #instance:hints(), "no-hint results are not recorded")
     end)
 
+    it("rejects a hint action after the game revision changes", function()
+        local instance = new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION)
+        local result = assert(instance:hint())
+
+        assert.is_true(instance:place(8, 8, 5))
+        local ok, err = instance:apply_action(result.action)
+
+        assert.is_nil(ok)
+        assert.is_string(err)
+        assert.are.equal(5, instance:get(8, 8))
+    end)
+
     it("blocks hints while the board has live conflicts", function()
         local instance = new_game()
 
