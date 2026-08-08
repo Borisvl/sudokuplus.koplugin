@@ -63,12 +63,15 @@ function Sudoku:startGame()
         })
         return
     end
-    UIManager:show(SudokuView:new {
-        game = g,
-        stats = self:loadStats(),
-        save_path = SAVE_PATH,
-        stats_path = STATS_PATH,
-    })
+    UIManager:show(
+        SudokuView:new {
+            game = g,
+            stats = self:loadStats(),
+            save_path = SAVE_PATH,
+            stats_path = STATS_PATH,
+        },
+        "full"
+    )
 end
 
 function Sudoku:continueGame()
@@ -86,12 +89,15 @@ function Sudoku:continueGame()
         })
         return
     end
-    UIManager:show(SudokuView:new {
-        game = g,
-        stats = self:loadStats(),
-        save_path = SAVE_PATH,
-        stats_path = STATS_PATH,
-    })
+    UIManager:show(
+        SudokuView:new {
+            game = g,
+            stats = self:loadStats(),
+            save_path = SAVE_PATH,
+            stats_path = STATS_PATH,
+        },
+        "full"
+    )
 end
 
 function Sudoku:addToMainMenu(menu_items)

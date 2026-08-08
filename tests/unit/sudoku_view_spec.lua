@@ -397,4 +397,171 @@ describe("sudoku view", function()
         assert.is_false(view.menu_open)
         assert.is_true(g.timer.running)
     end)
+
+    describe("refresh modes and regions", function()
+        local UIManager
+        local calls
+        local original_set_dirty
+
+        local function paint_view(view)
+            local bb = Blitbuffer.new(758, 1024)
+            bb:fill(Blitbuffer.COLOR_WHITE)
+            view:paintTo(bb, 0, 0)
+            bb:free()
+        end
+
+        local function last_call()
+            assert.is_true(#calls > 0, "no setDirty call recorded")
+            return calls[#calls]
+        end
+
+        -- The grid region call of the latest refresh batch (tool-row regions
+        -- live below the grid).
+        local function last_grid_call(view)
+            local grid_bottom = view.layout.grid.y + view.layout.grid.h
+            for i = #calls, 1, -1 do
+                local call = calls[i]
+                if call.region and call.region.y < grid_bottom then
+                    return call
+                end
+            end
+            return nil
+        end
+
+        local function last_tool_call(view)
+            for i = #calls, 1, -1 do
+                local call = calls[i]
+                if call.region and call.region.y >= view.layout.tool_row.y then
+                    return call
+                end
+            end
+            return nil
+        end
+
+        local function assert_rect(region, rect)
+            assert.is_not_nil(region, "expected a refresh region")
+            assert.are.equal(rect.x, region.x)
+            assert.are.equal(rect.y, region.y)
+            assert.are.equal(rect.w, region.w)
+            assert.are.equal(rect.h, region.h)
+        end
+
+        before_each(function()
+            UIManager = require("ui/uimanager")
+            calls = {}
+            original_set_dirty = UIManager.setDirty
+            UIManager.setDirty = function(self, widget, mode, region)
+                table.insert(calls, { widget = widget, mode = mode, region = region })
+            end
+        end)
+
+        after_each(function()
+            UIManager.setDirty = original_set_dirty
+        end)
+
+        it("uses a full-screen refresh before the first paint", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            view:refresh()
+            assert.are.equal("full", last_call().mode)
+        end)
+
+        it("refreshes only the selected cell on selection", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            tap_cell(view, 3, 4)
+            local call = last_call()
+            assert.are.equal("partial", call.mode)
+            assert_rect(call.region, layout.cell_rect(view.layout, 3, 4))
+        end)
+
+        it("covers the old and new cell when the selection moves", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            tap_cell(view, 3, 4)
+            tap_cell(view, 5, 7)
+            local call = last_call()
+            assert.are.equal("partial", call.mode)
+            local a = layout.cell_rect(view.layout, 3, 4)
+            local b = layout.cell_rect(view.layout, 5, 7)
+            local x = math.min(a.x, b.x)
+            local y = math.min(a.y, b.y)
+            assert_rect(call.region, {
+                x = x,
+                y = y,
+                w = math.max(a.x + a.w, b.x + b.w) - x,
+                h = math.max(a.y + a.h, b.y + b.h) - y,
+            })
+        end)
+
+        it("refreshes only the cells a placed digit can affect", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            tap_cell(view, 0, 5)
+            tap_button(view, "number_row", 3)
+            local call = last_grid_call(view)
+            assert.is_not_nil(call, "expected a grid-region refresh")
+            assert.are.equal("partial", call.mode)
+            -- 3 sits at (0,1) in the row and (4,5) in the column: the region
+            -- is the bounding box of the target cell and those two peers,
+            -- and must stay well below the full grid.
+            local a = layout.cell_rect(view.layout, 0, 5)
+            local b = layout.cell_rect(view.layout, 0, 1)
+            local c = layout.cell_rect(view.layout, 4, 5)
+            local x = math.min(a.x, math.min(b.x, c.x))
+            local y = math.min(a.y, math.min(b.y, c.y))
+            assert_rect(call.region, {
+                x = x,
+                y = y,
+                w = math.max(a.x + a.w, math.max(b.x + b.w, c.x + c.w)) - x,
+                h = math.max(a.y + a.h, math.max(b.y + b.h, c.y + c.h)) - y,
+            })
+            assert.is_true(call.region.h < view.layout.grid.h, "region must not cover the whole grid")
+            local tool = last_tool_call(view)
+            assert.is_not_nil(tool, "undo/redo state changed, tool row must refresh")
+            assert.are.equal("partial", tool.mode)
+            assert_rect(tool.region, view.layout.tool_row)
+        end)
+
+        it("refreshes the tool row only when notes mode toggles", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            tap_button(view, "tool_row", "notes")
+            local call = last_call()
+            assert.are.equal("partial", call.mode)
+            assert_rect(call.region, view.layout.tool_row)
+            assert.is_nil(last_grid_call(view), "no grid region needed")
+        end)
+
+        it("uses a coarse full-screen partial for undo and redo", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            tap_cell(view, 0, 5)
+            tap_button(view, "number_row", 3)
+            tap_button(view, "tool_row", "undo")
+            local undo_call = last_call()
+            assert.are.equal("partial", undo_call.mode)
+            assert.is_nil(undo_call.region)
+            tap_button(view, "tool_row", "redo")
+            local redo_call = last_call()
+            assert.are.equal("partial", redo_call.mode)
+            assert.is_nil(redo_call.region)
+        end)
+
+        it("uses a coarse full-screen partial when closing the pause menu", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            view:openMenu()
+            view:closeMenu()
+            local call = last_call()
+            assert.are.equal("partial", call.mode)
+            assert.is_nil(call.region)
+        end)
+
+        it("full-refreshes on resume", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            view:onResume()
+            assert.are.equal("full", last_call().mode)
+        end)
+    end)
 end)

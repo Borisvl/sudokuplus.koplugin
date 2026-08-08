@@ -56,6 +56,9 @@ function SudokuView:init()
     self.selected = nil
     self.notes_mode = false
     self.menu_open = false
+    self._dirty_cells = {}
+    self._dirty_tool_row = false
+    self._painted = false
 
     self.ges_events.Tap = {
         GestureRange:new {
@@ -66,8 +69,62 @@ function SudokuView:init()
     self.key_events.Close = { { Device.input.group.Back } }
 end
 
+-- E-ink refresh strategy: in-game updates are flash-free "partial" refreshes
+-- limited to the cells that actually changed (KOReader promotes a "partial"
+-- to a flashing refresh every FULL_REFRESH_COUNT refreshes, so ghosting is
+-- cleared periodically); "full" is reserved for the first paint and for
+-- wake/resize, and leaving the game stays a "flashui" close.
 function SudokuView:refresh()
+    if not self._painted then
+        UIManager:setDirty(self, "full")
+        return
+    end
+    local regions = {}
+    local grid_region = layout.cells_region(self.layout, self._dirty_cells)
+    if grid_region then
+        regions[#regions + 1] = Geom:new(grid_region)
+    end
+    if self._dirty_tool_row then
+        local row = self.layout.tool_row
+        regions[#regions + 1] = Geom:new { x = row.x, y = row.y, w = row.w, h = row.h }
+    end
+    self._dirty_cells = {}
+    self._dirty_tool_row = false
+    if #regions == 0 then
+        UIManager:setDirty(self, "partial")
+        return
+    end
+    for _, region in ipairs(regions) do
+        UIManager:setDirty(self, "partial", region)
+    end
+end
+
+-- Full-screen flash-free refresh for state changes that move too much to
+-- track precisely (undo/redo, check reveals, closing the pause menu).
+function SudokuView:refreshCoarse()
+    if not self._painted then
+        UIManager:setDirty(self, "full")
+        return
+    end
+    UIManager:setDirty(self, "partial")
+end
+
+function SudokuView:refreshFull()
     UIManager:setDirty(self, "full")
+end
+
+function SudokuView:markCell(row, col)
+    self._dirty_cells[row * 9 + col] = true
+end
+
+function SudokuView:markCells(cells)
+    for key in pairs(cells) do
+        self._dirty_cells[key] = true
+    end
+end
+
+function SudokuView:markToolRow()
+    self._dirty_tool_row = true
 end
 
 function SudokuView:paintGrid(bb)
@@ -151,6 +208,7 @@ function SudokuView:paintTo(bb, x, y)
         can_undo = self.game:can_undo(),
         can_redo = self.game:can_redo(),
     })
+    self._painted = true
 end
 
 function SudokuView:onTap(ev_args, ges)
@@ -159,7 +217,11 @@ function SudokuView:onTap(ev_args, ges)
         return true
     end
     if hit.kind == "cell" then
+        if self.selected then
+            self:markCell(self.selected.row, self.selected.col)
+        end
         self.selected = { row = hit.row, col = hit.col }
+        self:markCell(hit.row, hit.col)
         self:refresh()
         return true
     end
@@ -174,24 +236,35 @@ function SudokuView:onTap(ev_args, ges)
     local ok, err
     if type(hit.id) == "number" then
         if self.notes_mode then
+            self:markCell(self.selected.row, self.selected.col)
             ok, err = self.game:toggle_note(self.selected.row, self.selected.col, hit.id)
-        elseif self.game:get(self.selected.row, self.selected.col) == hit.id then
-            ok, err = self.game:erase(self.selected.row, self.selected.col)
         else
-            ok, err = self.game:place(self.selected.row, self.selected.col, hit.id)
+            -- affected cells are computed from the pre-mutation state
+            self:markCells(self.game:affected_cells(self.selected.row, self.selected.col, hit.id))
+            if self.game:get(self.selected.row, self.selected.col) == hit.id then
+                ok, err = self.game:erase(self.selected.row, self.selected.col)
+            else
+                ok, err = self.game:place(self.selected.row, self.selected.col, hit.id)
+            end
         end
+        self:markToolRow()
     elseif hit.id == "erase" then
-        if self.game:get(self.selected.row, self.selected.col) ~= 0 then
+        local value = self.game:get(self.selected.row, self.selected.col)
+        if value ~= 0 then
+            self:markCells(self.game:affected_cells(self.selected.row, self.selected.col, value))
             ok, err = self.game:erase(self.selected.row, self.selected.col)
         else
+            self:markCell(self.selected.row, self.selected.col)
             ok, err = self.game:clear_notes(self.selected.row, self.selected.col)
         end
+        self:markToolRow()
     elseif hit.id == "undo" then
         self.game:undo()
     elseif hit.id == "redo" then
         self.game:redo()
     elseif hit.id == "notes" then
         self.notes_mode = not self.notes_mode
+        self:markToolRow()
     elseif hit.id == "check" then
         self:onCheck()
     elseif hit.id == "menu" then
@@ -200,12 +273,16 @@ function SudokuView:onTap(ev_args, ges)
     if ok == false or (ok == nil and err ~= nil) then
         UIManager:show(Notification:new { text = err })
     end
-    self:afterMove()
+    self:afterMove(hit.id == "undo" or hit.id == "redo" or hit.id == "check")
     return true
 end
 
-function SudokuView:afterMove()
-    self:refresh()
+function SudokuView:afterMove(coarse)
+    if coarse then
+        self:refreshCoarse()
+    else
+        self:refresh()
+    end
     if self.game:is_won() then
         self:onWin()
     end
@@ -311,7 +388,7 @@ end
 function SudokuView:closeMenu()
     self.menu_open = false
     self.game:resume()
-    self:refresh()
+    self:refreshCoarse()
 end
 
 function SudokuView:onSuspend()
@@ -323,7 +400,7 @@ function SudokuView:onResume()
     if not self.menu_open and not self.game:is_finished() then
         self.game:resume()
     end
-    self:refresh()
+    self:refreshFull()
     return true
 end
 
@@ -331,7 +408,7 @@ function SudokuView:onSetDimensions(dimen)
     self.layout = layout.compute(self.width, self.height, function(dp)
         return Screen:scaleBySize(dp)
     end)
-    self:refresh()
+    self:refreshFull()
     return true
 end
 

@@ -112,6 +112,32 @@ function layout.cell_rect(l, row, col)
     }
 end
 
+-- Bounding box ({x, y, w, h}) over the rects of the given cells (a set
+-- keyed row * 9 + col), or nil when the set holds no valid cells.
+function layout.cells_region(l, cell_keys)
+    local min_x, min_y, max_x, max_y
+    for key in pairs(cell_keys) do
+        local row = math.floor(key / 9)
+        local col = key % 9
+        if row >= 0 and row <= 8 and col >= 0 and col <= 8 then
+            local rect = layout.cell_rect(l, row, col)
+            if min_x == nil then
+                min_x, min_y = rect.x, rect.y
+                max_x, max_y = rect.x + rect.w, rect.y + rect.h
+            else
+                min_x = math.min(min_x, rect.x)
+                min_y = math.min(min_y, rect.y)
+                max_x = math.max(max_x, rect.x + rect.w)
+                max_y = math.max(max_y, rect.y + rect.h)
+            end
+        end
+    end
+    if min_x == nil then
+        return nil
+    end
+    return { x = min_x, y = min_y, w = max_x - min_x, h = max_y - min_y }
+end
+
 -- Line positions for grid painting: one separator between each pair of
 -- consecutive cells, thin inside a box and thick between boxes.
 function layout.grid_lines(l)

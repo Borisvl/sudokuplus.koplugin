@@ -647,4 +647,70 @@ describe("game", function()
         assert.are.equal(0, record.check_errors)
         assert.are.equal(4000, record.duration)
     end)
+
+    describe("affected_cells", function()
+        local function cell_key(r, c)
+            return r * 9 + c
+        end
+
+        local function count(set)
+            local n = 0
+            for _ in pairs(set) do
+                n = n + 1
+            end
+            return n
+        end
+
+        it("rejects invalid arguments", function()
+            local instance = new_game()
+            assert.is_nil(instance:affected_cells(-1, 0, 5))
+            assert.is_nil(instance:affected_cells(0, 9, 5))
+            assert.is_nil(instance:affected_cells(0, 0, 0))
+            assert.is_nil(instance:affected_cells(0, 0, 10))
+        end)
+
+        it("includes the cell itself and every peer holding the value", function()
+            local instance = new_game()
+            -- (0,5) is empty; 3 sits at (0,1) in its row and (4,5) in its column
+            local affected = instance:affected_cells(0, 5, 3)
+            assert.is_not_nil(affected[cell_key(0, 5)])
+            assert.is_not_nil(affected[cell_key(0, 1)], "row peer holding 3")
+            assert.is_not_nil(affected[cell_key(4, 5)], "column peer holding 3")
+            assert.are.equal(3, count(affected))
+        end)
+
+        it("includes peers whose notes hold the value", function()
+            local instance = new_game()
+            assert.is_true(instance:toggle_note(0, 3, 2))
+            -- (0,4) is empty; (5,4) holds 2; (0,3) notes 2
+            local affected = instance:affected_cells(0, 4, 2)
+            assert.is_not_nil(affected[cell_key(0, 4)])
+            assert.is_not_nil(affected[cell_key(5, 4)])
+            assert.is_not_nil(affected[cell_key(0, 3)], "peer noting 2")
+            assert.are.equal(3, count(affected))
+        end)
+
+        it("excludes cells outside the row, column and box of the target", function()
+            local instance = new_game()
+            assert.is_true(instance:toggle_note(8, 0, 2))
+            local affected = instance:affected_cells(0, 4, 2)
+            assert.is_nil(affected[cell_key(8, 0)], "(8,0) is not a peer of (0,4)")
+            assert.is_nil(affected[cell_key(0, 0)], "no 2 in the unit and no note")
+            assert.is_not_nil(affected[cell_key(5, 4)], "(5,4) holds 2 in the column")
+            assert.are.equal(2, count(affected))
+        end)
+
+        it("includes the peers the last placement cleaned, even after the note is gone", function()
+            local instance = new_game()
+            assert.is_true(instance:toggle_note(0, 3, 2))
+            assert.is_true(instance:place(0, 6, 2), "cleans note 2 from (0,3)")
+            assert.is_false(has_note(instance, 0, 3, 2))
+            -- erasing (0,6) may restore the cleaned note on (0,3)
+            local affected = instance:affected_cells(0, 6, 2)
+            assert.is_not_nil(affected[cell_key(0, 6)])
+            assert.is_not_nil(affected[cell_key(6, 6)], "peer holding 2")
+            assert.is_not_nil(affected[cell_key(0, 3)], "restored peer from the placement")
+            assert.are.equal(3, count(affected))
+        end)
+    end)
 end)

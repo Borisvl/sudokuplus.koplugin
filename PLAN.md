@@ -379,6 +379,43 @@ old save.
 `sudoku_numberbar`, `sudoku_view`), lint clean, emulator boot smoke on both
 profiles, PLAN.md + README updated, commit.
 
+### M6.1 — E-ink refresh optimization
+
+Planned: every interaction went through `SudokuView:refresh()` →
+`UIManager:setDirty(self, "full")`, i.e. a full-screen flashing refresh on
+every tap (cell selection, digit entry, notes, undo…). This milestone limits
+both the refresh *mode* and the refresh *region* (KOReader semantics verified
+against the pinned checkout: `setDirty(widget, mode, region)` restricts the
+EPD update to `region`; `"partial"` is flash-free and gets promoted to a
+flashing refresh every `FULL_REFRESH_COUNT` refreshes (default 6, user
+setting) for ghosting control; `paintTo` always repaints the whole widget, so
+the region only bounds the screen update, not the drawing).
+
+- [x] `game.lua`: pure `mt:affected_cells(r, c, value)` — the set of cells
+      whose paint can change when `value` is placed/erased at (r, c): the
+      cell itself, peers containing `value` (conflict highlights), peers with
+      note `value` (auto-clean), and the last placement's `cleaned` peers
+      (notes restored by erase/replace); reuses `each_peer` /
+      `last_place_entry` (no new core deps)
+- [x] `ui/layout.lua`: pure `layout.cells_region(l, cell_keys)` — bounding
+      box of cell rects (`nil` for an empty set)
+- [x] `ui/sudokuview.lua`: dirty tracking (`_dirty_cells` set +
+      `_dirty_tool_row`, `_painted` flag set by `paintTo`); `refresh()`
+      becomes region-limited `"partial"` (tool row as a second small region),
+      `"full"` only for the first paint (also requested by `main.lua` via
+      `UIManager:show(view, "full")`); cell taps mark old + new selection
+      cells; place/erase/note taps mark `game:affected_cells` ∪ selection;
+      undo/redo/check and `closeMenu` use a coarse full-screen `"partial"`;
+      `onResume`/`onSetDimensions` stay `"full"`; quit/give-up/win stay
+      `"flashui"` (via `UIManager:close`)
+- [x] Specs: `sudoku_game_spec` (`affected_cells` membership/peers/restored),
+      `sudoku_layout_spec` (`cells_region` bounding box + nil), and a
+      `UIManager.setDirty` spy in `sudoku_view_spec` asserting modes and
+      regions per gesture
+
+**Exit criteria**: specs green, `./dev.sh lint` clean, emulator boot smoke on
+`kobo-aura-one` with no errors, PLAN.md + README updated, commit.
+
 ### M7 — Menus, hint display, stats screen
 
 - [ ] Tools menu: New Game (difficulty picker), Continue, Statistics

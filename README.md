@@ -201,6 +201,9 @@ storage):
       storage.lua; UI-free, fully tested)
 - [x] M6: game UI (e-ink first — sudokuview, numberbar, layout, theme;
       playable loop in the emulator; hint button and menus land in M7)
+- [x] M6.1: e-ink refresh optimization (flash-free region-limited
+      `"partial"` refreshes; full flashes only on first paint, wake, resize
+      and leaving the game)
 - [ ] M7: menus, hint display, stats screen
 - [ ] M8: polish, i18n, on-device testing
 
