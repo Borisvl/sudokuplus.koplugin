@@ -71,7 +71,10 @@ describe("sudoku view", function()
     end
 
     local function tap(view, x, y)
-        view:onTap { pos = { x = x, y = y } }
+        -- dispatch through the real event path (handleEvent unpacks the
+        -- event args: handlers receive (args, gesture))
+        local Event = require("ui/event")
+        view:handleEvent(Event:new("Tap", nil, { pos = { x = x, y = y } }))
     end
 
     local function tap_cell(view, row, col)
@@ -111,6 +114,28 @@ describe("sudoku view", function()
         bb:fill(Blitbuffer.COLOR_WHITE)
         view:paintTo(bb, 0, 0)
         bb:free()
+    end)
+
+    it("starts without a selection and paints no black cell", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        assert.is_nil(view.selected)
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        view:paintTo(bb, 0, 0)
+        local rect = layout.cell_rect(view.layout, 0, 2)
+        assert.are.equal(
+            tonumber(theme.background.a),
+            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
+            "an empty cell must stay white at game start"
+        )
+        bb:free()
+    end)
+
+    it("ignores number-bar taps without a selection", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_button(view, "number_row", 2)
+        assert.are.equal(0, view.game:revision(), "no move without a selection")
+        assert.is_nil(view.selected)
     end)
 
     it("paints crisp cell lines: thin inside boxes, thick between boxes", function()

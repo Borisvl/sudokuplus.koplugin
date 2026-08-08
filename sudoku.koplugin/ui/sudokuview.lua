@@ -53,18 +53,6 @@ function SudokuView:init()
     }
 
     self.selected = nil
-    for row = 0, 8 do
-        for col = 0, 8 do
-            if self.game:get(row, col) == 0 then
-                self.selected = { row = row, col = col }
-                break
-            end
-        end
-        if self.selected then
-            break
-        end
-    end
-    self.selected = self.selected or { row = 4, col = 4 }
     self.notes_mode = false
     self.menu_open = false
 
@@ -127,7 +115,7 @@ function SudokuView:paintCells(bb)
         for col = 0, 8 do
             local rect = layout.cell_rect(self.layout, row, col)
             local key = row * 9 + col
-            local is_selected = self.selected.row == row and self.selected.col == col
+            local is_selected = self.selected ~= nil and self.selected.row == row and self.selected.col == col
             if is_selected then
                 bb:invertRect(rect.x, rect.y, rect.w, rect.h)
             elseif conflict_set[key] or revealed_set[key] then
@@ -156,7 +144,7 @@ function SudokuView:paintTo(bb, x, y)
     })
 end
 
-function SudokuView:onTap(ges)
+function SudokuView:onTap(ev_args, ges)
     local hit = layout.hit(self.layout, ges.pos.x, ges.pos.y)
     if not hit then
         return true
@@ -165,6 +153,13 @@ function SudokuView:onTap(ges)
         self.selected = { row = hit.row, col = hit.col }
         self:refresh()
         return true
+    end
+
+    if type(hit.id) == "number" or hit.id == "erase" then
+        if not self.selected then
+            UIManager:show(Notification:new { text = _("Select a cell first.") })
+            return true
+        end
     end
 
     local ok, err
