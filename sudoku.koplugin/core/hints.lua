@@ -38,6 +38,19 @@ for _, technique in ipairs(TECHNIQUES) do
     TECHNIQUE_BY_FLAG[technique.flag] = technique
 end
 
+-- Public read-only access to the supported technique list (id, name, flag).
+function hints.techniques()
+    local copy = {}
+    for i, technique in ipairs(TECHNIQUES) do
+        copy[i] = {
+            id = technique.id,
+            name = technique.name,
+            flag = technique.flag,
+        }
+    end
+    return copy
+end
+
 local function validate_optional_limit(value, name)
     if value == nil then
         return nil

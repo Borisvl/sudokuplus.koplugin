@@ -1,0 +1,484 @@
+package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
+
+local bit = require("bit")
+local board = require("core.board")
+local game = require("game")
+
+local PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+local SOLUTION = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+
+local function blank_cells(solution, cells)
+    local chars = {}
+    for i = 1, 81 do
+        chars[i] = solution:sub(i, i)
+    end
+    for _, cell in ipairs(cells) do
+        chars[cell[1] * 9 + cell[2] + 1] = "0"
+    end
+    return table.concat(chars)
+end
+
+-- SOLUTION with the two cells (0,6) and (0,7) blanked: winnable in two moves.
+local PUZZLE_WIN = blank_cells(SOLUTION, { { 0, 6 }, { 0, 7 } })
+
+local NAKED_SINGLE_PUZZLE = "385421967194756328627983145571892634839645271246137589462579813918364752753218490"
+local NAKED_SINGLE_SOLUTION = "385421967194756328627983145571892634839645271246137589462579813918364752753218496"
+
+local function new_game(puzzle, solution)
+    local clock = { t = 1000 }
+    local instance = assert(game.new({
+        puzzle = board.from_string(puzzle or PUZZLE),
+        solution = board.from_string(solution or SOLUTION),
+        difficulty = "medium",
+        now = function()
+            return clock.t
+        end,
+    }))
+    return instance, clock
+end
+
+local function digit_bit(v)
+    return bit.lshift(1, v - 1)
+end
+
+local function has_note(instance, r, c, v)
+    return bit.band(instance:get_notes(r, c), digit_bit(v)) ~= 0
+end
+
+describe("game", function()
+    it("rejects invalid construction arguments", function()
+        local now = function()
+            return 0
+        end
+        local puzzle = board.from_string(PUZZLE)
+        local solution = board.from_string(SOLUTION)
+
+        local no_puzzle, no_puzzle_err = game.new({ solution = solution, difficulty = "easy", now = now })
+        assert.is_nil(no_puzzle)
+        assert.is_string(no_puzzle_err)
+
+        local no_solution, no_solution_err = game.new({ puzzle = puzzle, difficulty = "easy", now = now })
+        assert.is_nil(no_solution)
+        assert.is_string(no_solution_err)
+
+        local inconsistent, inconsistent_err = game.new({
+            puzzle = puzzle,
+            solution = board.from_string(
+                "999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+            ),
+            difficulty = "easy",
+            now = now,
+        })
+        assert.is_nil(inconsistent)
+        assert.is_string(inconsistent_err)
+
+        local duplicate, duplicate_err = game.new({
+            puzzle = board.from_string(
+                "530070000530070000098000060800060003400803001700020006060000280000419005000080079"
+            ),
+            solution = solution,
+            difficulty = "easy",
+            now = now,
+        })
+        assert.is_nil(duplicate)
+        assert.is_string(duplicate_err)
+
+        local bad_difficulty, bad_difficulty_err =
+            game.new({ puzzle = puzzle, solution = solution, difficulty = "impossible", now = now })
+        assert.is_nil(bad_difficulty)
+        assert.is_string(bad_difficulty_err)
+
+        local bad_clock, bad_clock_err = game.new({ puzzle = puzzle, solution = solution, difficulty = "easy" })
+        assert.is_nil(bad_clock)
+        assert.is_string(bad_clock_err)
+    end)
+
+    it("initializes notes as the board-legal candidate masks", function()
+        local instance = new_game()
+        local puzzle = board.from_string(PUZZLE)
+
+        for r = 0, 8 do
+            for c = 0, 8 do
+                if board.is_empty(puzzle, r, c) then
+                    assert.is_true(instance:get_notes(r, c) ~= 0, "empty cell must have notes")
+                else
+                    assert.are.equal(0, instance:get_notes(r, c), "given cell must not have notes")
+                end
+            end
+        end
+
+        assert.are.equal(0, instance:revision())
+        assert.are.equal(0, instance:mistakes())
+        assert.are.equal(0, instance:check_errors())
+        assert.are.equal("medium", instance:difficulty())
+        assert.is_false(instance:is_finished())
+    end)
+
+    it("locks given cells against every kind of mutation", function()
+        local instance = new_game()
+
+        local place_ok, place_err = instance:place(0, 0, 4)
+        assert.is_nil(place_ok)
+        assert.is_string(place_err)
+
+        local erase_ok, erase_err = instance:erase(0, 0)
+        assert.is_nil(erase_ok)
+        assert.is_string(erase_err)
+
+        local toggle_ok, toggle_err = instance:toggle_note(0, 0, 4)
+        assert.is_nil(toggle_ok)
+        assert.is_string(toggle_err)
+
+        local clear_ok, clear_err = instance:clear_notes(0, 0)
+        assert.is_nil(clear_ok)
+        assert.is_string(clear_err)
+
+        assert.are.equal(0, instance:revision())
+    end)
+
+    it("places values and reports rule-legal entries without conflicts", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 2, 4))
+        assert.are.equal(4, instance:get(0, 2))
+        assert.are.equal(0, instance:get_notes(0, 2))
+        assert.are.equal(0, #instance:conflicts())
+        assert.are.equal(0, instance:mistakes())
+        assert.are.equal(1, instance:revision())
+    end)
+
+    it("auto-cleans the placed digit from peer notes and prunes to legal candidates", function()
+        local instance = new_game()
+
+        assert.is_true(has_note(instance, 0, 3, 2))
+        assert.is_true(instance:place(0, 2, 2))
+
+        assert.is_false(has_note(instance, 0, 3, 2), "row peer note cleaned")
+        assert.is_false(has_note(instance, 1, 2, 2), "column peer note cleaned")
+        assert.is_false(has_note(instance, 1, 1, 2), "box peer note cleaned")
+        assert.is_true(has_note(instance, 1, 7, 2), "non-peer notes are untouched")
+    end)
+
+    it("marks live conflicts only for rule violations and counts mistakes per entry", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 7, 5))
+        assert.are.equal(5, instance:get(0, 7))
+
+        local conflicts = instance:conflicts()
+        assert.are.equal(2, #conflicts)
+        local found = {}
+        for _, cell in ipairs(conflicts) do
+            found[cell[1] * 9 + cell[2]] = true
+        end
+        assert.is_true(found[0 * 9 + 0], "given twin is part of the conflict")
+        assert.is_true(found[0 * 9 + 7], "placed duplicate is part of the conflict")
+        assert.are.equal(1, instance:mistakes(), "one violating entry created")
+
+        assert.is_true(instance:erase(0, 7))
+        assert.are.equal(0, #instance:conflicts())
+        assert.are.equal(1, instance:mistakes(), "mistakes are cumulative")
+    end)
+
+    it("replaces an existing user entry without creating a new history depth", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 2, 4))
+        assert.is_true(instance:place(0, 2, 2))
+        assert.are.equal(2, instance:get(0, 2))
+
+        assert.is_true(instance:undo())
+        assert.are.equal(4, instance:get(0, 2))
+        assert.is_true(instance:undo())
+        assert.are.equal(0, instance:get(0, 2))
+    end)
+
+    it("rejects out-of-range coordinates and values", function()
+        local instance = new_game()
+
+        assert.is_nil(instance:place(9, 0, 4))
+        assert.is_nil(instance:place(0, -1, 4))
+        assert.is_nil(instance:place(0, 2, 0))
+        assert.is_nil(instance:place(0, 2, 10))
+        assert.is_nil(instance:toggle_note(0, 2, 10))
+        assert.is_nil(instance:get_notes(0, 12))
+    end)
+
+    it("rejects illegal note toggles and allows user removals of any candidate", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 2, 2))
+        local ok, err = instance:toggle_note(0, 3, 2)
+        assert.is_nil(ok)
+        assert.is_string(err)
+
+        assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.is_false(has_note(instance, 0, 3, 6))
+        assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.is_true(has_note(instance, 0, 3, 6))
+    end)
+
+    it("clears all notes of a cell", function()
+        local instance = new_game()
+
+        local mask = instance:get_notes(0, 3)
+        assert.is_true(mask ~= 0)
+        assert.is_true(instance:clear_notes(0, 3))
+        assert.are.equal(0, instance:get_notes(0, 3))
+
+        assert.is_true(instance:undo())
+        assert.are.equal(mask, instance:get_notes(0, 3))
+    end)
+
+    it("undoes and redoes moves restoring notes exactly", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 2, 2))
+        assert.is_true(instance:toggle_note(0, 3, 6))
+
+        assert.is_true(instance:undo())
+        assert.is_true(has_note(instance, 0, 3, 6), "note toggle undone")
+        assert.is_true(instance:undo())
+        assert.are.equal(0, instance:get(0, 2))
+        assert.is_true(has_note(instance, 0, 3, 2), "auto-cleaned note restored")
+
+        local no_undo, undo_err = instance:undo()
+        assert.is_nil(no_undo)
+        assert.is_string(undo_err)
+
+        assert.is_true(instance:redo())
+        assert.are.equal(2, instance:get(0, 2))
+        assert.is_false(has_note(instance, 0, 3, 2))
+        assert.is_true(instance:redo())
+        assert.is_false(has_note(instance, 0, 3, 6))
+    end)
+
+    it("clears the redo stack on a new move", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 2, 2))
+        assert.is_true(instance:undo())
+        assert.is_true(instance:can_redo())
+        assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.is_false(instance:can_redo())
+        local no_redo, redo_err = instance:redo()
+        assert.is_nil(no_redo)
+        assert.is_string(redo_err)
+    end)
+
+    it("keeps the timer paused while suspended", function()
+        local instance, clock = new_game()
+
+        assert.are.equal(0, instance:elapsed())
+        clock.t = 1010
+        assert.are.equal(10, instance:elapsed())
+
+        assert.is_true(instance:pause())
+        clock.t = 1020
+        assert.are.equal(10, instance:elapsed())
+
+        assert.is_true(instance:resume())
+        clock.t = 1030
+        assert.are.equal(20, instance:elapsed())
+
+        assert.is_true(instance:resume(), "resuming a running timer is a no-op")
+        clock.t = 1035
+        assert.are.equal(25, instance:elapsed())
+    end)
+
+    it("reveals all wrong numbers and counts each cell once until fixed", function()
+        local instance = new_game()
+
+        local wrong = instance:check_for_errors()
+        assert.are.equal(0, #wrong)
+        assert.are.equal(0, instance:check_errors())
+
+        assert.is_true(instance:place(0, 2, 2))
+
+        local first_check = instance:check_for_errors()
+        assert.are.equal(1, #first_check)
+        assert.are.same({ 0, 2 }, first_check[1])
+        assert.are.equal(1, instance:check_errors())
+
+        local second_check = instance:check_for_errors()
+        assert.are.equal(1, #second_check)
+        assert.are.equal(1, instance:check_errors(), "repeated checks do not re-count")
+
+        assert.is_true(instance:erase(0, 2))
+        assert.are.equal(0, #instance:check_for_errors())
+        assert.are.equal(0, #instance:revealed())
+
+        assert.is_true(instance:place(0, 2, 2))
+        instance:check_for_errors()
+        assert.are.equal(2, instance:check_errors(), "re-break re-counts after a fix")
+    end)
+
+    it("detects the win only when the board matches the solution", function()
+        local instance = new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION)
+
+        assert.is_false(instance:is_won())
+        assert.is_true(instance:place(8, 8, 6))
+        assert.is_true(instance:is_won())
+
+        assert.is_not_nil(instance:finish())
+        assert.is_true(instance:is_finished())
+    end)
+
+    it("finish() produces the game record and locks the board", function()
+        local instance, clock = new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION)
+
+        assert.is_true(instance:place(8, 8, 6))
+        clock.t = 1337
+        local record = instance:finish()
+
+        assert.is_not_nil(record)
+        assert.are.equal("finished", record.kind)
+        assert.are.equal("medium", record.difficulty)
+        assert.are.equal(337, record.duration)
+        assert.are.equal(1337, record.timestamp)
+        assert.are.equal(0, record.mistakes)
+        assert.are.equal(0, record.check_errors)
+        assert.are.same({}, record.hints)
+
+        local move_ok, move_err = instance:place(0, 2, 4)
+        assert.is_nil(move_ok)
+        assert.is_string(move_err)
+        local undo_ok, undo_err = instance:undo()
+        assert.is_nil(undo_ok)
+        assert.is_string(undo_err)
+        local second_finish, second_finish_err = instance:finish()
+        assert.is_nil(second_finish)
+        assert.is_string(second_finish_err)
+    end)
+
+    it("finish() rejects an unsolved board", function()
+        local instance = new_game()
+        local ok, err = instance:finish()
+        assert.is_nil(ok)
+        assert.is_string(err)
+    end)
+
+    it("give_up() records separately and locks the board", function()
+        local instance, clock = new_game()
+
+        assert.is_true(instance:place(0, 2, 2))
+        instance:check_for_errors()
+        assert.is_true(instance:place(0, 7, 5))
+        clock.t = 2000
+        local record = instance:give_up()
+
+        assert.is_not_nil(record)
+        assert.are.equal("give_up", record.kind)
+        assert.are.equal(1000, record.duration)
+        assert.are.equal(1, record.mistakes)
+        assert.are.equal(1, record.check_errors)
+        assert.is_true(instance:is_finished())
+
+        local again, again_err = instance:give_up()
+        assert.is_nil(again)
+        assert.is_string(again_err)
+    end)
+
+    it("returns a hint, records the missed strategy, and applies its action", function()
+        local instance = new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION)
+
+        local result, err = instance:hint()
+        assert.is_nil(err)
+        assert.is_not_nil(result)
+        assert.are.equal("available", result.status)
+        assert.are.equal("naked_singles", result.technique.id)
+        assert.are.same({ 8, 8 }, { result.action.row, result.action.col })
+
+        local hints = instance:hints()
+        assert.are.equal(1, #hints)
+        assert.are.equal("naked_singles", hints[1].technique)
+        assert.is_string(hints[1].id)
+        assert.is_true(hints[1].flag ~= 0)
+
+        assert.is_true(instance:apply_action(result.action))
+        assert.are.equal(6, instance:get(8, 8))
+        assert.is_true(instance:is_won())
+
+        local exhausted = instance:hint()
+        assert.are.equal("none", exhausted.status)
+        assert.are.equal(1, #instance:hints(), "no-hint results are not recorded")
+    end)
+
+    it("blocks hints while the board has live conflicts", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 3, 5))
+        local result, err = instance:hint()
+        assert.is_nil(result)
+        assert.is_string(err)
+        assert.are.equal(0, #instance:hints())
+    end)
+
+    it("blocks hints when the board diverges from the solution", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 2, 2))
+        local result, err = instance:hint()
+        assert.is_nil(result)
+        assert.is_string(err)
+        assert.are.equal(0, #instance:hints())
+    end)
+
+    it("surfaces note errors and does not record them as missed strategies", function()
+        local instance = new_game()
+
+        assert.is_true(has_note(instance, 0, 2, 4), "solution candidate present in notes")
+        assert.is_true(instance:toggle_note(0, 2, 4))
+        local result, err = instance:hint()
+        assert.is_nil(err)
+        assert.is_not_nil(result)
+        assert.are.equal("note_error", result.status)
+        assert.is_true(#result.errors > 0)
+        assert.are.equal(0, #instance:hints())
+    end)
+
+    it("applies elimination actions as undoable note changes", function()
+        local instance = new_game()
+        local puzzle = board.from_string(PUZZLE)
+
+        local cell, value
+        for r = 0, 8 do
+            for c = 0, 8 do
+                if cell == nil and board.is_empty(puzzle, r, c) then
+                    local mask = instance:get_notes(r, c)
+                    for v = 1, 9 do
+                        if bit.band(mask, digit_bit(v)) ~= 0 then
+                            cell, value = { r, c }, v
+                            break
+                        end
+                    end
+                end
+            end
+        end
+        assert.is_not_nil(cell)
+
+        assert.is_true(instance:apply_action({ type = "elim", row = cell[1], col = cell[2], value = value }))
+        assert.is_false(has_note(instance, cell[1], cell[2], value))
+        assert.is_true(instance:undo())
+        assert.is_true(has_note(instance, cell[1], cell[2], value))
+    end)
+
+    it("counts mistakes into the finish record", function()
+        local instance, clock = new_game(PUZZLE_WIN, SOLUTION)
+
+        assert.is_true(instance:place(0, 6, 5))
+        assert.are.equal(1, instance:mistakes(), "duplicate of a given is a mistake")
+
+        assert.is_true(instance:erase(0, 6))
+        assert.is_true(instance:place(0, 6, 9))
+        assert.is_true(instance:place(0, 7, 1))
+        assert.is_true(instance:is_won())
+
+        clock.t = 5000
+        local record = instance:finish()
+        assert.are.equal("finished", record.kind)
+        assert.are.equal(1, record.mistakes)
+        assert.are.equal(0, record.check_errors)
+        assert.are.equal(4000, record.duration)
+    end)
+end)

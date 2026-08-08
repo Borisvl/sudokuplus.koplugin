@@ -65,6 +65,10 @@ function sudoku.generate(opts)
     return generator.generate(opts)
 end
 
+function sudoku.generate_game(opts)
+    return generator.generate_game(opts)
+end
+
 function sudoku.next_hint(state, opts)
     return hints.next(state, opts)
 end

@@ -228,10 +228,16 @@ local function generate_single(options, target_clues)
     if not solution then
         return nil, err
     end
-    return remove_clues(solution, options, target_clues)
+    local puzzle, remove_err = remove_clues(solution, options, target_clues)
+    if not puzzle then
+        return nil, remove_err
+    end
+    return { board = puzzle, solution = solution }
 end
 
-local function matches_difficulty(puzzle, options)
+-- Returns the classification when the puzzle is uniquely solvable, nil
+-- without an error when it is not (a failed attempt, not a failure).
+local function classify_puzzle(puzzle, options)
     local human_solver, err = new_solver(puzzle, options.rng, ALL_TECHNIQUES)
     if not human_solver then
         return nil, err
@@ -239,11 +245,19 @@ local function matches_difficulty(puzzle, options)
 
     local solutions = human_solver:solve_until(2)
     if #solutions ~= 1 then
-        return false
+        return nil
     end
 
-    local classification = solve_path.classify(solutions[1].solve_path)
-    return not classification.requires_guessing and classification.difficulty == options.difficulty
+    return solve_path.classify(solutions[1].solve_path)
+end
+
+local function game_payload(payload, classification, options)
+    return {
+        board = payload.board,
+        solution = payload.solution,
+        difficulty = classification.difficulty,
+        clues = board.count_clues(payload.board),
+    }
 end
 
 function generator.generate(options)
@@ -253,20 +267,25 @@ function generator.generate(options)
     end
 
     if not normalized.difficulty then
-        return generate_single(normalized, normalized.clues)
+        local payload, generate_err = generate_single(normalized, normalized.clues)
+        if not payload then
+            return nil, generate_err
+        end
+        return payload.board
     end
 
     local range = DIFFICULTY_RANGES[normalized.difficulty]
     for _ = 1, normalized.max_attempts do
         local target = range.min + normalized.rng:int(range.max - range.min + 1) - 1
-        local puzzle, generate_err = generate_single(normalized, target)
-        if puzzle then
-            local matches, match_err = matches_difficulty(puzzle, normalized)
-            if match_err then
-                return nil, match_err
-            end
-            if matches then
-                return puzzle
+        local payload, generate_err = generate_single(normalized, target)
+        if payload then
+            local classification, classify_err = classify_puzzle(payload.board, normalized)
+            if not classification then
+                if classify_err then
+                    return nil, classify_err
+                end
+            elseif not classification.requires_guessing and classification.difficulty == normalized.difficulty then
+                return payload.board
             end
         elseif generate_err then
             err = generate_err
@@ -274,6 +293,48 @@ function generator.generate(options)
     end
 
     return nil, err or ("failed to generate a " .. normalized.difficulty .. " puzzle")
+end
+
+function generator.generate_game(options)
+    local normalized, err = validate_options(options)
+    if not normalized then
+        return nil, err
+    end
+
+    if not normalized.difficulty then
+        local payload, generate_err = generate_single(normalized, normalized.clues)
+        if not payload then
+            return nil, generate_err
+        end
+        local classification, classify_err = classify_puzzle(payload.board, normalized)
+        if not classification then
+            if classify_err then
+                return nil, classify_err
+            end
+            return nil, "generated puzzle is not uniquely solvable"
+        end
+        return game_payload(payload, classification)
+    end
+
+    local range = DIFFICULTY_RANGES[normalized.difficulty]
+    for _ = 1, normalized.max_attempts do
+        local target = range.min + normalized.rng:int(range.max - range.min + 1) - 1
+        local payload, generate_err = generate_single(normalized, target)
+        if payload then
+            local classification, classify_err = classify_puzzle(payload.board, normalized)
+            if not classification then
+                if classify_err then
+                    return nil, classify_err
+                end
+            elseif not classification.requires_guessing and classification.difficulty == normalized.difficulty then
+                return game_payload(payload, classification)
+            end
+        elseif generate_err then
+            err = generate_err
+        end
+    end
+
+    return nil, err or ("failed to generate a " .. normalized.difficulty .. " game")
 end
 
 return generator

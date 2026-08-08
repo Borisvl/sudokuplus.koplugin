@@ -197,7 +197,8 @@ storage):
 - [~] M3: solve path, difficulty, generation (implementation complete; full
       repository test gate is blocked by the KOReader version target)
 - [~] M4: hint engine (core; implementation complete, full repository test gate blocked by KOReader version target)
-- [ ] M5: game state machine + storage
+- [x] M5: game state machine + storage (game.lua, stats.lua, json.lua,
+      storage.lua; UI-free, fully tested)
 - [ ] M6: game UI (e-ink first)
 - [ ] M7: menus, hint display, stats screen
 - [ ] M8: polish, i18n, on-device testing

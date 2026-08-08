@@ -49,8 +49,12 @@ A Sudoku puzzle game for e-ink readers (KOReader plugin, target: Kobo).
 7. **Streak**: consecutive solved games without using a hint.
 8. **v1 UI difficulties**: Easy, Medium, Hard; Expert puzzles behind a
    setting (once AIC hints are solid).
-9. **Stats storage**: JSON file in KOReader's data dir via `persist.lua`.
-   Time stats count finished games; give-ups are recorded separately.
+9. **Stats storage**: JSON files in KOReader's data dir (`sudoku_stats`,
+   `sudoku_save`). M5 divergence from the original "via persist.lua" wording:
+   persist.lua has no JSON codec (serpent/dump/bitser only), so the JSON
+   codec is a small pure-Lua module (`json.lua`) and `storage.lua` writes
+   plain files with injected paths. Time stats count finished games;
+   give-ups are recorded separately.
 10. **Test location**: specs live in `tests/unit/` (versioned) and are
     symlinked into the gitignored koreader checkout's `spec/unit/` by the
     dev setup.
@@ -79,7 +83,8 @@ sudoku.koplugin/
 ├── game.lua                     # game state machine: board, notes, undo/redo,
 │                                # timer, mistake/check layers, win detection (pure, time-injected)
 ├── stats.lua                    # stat recording/aggregation (pure)
-├── storage.lua                  # JSON persistence via KOReader persist.lua
+├── json.lua                     # minimal strict JSON codec (pure)
+├── storage.lua                  # JSON file save/load/delete (injected paths)
 └── ui/                          # sudokuview.lua (grid render + input), numberbar.lua, statsview.lua
 tests/unit/*_spec.lua            # busted specs (symlinked into koreader spec/unit)
 third_party/rustoku              # pinned rustoku clone (gitignored reference)
@@ -252,16 +257,47 @@ defined.
 
 ### M5 — Game state machine + storage (UI-free, testable)
 
-- [ ] `game.lua`: notes/pencil marks, given-cell lock, undo/redo history,
-      live conflict marking (rule violations only), `check_for_errors()`
-      (solution comparison), timer (injected time), win detection,
-      save/restore serialization
-- [ ] `stats.lua` + `storage.lua`: JSON via persist.lua; per game —
-      difficulty, duration, hints requested (→ missed strategies), mistakes,
-      check-revealed errors; give-ups recorded separately
+Refined plan: `game.lua` (plugin root, pure, injected `now()`) is the game
+state machine; `stats.lua` (pure) aggregates per-game records; `json.lua` +
+`storage.lua` persist them as JSON files with injected paths (data-dir
+wiring is M6/M7). Resolved decisions: solution comes from
+`generator.generate_game` (the solution is already computed during clue
+removal); notes auto-clean the placed digit from peers and are pruned to
+legal candidates after every move (user removals are never re-added);
+mistakes and check-revealed errors are cumulative; stats store per-game
+records (capped at 200 each, oldest dropped); storage uses two files
+(stats + active save); streak resets on hint-used wins and give-ups;
+undo/redo survives save/restore.
 
-**Exit criteria**: state machine + aggregation specs green; save/load
-round-trip test.
+Hint contract: the game passes `solution` to `hints.next`; hints are
+blocked while the board has rule conflicts or diverges from the solution
+(`nil, "board has conflicts"` / `nil, "board does not match the solution"`)
+so deductions are always solution-sound; `note_error` results are surfaced
+to the UI; only `"available"` results record the missed strategy (the M4
+stats feed point). Hint actions applied via `apply_action` go through the
+move machinery and are undoable.
+
+- [x] `generator.generate_game(opts)` + facade: `{ board, solution,
+      difficulty, clues }`; `generate` unchanged (no caller breakage)
+- [x] `game.lua`: givens lock; place/erase (replace supported); note
+      toggle/clear with auto-clean; live conflict marking (rule duplicates
+      only, derived); mistakes counter; revision counter; undo/redo with
+      exact note restoration and redo-stack clearing; timer (pause/resume,
+      injected time); `check_for_errors()` (filled cells only, per-cell
+      revealed set — counted once until fixed, re-break re-counts);
+      `is_won`/`finish`/`give_up` records; `hint()` + `apply_action`;
+      `serialize`/`game.restore` with strict validation
+- [x] `stats.lua`: per-game records, streak, summary (per-difficulty
+      count/avg/best, hints per technique, most-missed with deterministic
+      tie-break), `from_table`/`to_table`
+- [x] `json.lua` + `storage.lua`: strict JSON (deterministic key order,
+      cycle/non-finite rejection, strict decode incl. number syntax),
+      file save/load/delete with `nil, msg` errors
+
+**Exit criteria**: state machine + aggregation specs green
+(`sudoku_generator_game`, `sudoku_game`, `sudoku_game_serialize`,
+`sudoku_stats`, `sudoku_json`, `sudoku_storage`); save/load round-trip
+test; `./dev.sh lint` clean; PLAN.md + README updated; commit.
 
 ### M6 — Game UI (e-ink first)
 
