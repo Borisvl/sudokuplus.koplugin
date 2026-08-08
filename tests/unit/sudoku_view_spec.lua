@@ -415,19 +415,6 @@ describe("sudoku view", function()
             return calls[#calls]
         end
 
-        -- The grid region call of the latest refresh batch (tool-row regions
-        -- live below the grid).
-        local function last_grid_call(view)
-            local grid_bottom = view.layout.grid.y + view.layout.grid.h
-            for i = #calls, 1, -1 do
-                local call = calls[i]
-                if call.region and call.region.y < grid_bottom then
-                    return call
-                end
-            end
-            return nil
-        end
-
         local function last_tool_call(view)
             for i = #calls, 1, -1 do
                 local call = calls[i]
@@ -436,6 +423,30 @@ describe("sudoku view", function()
                 end
             end
             return nil
+        end
+
+        local function rect_key(rect)
+            return rect.x .. "," .. rect.y .. "," .. rect.w .. "," .. rect.h
+        end
+
+        -- The set of refreshed region keys, without the tool row strip.
+        local function grid_region_set(view)
+            local grid_bottom = view.layout.grid.y + view.layout.grid.h
+            local set = {}
+            for _, call in ipairs(calls) do
+                if call.region and call.region.y < grid_bottom then
+                    set[rect_key(call.region)] = true
+                end
+            end
+            return set
+        end
+
+        local function count_set(set)
+            local n = 0
+            for _ in pairs(set) do
+                n = n + 1
+            end
+            return n
         end
 
         local function assert_rect(region, rect)
@@ -474,48 +485,31 @@ describe("sudoku view", function()
             assert_rect(call.region, layout.cell_rect(view.layout, 3, 4))
         end)
 
-        it("covers the old and new cell when the selection moves", function()
+        it("refreshes the old and new cell separately when the selection moves", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
             tap_cell(view, 3, 4)
+            calls = {}
             tap_cell(view, 5, 7)
-            local call = last_call()
-            assert.are.equal("partial", call.mode)
-            local a = layout.cell_rect(view.layout, 3, 4)
-            local b = layout.cell_rect(view.layout, 5, 7)
-            local x = math.min(a.x, b.x)
-            local y = math.min(a.y, b.y)
-            assert_rect(call.region, {
-                x = x,
-                y = y,
-                w = math.max(a.x + a.w, b.x + b.w) - x,
-                h = math.max(a.y + a.h, b.y + b.h) - y,
-            })
+            local set = grid_region_set(view)
+            assert.are.equal(2, #calls, "two separate cell refreshes, no bounding box")
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 3, 4))])
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 5, 7))])
         end)
 
-        it("refreshes only the cells a placed digit can affect", function()
+        it("refreshes each affected cell separately when placing a digit", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
             tap_cell(view, 0, 5)
+            calls = {}
             tap_button(view, "number_row", 3)
-            local call = last_grid_call(view)
-            assert.is_not_nil(call, "expected a grid-region refresh")
-            assert.are.equal("partial", call.mode)
-            -- 3 sits at (0,1) in the row and (4,5) in the column: the region
-            -- is the bounding box of the target cell and those two peers,
-            -- and must stay well below the full grid.
-            local a = layout.cell_rect(view.layout, 0, 5)
-            local b = layout.cell_rect(view.layout, 0, 1)
-            local c = layout.cell_rect(view.layout, 4, 5)
-            local x = math.min(a.x, math.min(b.x, c.x))
-            local y = math.min(a.y, math.min(b.y, c.y))
-            assert_rect(call.region, {
-                x = x,
-                y = y,
-                w = math.max(a.x + a.w, math.max(b.x + b.w, c.x + c.w)) - x,
-                h = math.max(a.y + a.h, math.max(b.y + b.h, c.y + c.h)) - y,
-            })
-            assert.is_true(call.region.h < view.layout.grid.h, "region must not cover the whole grid")
+            local set = grid_region_set(view)
+            -- 3 sits at (0,1) in the row and (4,5) in the column: the target
+            -- cell and both peers refresh individually, never as one rectangle.
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 5))])
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 1))])
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 4, 5))])
+            assert.are.equal(3, count_set(set))
             local tool = last_tool_call(view)
             assert.is_not_nil(tool, "undo/redo state changed, tool row must refresh")
             assert.are.equal("partial", tool.mode)
@@ -529,22 +523,41 @@ describe("sudoku view", function()
             local call = last_call()
             assert.are.equal("partial", call.mode)
             assert_rect(call.region, view.layout.tool_row)
-            assert.is_nil(last_grid_call(view), "no grid region needed")
+            assert.are.equal(0, count_set(grid_region_set(view)), "no grid region needed")
         end)
 
-        it("uses a coarse full-screen partial for undo and redo", function()
+        it("refreshes only the cells an undo or redo can affect", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
-            tap_cell(view, 0, 5)
-            tap_button(view, "number_row", 3)
+            tap_cell(view, 0, 6)
+            tap_button(view, "number_row", 2) -- (6,6) holds 2
+            calls = {}
             tap_button(view, "tool_row", "undo")
-            local undo_call = last_call()
-            assert.are.equal("partial", undo_call.mode)
-            assert.is_nil(undo_call.region)
+            local set = grid_region_set(view)
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 6))])
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 6, 6))])
+            assert.is_not_nil(last_tool_call(view), "undo/redo state changed")
+            assert.are.equal(2, count_set(set))
+            calls = {}
             tap_button(view, "tool_row", "redo")
-            local redo_call = last_call()
-            assert.are.equal("partial", redo_call.mode)
-            assert.is_nil(redo_call.region)
+            set = grid_region_set(view)
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 6))])
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 6, 6))])
+            assert.is_not_nil(last_tool_call(view))
+            assert.are.equal(2, count_set(set))
+        end)
+
+        it("refreshes only the newly revealed cells on check", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            tap_cell(view, 0, 3)
+            tap_button(view, "number_row", 2) -- (0,3) is wrong: solution digit is 6
+            calls = {}
+            tap_button(view, "tool_row", "check")
+            local set = grid_region_set(view)
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 3))])
+            assert.are.equal(1, count_set(set), "only the revealed cell refreshes")
+            assert.is_nil(last_tool_call(view), "tool row state did not change")
         end)
 
         it("uses a coarse full-screen partial when closing the pause menu", function()

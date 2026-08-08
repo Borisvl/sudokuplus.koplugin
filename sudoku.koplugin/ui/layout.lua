@@ -138,6 +138,49 @@ function layout.cells_region(l, cell_keys)
     return { x = min_x, y = min_y, w = max_x - min_x, h = max_y - min_y }
 end
 
+-- One rect per cell (a set keyed row * 9 + col), merging only cells that are
+-- horizontally adjacent in the same row into strips (borders included), so a
+-- scattered selection never turns into one large rectangle; ordered by row,
+-- then by column. Returns {} when the set holds no valid cells.
+function layout.cells_regions(l, cell_keys)
+    local rows = {}
+    for key in pairs(cell_keys) do
+        local row = math.floor(key / 9)
+        local col = key % 9
+        if row >= 0 and row <= 8 and col >= 0 and col <= 8 then
+            local cols = rows[row]
+            if not cols then
+                cols = {}
+                rows[row] = cols
+            end
+            cols[#cols + 1] = col
+        end
+    end
+    local regions = {}
+    for row = 0, 8 do
+        local cols = rows[row]
+        if cols then
+            table.sort(cols)
+            local start = cols[1]
+            local prev = cols[1]
+            for i = 2, #cols do
+                local col = cols[i]
+                if col ~= prev + 1 then
+                    local first = layout.cell_rect(l, row, start)
+                    local last = layout.cell_rect(l, row, prev)
+                    regions[#regions + 1] = { x = first.x, y = first.y, w = last.x + last.w - first.x, h = first.h }
+                    start = col
+                end
+                prev = col
+            end
+            local first = layout.cell_rect(l, row, start)
+            local last = layout.cell_rect(l, row, prev)
+            regions[#regions + 1] = { x = first.x, y = first.y, w = last.x + last.w - first.x, h = first.h }
+        end
+    end
+    return regions
+end
+
 -- Line positions for grid painting: one separator between each pair of
 -- consecutive cells, thin inside a box and thick between boxes.
 function layout.grid_lines(l)

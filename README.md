@@ -204,6 +204,8 @@ storage):
 - [x] M6.1: e-ink refresh optimization (flash-free region-limited
       `"partial"` refreshes; full flashes only on first paint, wake, resize
       and leaving the game)
+- [x] M6.2: refresh region refinement (per-cell regions instead of bounding
+      boxes; precise check/undo/redo — no more rectangle flashes on device)
 - [ ] M7: menus, hint display, stats screen
 - [ ] M8: polish, i18n, on-device testing
 

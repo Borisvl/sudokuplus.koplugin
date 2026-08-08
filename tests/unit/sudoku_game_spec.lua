@@ -713,4 +713,74 @@ describe("game", function()
             assert.are.equal(3, count(affected))
         end)
     end)
+
+    describe("undo and redo affected cells", function()
+        local function cell_key(r, c)
+            return r * 9 + c
+        end
+
+        local function count(set)
+            local n = 0
+            for _ in pairs(set) do
+                n = n + 1
+            end
+            return n
+        end
+
+        it("returns an empty set without history", function()
+            local instance = new_game()
+            assert.are.equal(0, count(instance:undo_affected_cells()))
+            assert.are.equal(0, count(instance:redo_affected_cells()))
+        end)
+
+        it("undo of a place covers the cell, its value peers and cleaned notes", function()
+            local instance = new_game()
+            assert.is_true(instance:toggle_note(0, 3, 2))
+            assert.is_true(instance:place(0, 6, 2))
+            assert.is_true(instance:undo())
+            local affected = instance:undo_affected_cells()
+            assert.is_not_nil(affected[cell_key(0, 6)])
+            assert.is_not_nil(affected[cell_key(6, 6)], "peer holding the placed value")
+            assert.is_not_nil(affected[cell_key(0, 3)], "peer whose cleaned note is restored")
+            assert.are.equal(3, count(affected))
+        end)
+
+        it("redo of the place covers the same cells", function()
+            local instance = new_game()
+            assert.is_true(instance:toggle_note(0, 3, 2))
+            assert.is_true(instance:place(0, 6, 2))
+            assert.is_true(instance:undo())
+            assert.is_true(instance:redo())
+            local affected = instance:redo_affected_cells()
+            assert.is_not_nil(affected[cell_key(0, 6)])
+            assert.is_not_nil(affected[cell_key(6, 6)])
+            assert.is_not_nil(affected[cell_key(0, 3)], "peer whose note is cleaned again")
+            assert.are.equal(3, count(affected))
+        end)
+
+        it("undo of an erase covers the cell, its old-value peers and restored notes", function()
+            local instance = new_game()
+            assert.is_true(instance:toggle_note(0, 3, 2))
+            assert.is_true(instance:place(0, 6, 2))
+            assert.is_true(instance:erase(0, 6))
+            assert.is_true(instance:undo())
+            local affected = instance:undo_affected_cells()
+            assert.is_not_nil(affected[cell_key(0, 6)])
+            assert.is_not_nil(affected[cell_key(6, 6)], "peer whose conflict returns")
+            assert.is_not_nil(affected[cell_key(0, 3)], "peer whose restored note is removed")
+            assert.are.equal(3, count(affected))
+        end)
+
+        it("undo of a replacing place covers peers of both values", function()
+            local instance = new_game()
+            assert.is_true(instance:place(0, 6, 2))
+            assert.is_true(instance:place(0, 6, 3))
+            assert.is_true(instance:undo())
+            local affected = instance:undo_affected_cells()
+            assert.is_not_nil(affected[cell_key(0, 6)])
+            assert.is_not_nil(affected[cell_key(6, 6)], "peer holding the replaced value 2")
+            assert.is_not_nil(affected[cell_key(0, 1)], "peer holding the restored value 3")
+            assert.are.equal(3, count(affected))
+        end)
+    end)
 end)

@@ -416,6 +416,37 @@ the region only bounds the screen update, not the drawing).
 **Exit criteria**: specs green, `./dev.sh lint` clean, emulator boot smoke on
 `kobo-aura-one` with no errors, PLAN.md + README updated, commit.
 
+### M6.2 — Refresh region refinement (on-device playtest feedback)
+
+Planned: the M6.1 bounding box still flashed large rectangles on device —
+moving the selection across the board refreshed the whole rectangle between
+the old and new cell, a digit entry refreshed the whole 3×3 box when the
+affected peers clustered, and check/undo/redo used a coarse full-screen
+partial. Fixed by refreshing **each affected cell individually** (merging
+only horizontally adjacent cells in a row into strips, via
+`layout.cells_regions`; `cells_region` remains as a bounding-box fallback
+when more than `MAX_REGIONS` cells change, e.g. check on a wrecked board),
+and by making check and undo/redo precise instead of coarse:
+
+- [x] `ui/layout.lua`: `layout.cells_regions(l, cell_keys)` — one rect per
+      cell, horizontal strips for adjacent cells in a row, ordered by
+      row/column (spec: empty set, single cell, distant cells separate,
+      adjacent cells merged, mixed rows)
+- [x] `game.lua`: `mt:undo_affected_cells()` / `mt:redo_affected_cells()` —
+      cells an undo/redo of the history entry can repaint (entry cell, peers
+      of both involved values for conflict highlights, cleaned/restored note
+      peers); specs for place/redo/erase/replace entries
+- [x] `ui/sudokuview.lua`: `refresh()` issues one `"partial"` per region
+      (capped at `MAX_REGIONS`, then one bounding box); `onCheck` diffs the
+      revealed set instead of a coarse refresh; undo/redo mark the entry's
+      affected cells; no refresh at all when nothing changed (no full-screen
+      partial fallback)
+- [x] `sudoku_view_spec`: selection move = two separate cell refreshes,
+      digit entry = per-cell regions, undo/redo/check = affected cells only
+
+**Exit criteria**: specs green, `./dev.sh lint` clean, emulator boot smoke on
+`kobo-aura-one` with no errors, PLAN.md + README updated, commit.
+
 ### M7 — Menus, hint display, stats screen
 
 - [ ] Tools menu: New Game (difficulty picker), Continue, Statistics

@@ -408,6 +408,55 @@ function mt:affected_cells(r, c, value)
     return affected
 end
 
+-- The set of cells whose paint can change when the history entry is undone
+-- or redone: its cell, the peers whose conflict state the entry's value
+-- changes can affect, and the peers whose notes the entry cleaned/restored.
+local function entry_affected(self, entry)
+    local affected = { [entry.r * 9 + entry.c] = true }
+    local function peers_with(value)
+        if value ~= 0 then
+            each_peer(entry.r, entry.c, function(cr, cc)
+                if self.board[cell_index(cr, cc)] == value then
+                    affected[cr * 9 + cc] = true
+                end
+            end)
+        end
+    end
+    if entry.kind == "place" then
+        peers_with(entry.value)
+        peers_with(entry.old)
+    elseif entry.kind == "erase" then
+        peers_with(entry.old)
+    end
+    for _, cell in ipairs(entry.cleaned or {}) do
+        affected[cell[1] * 9 + cell[2]] = true
+    end
+    for _, cell in ipairs(entry.restored or {}) do
+        affected[cell[1] * 9 + cell[2]] = true
+    end
+    return affected
+end
+
+-- Cells whose paint can change when the most recent move was undone (the
+-- entry at undo_ptr + 1); {} when nothing was undone. Valid after `undo()`.
+function mt:undo_affected_cells()
+    local entry = self.history[self.undo_ptr + 1]
+    if not entry then
+        return {}
+    end
+    return entry_affected(self, entry)
+end
+
+-- Cells whose paint can change when the most recent undo was redone (the
+-- entry at undo_ptr); {} when nothing can be redone. Valid after `redo()`.
+function mt:redo_affected_cells()
+    local entry = self.history[self.undo_ptr]
+    if not entry then
+        return {}
+    end
+    return entry_affected(self, entry)
+end
+
 function mt:difficulty()
     return self._difficulty
 end

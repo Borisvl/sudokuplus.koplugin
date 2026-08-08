@@ -73,29 +73,31 @@ end
 -- limited to the cells that actually changed (KOReader promotes a "partial"
 -- to a flashing refresh every FULL_REFRESH_COUNT refreshes, so ghosting is
 -- cleared periodically); "full" is reserved for the first paint and for
--- wake/resize, and leaving the game stays a "flashui" close.
+-- wake/resize, and leaving the game stays a "flashui" close. Affected cells
+-- refresh individually (never as one big rectangle), except when so many
+-- cells change at once that per-cell refreshes would cost more than one.
+local MAX_REGIONS = 8
+
 function SudokuView:refresh()
     if not self._painted then
         UIManager:setDirty(self, "full")
         return
     end
-    local regions = {}
-    local grid_region = layout.cells_region(self.layout, self._dirty_cells)
-    if grid_region then
-        regions[#regions + 1] = Geom:new(grid_region)
-    end
-    if self._dirty_tool_row then
-        local row = self.layout.tool_row
-        regions[#regions + 1] = Geom:new { x = row.x, y = row.y, w = row.w, h = row.h }
+    local regions = layout.cells_regions(self.layout, self._dirty_cells)
+    if #regions > MAX_REGIONS then
+        local bbox = layout.cells_region(self.layout, self._dirty_cells)
+        if bbox then
+            regions = { bbox }
+        end
     end
     self._dirty_cells = {}
-    self._dirty_tool_row = false
-    if #regions == 0 then
-        UIManager:setDirty(self, "partial")
-        return
+    if self._dirty_tool_row then
+        local row = self.layout.tool_row
+        regions[#regions + 1] = { x = row.x, y = row.y, w = row.w, h = row.h }
+        self._dirty_tool_row = false
     end
-    for _, region in ipairs(regions) do
-        UIManager:setDirty(self, "partial", region)
+    for _, rect in ipairs(regions) do
+        UIManager:setDirty(self, "partial", Geom:new(rect))
     end
 end
 
@@ -259,9 +261,17 @@ function SudokuView:onTap(ev_args, ges)
         end
         self:markToolRow()
     elseif hit.id == "undo" then
-        self.game:undo()
+        ok, err = self.game:undo()
+        if not (ok == false or (ok == nil and err ~= nil)) then
+            self:markCells(self.game:undo_affected_cells())
+            self:markToolRow()
+        end
     elseif hit.id == "redo" then
-        self.game:redo()
+        ok, err = self.game:redo()
+        if not (ok == false or (ok == nil and err ~= nil)) then
+            self:markCells(self.game:redo_affected_cells())
+            self:markToolRow()
+        end
     elseif hit.id == "notes" then
         self.notes_mode = not self.notes_mode
         self:markToolRow()
@@ -273,25 +283,42 @@ function SudokuView:onTap(ev_args, ges)
     if ok == false or (ok == nil and err ~= nil) then
         UIManager:show(Notification:new { text = err })
     end
-    self:afterMove(hit.id == "undo" or hit.id == "redo" or hit.id == "check")
+    self:afterMove()
     return true
 end
 
-function SudokuView:afterMove(coarse)
-    if coarse then
-        self:refreshCoarse()
-    else
-        self:refresh()
-    end
+function SudokuView:afterMove()
+    self:refresh()
     if self.game:is_won() then
         self:onWin()
     end
 end
 
 function SudokuView:onCheck()
+    local before = self.game:revealed()
     local wrong = self.game:check_for_errors()
     local text = #wrong == 0 and _("No mistakes found.") or T(_("%1 wrong cell(s) found."), #wrong)
     UIManager:show(Notification:new { text = text })
+    self:markRevealedDiff(before)
+end
+
+-- Marks the cells whose check-reveal state changed since `before` (a list
+-- of {row, col} from `game:revealed()`).
+function SudokuView:markRevealedDiff(before)
+    local before_set = {}
+    for _, cell in ipairs(before) do
+        before_set[cell[1] * 9 + cell[2]] = true
+    end
+    for _, cell in ipairs(self.game:revealed()) do
+        local key = cell[1] * 9 + cell[2]
+        if not before_set[key] then
+            self:markCell(cell[1], cell[2])
+        end
+        before_set[key] = nil
+    end
+    for key in pairs(before_set) do
+        self:markCell(math.floor(key / 9), key % 9)
+    end
 end
 
 function SudokuView:persistStats()
