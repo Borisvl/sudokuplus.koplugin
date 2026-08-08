@@ -83,6 +83,9 @@ function layout.compute(width, height, scale)
             h = grid_w,
             cell = cell,
         },
+        -- dp sizes, deliberately NOT passed through `scale`: Font:getFace
+        -- applies Screen:scaleBySize itself (KOReader convention), so the
+        -- injected scaler only drives pixel geometry.
         fonts = {
             given = FONT_GIVEN_DP,
             user = FONT_USER_DP,

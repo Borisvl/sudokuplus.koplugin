@@ -146,12 +146,12 @@ end
 function SudokuView:paintGrid(bb)
     local l = self.layout
     local grid = l.grid
-    for i, line in ipairs(layout.grid_lines(l).horizontal) do
-        local color = (i - 1) % 3 == 2 and theme.grid_thick or theme.grid_thin
+    for _, line in ipairs(layout.grid_lines(l).horizontal) do
+        local color = line.thickness == l.thick and theme.grid_thick or theme.grid_thin
         bb:paintRect(grid.x, line.y, line.w, line.thickness, color)
     end
-    for i, line in ipairs(layout.grid_lines(l).vertical) do
-        local color = (i - 1) % 3 == 2 and theme.grid_thick or theme.grid_thin
+    for _, line in ipairs(layout.grid_lines(l).vertical) do
+        local color = line.thickness == l.thick and theme.grid_thick or theme.grid_thin
         bb:paintRect(line.x, grid.y, line.thickness, line.h, color)
     end
     bb:paintRect(grid.x, grid.y, grid.w, l.thick, theme.grid_thick)
@@ -276,13 +276,13 @@ function SudokuView:onTap(ev_args, ges)
         self:markToolRowIfChanged()
     elseif hit.id == "undo" then
         ok, err = self.game:undo()
-        if not (ok == false or (ok == nil and err ~= nil)) then
+        if ok then
             self:markCells(self.game:undo_affected_cells())
             self:markToolRowIfChanged()
         end
     elseif hit.id == "redo" then
         ok, err = self.game:redo()
-        if not (ok == false or (ok == nil and err ~= nil)) then
+        if ok then
             self:markCells(self.game:redo_affected_cells())
             self:markToolRowIfChanged()
         end
@@ -294,7 +294,7 @@ function SudokuView:onTap(ev_args, ges)
     elseif hit.id == "menu" then
         self:openMenu()
     end
-    if ok == false or (ok == nil and err ~= nil) then
+    if not ok and err ~= nil then
         UIManager:show(Notification:new { text = err })
     end
     self:afterMove()
@@ -446,9 +446,20 @@ function SudokuView:onResume()
 end
 
 function SudokuView:onSetDimensions(dimen)
+    if dimen then
+        self.width = dimen.w
+        self.height = dimen.h
+    end
     self.layout = layout.compute(self.width, self.height, function(dp)
         return Screen:scaleBySize(dp)
     end)
+    self.dimen = Geom:new { x = 0, y = 0, w = self.width, h = self.height }
+    self.ges_events.Tap = {
+        GestureRange:new {
+            ges = "tap",
+            range = Geom:new { x = 0, y = 0, w = self.width, h = self.height },
+        },
+    }
     self:refreshFull()
     return true
 end

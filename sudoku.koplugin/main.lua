@@ -40,8 +40,9 @@ end
 
 function Sudoku:startGame()
     -- core/ is deterministic; seed the PRNG from the wall clock and the
-    -- UI timer in the plugin layer. A fresh game abandons any previous save.
-    storage.delete(SAVE_PATH)
+    -- UI timer in the plugin layer. A fresh game abandons any previous
+    -- save, but only once a new puzzle exists: a failed generation must
+    -- not destroy the saved game.
     local rng = prng.new(os.time() + UIManager:getTime())
     local payload, gen_err = generator.generate_game { difficulty = "easy", rng = rng }
     if not payload then
@@ -50,6 +51,7 @@ function Sudoku:startGame()
         })
         return
     end
+    storage.delete(SAVE_PATH)
     local g, game_err = game.new {
         puzzle = payload.board,
         solution = payload.solution,

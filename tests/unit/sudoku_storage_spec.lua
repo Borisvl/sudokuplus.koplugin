@@ -79,6 +79,18 @@ describe("storage", function()
         os.remove(path)
     end)
 
+    it("overwrites an existing file and leaves no temp file behind", function()
+        local path = temp_path()
+        assert.is_true(storage.save(path, { first = true }))
+        assert.is_true(storage.save(path, { second = true }))
+
+        local loaded, err = storage.load(path)
+        assert.is_nil(err)
+        assert.are.same({ second = true }, loaded)
+        assert.is_nil(io.open(path .. ".tmp", "rb"), "no temp file may remain after a save")
+        os.remove(path)
+    end)
+
     it("deletes files", function()
         local path = temp_path()
         assert.is_true(storage.save(path, { ok = true }))

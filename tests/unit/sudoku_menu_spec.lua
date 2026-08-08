@@ -100,6 +100,26 @@ describe("sudoku plugin menu", function()
         assert.is_true(t >= os.time() - 2 and t <= os.time() + 2, "timer must use wall-clock seconds")
     end)
 
+    it("keeps the saved game when generating a new one fails", function()
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function()
+            return nil, "forced generation failure"
+        end
+        local file = io.open(save_path, "wb")
+        file:write("{}")
+        file:close()
+
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function() end
+        Sudoku:startGame()
+        UIManager.show = original_show
+        generator.generate_game = original_generate
+
+        assert.is_not_nil(io.open(save_path, "rb"), "the abandoned save must survive a failed generation")
+    end)
+
     it("renders the submenu without crashing (checked_func evaluated)", function()
         local Device = require("device")
         local TouchMenu = require("ui/widget/touchmenu")

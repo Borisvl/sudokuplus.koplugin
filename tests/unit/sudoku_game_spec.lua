@@ -712,6 +712,16 @@ describe("game", function()
             assert.is_not_nil(affected[cell_key(0, 3)], "restored peer from the placement")
             assert.are.equal(3, count(affected))
         end)
+
+        it("includes peers holding the value being replaced", function()
+            local instance = new_game()
+            assert.is_true(instance:place(0, 6, 2), "2 at (6,6) makes the placement a live conflict")
+            -- replacing 2 with 4 at (0,6) clears (6,6)'s conflict highlight
+            local affected = instance:affected_cells(0, 6, 4)
+            assert.is_not_nil(affected[cell_key(0, 6)])
+            assert.is_not_nil(affected[cell_key(6, 6)], "peer holding the replaced value 2")
+            assert.are.equal(2, count(affected))
+        end)
     end)
 
     describe("undo and redo affected cells", function()

@@ -378,36 +378,6 @@ function mt:conflicts()
     return result
 end
 
--- The set (keyed r * 9 + c) of cells whose painted appearance can change
--- when `value` is placed in or erased from (r, c): the cell itself, peers
--- currently holding `value` (conflict highlights), peers with `value` in
--- their notes (auto-clean), and the peers the last placement in (r, c)
--- auto-cleaned (notes an erase or replace may restore).
-function mt:affected_cells(r, c, value)
-    local ok, err = validate_cell(r, c)
-    if not ok then
-        return nil, err
-    end
-    local value_ok, value_err = validate_value(value)
-    if not value_ok then
-        return nil, value_err
-    end
-    local affected = { [r * 9 + c] = true }
-    local v_bit = digit_bit(value)
-    each_peer(r, c, function(cr, cc)
-        if self.board[cell_index(cr, cc)] == value or bit.band(self.notes[cr + 1][cc + 1], v_bit) ~= 0 then
-            affected[cr * 9 + cc] = true
-        end
-    end)
-    local entry = last_place_entry(self, r, c)
-    if entry then
-        for _, cell in ipairs(entry.cleaned or {}) do
-            affected[cell[1] * 9 + cell[2]] = true
-        end
-    end
-    return affected
-end
-
 -- The set of cells whose paint can change when the history entry is undone
 -- or redone: its cell, the peers whose conflict state the entry's value
 -- changes can affect, and the peers whose notes the entry cleaned/restored.
@@ -435,6 +405,47 @@ local function entry_affected(self, entry)
         affected[cell[1] * 9 + cell[2]] = true
     end
     return affected
+end
+
+-- The set (keyed r * 9 + c) of cells whose painted appearance can change
+-- when `value` is placed in or erased from (r, c): the cell itself, peers
+-- holding `value` or the value being replaced (conflict highlights), peers
+-- with `value` in their notes (auto-clean), and the peers the last
+-- placement in (r, c) auto-cleaned (notes an erase or replace may restore).
+-- Computed as the repaint set of the place entry that move would commit,
+-- so this path can never drift from what an undo or redo of it repaints.
+function mt:affected_cells(r, c, value)
+    local ok, err = validate_cell(r, c)
+    if not ok then
+        return nil, err
+    end
+    local value_ok, value_err = validate_value(value)
+    if not value_ok then
+        return nil, value_err
+    end
+    local cleaned = {}
+    local v_bit = digit_bit(value)
+    each_peer(r, c, function(cr, cc)
+        if bit.band(self.notes[cr + 1][cc + 1], v_bit) ~= 0 then
+            cleaned[#cleaned + 1] = { cr, cc, value }
+        end
+    end)
+    local restored = {}
+    local entry = last_place_entry(self, r, c)
+    if entry then
+        for _, cell in ipairs(entry.cleaned or {}) do
+            restored[#restored + 1] = cell
+        end
+    end
+    return entry_affected(self, {
+        kind = "place",
+        r = r,
+        c = c,
+        value = value,
+        old = self.board[cell_index(r, c)],
+        cleaned = cleaned,
+        restored = restored,
+    })
 end
 
 -- Cells whose paint can change when the most recent move was undone (the
