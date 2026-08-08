@@ -83,6 +83,7 @@ describe("sudoku plugin menu", function()
 
         assert.is_not_nil(shown, "Resume game must show the game view")
         assert.are.equal(2, shown.game:get(0, 2))
+        assert.is_true(shown.game.timer.running, "resumed game must start its timer")
     end)
 
     it("starts a new game with a wall-clock timer", function()

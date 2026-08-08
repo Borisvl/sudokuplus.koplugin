@@ -89,6 +89,8 @@ function Sudoku:continueGame()
         })
         return
     end
+    -- The save was written while paused; a resumed game starts its timer.
+    g:resume()
     UIManager:show(
         SudokuView:new {
             game = g,
