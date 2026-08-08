@@ -199,7 +199,8 @@ storage):
 - [~] M4: hint engine (core; implementation complete, full repository test gate blocked by KOReader version target)
 - [x] M5: game state machine + storage (game.lua, stats.lua, json.lua,
       storage.lua; UI-free, fully tested)
-- [ ] M6: game UI (e-ink first)
+- [x] M6: game UI (e-ink first — sudokuview, numberbar, layout, theme;
+      playable loop in the emulator; hint button and menus land in M7)
 - [ ] M7: menus, hint display, stats screen
 - [ ] M8: polish, i18n, on-device testing
 

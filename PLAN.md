@@ -301,14 +301,44 @@ test; `./dev.sh lint` clean; PLAN.md + README updated; commit.
 
 ### M6 — Game UI (e-ink first)
 
-- [ ] `sudokuview.lua`: grid painted with BlitBuffer — thick 3×3 box borders
-      vs thin cell lines; givens bold vs user entries; notes as small digits;
-      selection + live conflict highlight; "Check board" state showing all
-      wrong numbers; night-mode safe; no animations
-- [ ] Input: tap to select; number bar (1–9, erase, notes toggle, hint,
-      check); undo/redo; pause menu
+Refined plan: UI splits into `ui/layout.lua` (pure geometry with injected
+screen size + dp scaler — grid rect, thin/thick borders, font dp sizes, bar
+rows, hit-testing), `ui/theme.lua` (luminance-only inks; night mode comes
+for free from KOReader's whole-framebuffer inversion), `ui/numberbar.lua`
+(paints digit row 1–9+erase and tool row undo/redo/notes/check/menu,
+renders centered text), and `ui/sudokuview.lua` (fullscreen
+`InputContainer`: paints grid/digits/notes/selection/conflicts/revealed,
+tap dispatch, win/give-up/quit flows, stats recording, timer pause on
+menus and `Suspend`/`Resume`). Divergences from the original M6 wording
+(milestone planning decisions, documented like M2/M5): the **hint button is
+deferred to M7** (hint overlay is an M7 deliverable); the **entry point is
+minimal** — Tools → Sudoku starts a fresh Easy game directly (difficulty
+picker, Continue, and Statistics are M7); **portrait-first layout** (the
+grid never overflows in landscape, but landscape is not tuned); quit
+auto-saves to `sudoku_save` while give-up/win clear it (Continue lands in
+M7); givens use the NotoSans bold variant via `Font.bold_font_variant`.
 
-**Exit criteria**: fully playable in the emulator (smoke check).
+- [x] `ui/layout.lua` + `sudoku_layout_spec.lua` — geometry, hit-testing,
+      grid-line positions across 6" (Glo/Clara), 7.8" (Aura One), and
+      landscape sizes
+- [x] `ui/theme.lua` + `sudoku_theme_spec.lua` — ink table, contrast
+      invariants
+- [x] `ui/numberbar.lua` + `sudoku_numberbar_spec.lua` — paint-to-BB,
+      separators, disabled/active states, notes-mode inversion
+- [x] `ui/sudokuview.lua` + `sudoku_view_spec.lua` — paint smoke + pixel
+      checks, tap dispatch (select/place/notes/erase/undo/redo/check),
+      givens lock, win → stats record + save cleared, give-up, quit →
+      save round-trip, suspend/resume timer pause, pause menu
+- [x] `main.lua` wiring — Tools menu starts an Easy game (wall-clock-seeded
+      PRNG, stats loaded, view shown)
+- [x] Emulator smoke check — boots clean with the plugin on
+      `kobo-aura-one` and `kobo-clara` (6") profiles, no errors; the
+      interactive loop is covered headlessly by `sudoku_view_spec` (the
+      checkout has no SDL input replay support for scripted clicks)
+
+**Exit criteria**: specs green (`sudoku_layout`, `sudoku_theme`,
+`sudoku_numberbar`, `sudoku_view`), lint clean, emulator boot smoke on both
+profiles, PLAN.md + README updated, commit.
 
 ### M7 — Menus, hint display, stats screen
 
