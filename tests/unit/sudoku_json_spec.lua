@@ -84,6 +84,28 @@ describe("json", function()
         end
     end)
 
+    it("rejects unescaped control characters", function()
+        local decoded, err = json.decode('"line\nbreak"')
+
+        assert.is_nil(decoded)
+        assert.is_string(err)
+    end)
+
+    it("decodes unicode escapes without throwing", function()
+        local ok, decoded, err = pcall(json.decode, '"\\u20ac"')
+
+        assert.is_true(ok)
+        assert.is_nil(err)
+        assert.are.equal("\226\130\172", decoded)
+    end)
+
+    it("rejects numbers that overflow to infinity", function()
+        local decoded, err = json.decode("1e9999")
+
+        assert.is_nil(decoded)
+        assert.is_string(err)
+    end)
+
     it("round-trips nested plain data", function()
         local value = {
             version = 1,

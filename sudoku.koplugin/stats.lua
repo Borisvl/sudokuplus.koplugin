@@ -6,6 +6,10 @@ local VERSION = 1
 local MAX_FINISHED = 200
 local MAX_GIVEN_UP = 200
 
+local function is_finite(value)
+    return value == value and value ~= math.huge and value ~= -math.huge
+end
+
 local DIFFICULTIES = {
     easy = true,
     medium = true,
@@ -28,7 +32,7 @@ local function validate_record(record)
     if type(record.difficulty) ~= "string" or not DIFFICULTIES[record.difficulty] then
         return nil, "record difficulty must be one of easy, medium, hard, expert"
     end
-    if type(record.duration) ~= "number" or record.duration < 0 then
+    if type(record.duration) ~= "number" or not is_finite(record.duration) or record.duration < 0 then
         return nil, "record duration must be a non-negative number"
     end
     if type(record.hints) ~= "table" then
@@ -47,7 +51,7 @@ local function validate_record(record)
     if type(record.check_errors) ~= "number" or record.check_errors % 1 ~= 0 or record.check_errors < 0 then
         return nil, "record check_errors must be a non-negative integer"
     end
-    if type(record.timestamp) ~= "number" then
+    if type(record.timestamp) ~= "number" or not is_finite(record.timestamp) then
         return nil, "record timestamp must be a number"
     end
     return {
@@ -163,7 +167,7 @@ function stats.from_table(t)
     if t.version ~= VERSION then
         return nil, "unsupported stats version: " .. tostring(t.version)
     end
-    if type(t.streak) ~= "number" or t.streak % 1 ~= 0 or t.streak < 0 then
+    if type(t.streak) ~= "number" or not is_finite(t.streak) or t.streak % 1 ~= 0 or t.streak < 0 then
         return nil, "invalid streak"
     end
     if type(t.finished) ~= "table" or type(t.given_up) ~= "table" then
@@ -176,13 +180,16 @@ function stats.from_table(t)
         finished = {},
         given_up = {},
     }
-    for _, list in ipairs({ { t.finished, result.finished }, { t.given_up, result.given_up } }) do
+    for _, list in ipairs({
+        { t.finished, result.finished, MAX_FINISHED },
+        { t.given_up, result.given_up, MAX_GIVEN_UP },
+    }) do
         for _, record in ipairs(list[1]) do
             local normalized, err = validate_record(record)
             if not normalized then
                 return nil, err
             end
-            list[2][#list[2] + 1] = normalized
+            append_capped(list[2], normalized, list[3])
         end
     end
     return result

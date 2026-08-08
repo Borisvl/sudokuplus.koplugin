@@ -251,7 +251,7 @@ local function classify_puzzle(puzzle, options)
     return solve_path.classify(solutions[1].solve_path)
 end
 
-local function game_payload(payload, classification, options)
+local function game_payload(payload, classification)
     return {
         board = payload.board,
         solution = payload.solution,
@@ -302,18 +302,20 @@ function generator.generate_game(options)
     end
 
     if not normalized.difficulty then
-        local payload, generate_err = generate_single(normalized, normalized.clues)
-        if not payload then
-            return nil, generate_err
-        end
-        local classification, classify_err = classify_puzzle(payload.board, normalized)
-        if not classification then
-            if classify_err then
-                return nil, classify_err
+        for _ = 1, normalized.max_attempts do
+            local payload, generate_err = generate_single(normalized, normalized.clues)
+            if payload then
+                local classification, classify_err = classify_puzzle(payload.board, normalized)
+                if classify_err then
+                    return nil, classify_err
+                elseif classification and not classification.requires_guessing then
+                    return game_payload(payload, classification)
+                end
+            elseif generate_err then
+                err = generate_err
             end
-            return nil, "generated puzzle is not uniquely solvable"
         end
-        return game_payload(payload, classification)
+        return nil, err or "failed to generate a non-guessing game"
     end
 
     local range = DIFFICULTY_RANGES[normalized.difficulty]

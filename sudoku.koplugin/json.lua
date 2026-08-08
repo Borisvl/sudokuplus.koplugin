@@ -118,6 +118,54 @@ local function decode_error(position, message)
     return nil, "invalid JSON at position " .. position .. ": " .. message
 end
 
+local function append_utf8(out, codepoint)
+    if codepoint <= 0x7F then
+        out[#out + 1] = string.char(codepoint)
+    elseif codepoint <= 0x7FF then
+        out[#out + 1] = string.char(0xC0 + math.floor(codepoint / 0x40), 0x80 + codepoint % 0x40)
+    elseif codepoint <= 0xFFFF then
+        out[#out + 1] = string.char(
+            0xE0 + math.floor(codepoint / 0x1000),
+            0x80 + math.floor(codepoint / 0x40) % 0x40,
+            0x80 + codepoint % 0x40
+        )
+    else
+        out[#out + 1] = string.char(
+            0xF0 + math.floor(codepoint / 0x40000),
+            0x80 + math.floor(codepoint / 0x1000) % 0x40,
+            0x80 + math.floor(codepoint / 0x40) % 0x40,
+            0x80 + codepoint % 0x40
+        )
+    end
+end
+
+local function decode_unicode_escape(text, position)
+    local hex = text:sub(position + 2, position + 5)
+    if not hex:match("^%x%x%x%x$") then
+        return nil, "invalid unicode escape"
+    end
+
+    local codepoint = tonumber(hex, 16)
+    if codepoint >= 0xD800 and codepoint <= 0xDBFF then
+        if text:sub(position + 6, position + 7) ~= "\\u" then
+            return nil, "high surrogate must be followed by a low surrogate"
+        end
+        local low_hex = text:sub(position + 8, position + 11)
+        if not low_hex:match("^%x%x%x%x$") then
+            return nil, "invalid unicode escape"
+        end
+        local low = tonumber(low_hex, 16)
+        if low < 0xDC00 or low > 0xDFFF then
+            return nil, "invalid unicode surrogate pair"
+        end
+        codepoint = 0x10000 + (codepoint - 0xD800) * 0x400 + (low - 0xDC00)
+        return codepoint, position + 12
+    elseif codepoint >= 0xDC00 and codepoint <= 0xDFFF then
+        return nil, "low surrogate without a high surrogate"
+    end
+    return codepoint, position + 6
+end
+
 local function skip_whitespace(d)
     local text = d.text
     while d.position <= d.length do
@@ -158,18 +206,20 @@ local function decode_string(d)
             elseif next_char == "t" then
                 out[#out + 1] = "\t"
             elseif next_char == "u" then
-                local hex = text:sub(position + 2, position + 5)
-                if not hex:match("^%x%x%x%x$") then
-                    return decode_error(position, "invalid unicode escape")
+                local codepoint, next_position, unicode_err = decode_unicode_escape(text, position)
+                if not codepoint then
+                    return decode_error(position, unicode_err)
                 end
-                out[#out + 1] = string.char(tonumber(hex, 16))
-                position = position + 4
+                append_utf8(out, codepoint)
+                position = next_position
             else
                 return decode_error(position, "invalid escape sequence")
             end
-            position = position + 2
-        elseif char == "\0" then
-            return decode_error(position, "unterminated string")
+            if next_char ~= "u" then
+                position = position + 2
+            end
+        elseif char:byte() < 32 then
+            return decode_error(position, "unescaped control character")
         else
             out[#out + 1] = char
             position = position + 1
@@ -216,7 +266,11 @@ local function decode_number(d)
     end
 
     d.position = position + #sign + #mantissa + #exponent
-    return tonumber(sign .. mantissa .. exponent)
+    local value = tonumber(sign .. mantissa .. exponent)
+    if not value or value ~= value or value == math.huge or value == -math.huge then
+        return decode_error(position, "number is out of range")
+    end
+    return value
 end
 
 local function decode_value(d, depth)

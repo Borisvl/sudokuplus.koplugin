@@ -18,6 +18,32 @@ local DIFFICULTIES = {
     expert = true,
 }
 
+local function new_mask_grid(value)
+    local grid = {}
+    for row = 1, 9 do
+        grid[row] = {}
+        for col = 1, 9 do
+            grid[row][col] = value or 0
+        end
+    end
+    return grid
+end
+
+local function deep_copy(value)
+    if type(value) ~= "table" then
+        return value
+    end
+    local copy = {}
+    for key, nested in pairs(value) do
+        copy[key] = deep_copy(nested)
+    end
+    return copy
+end
+
+local function is_finite(value)
+    return value == value and value ~= math.huge and value ~= -math.huge
+end
+
 local function digit_bit(value)
     return bit.lshift(1, value - 1)
 end
@@ -149,9 +175,36 @@ end
 
 local function add_note_digit(self, cr, cc, value)
     local index = cell_index(cr, cc)
-    if self.board[index] == 0 then
+    local value_bit = digit_bit(value)
+    if self.board[index] == 0 and bit.band(self.manual_removed[cr + 1][cc + 1], value_bit) == 0 then
         self.notes[cr + 1][cc + 1] = bit.bor(self.notes[cr + 1][cc + 1], digit_bit(value))
     end
+end
+
+local function remove_note_digit(self, cr, cc, value)
+    local index = cell_index(cr, cc)
+    if self.board[index] == 0 then
+        self.notes[cr + 1][cc + 1] = bit.band(self.notes[cr + 1][cc + 1], bit.bnot(digit_bit(value)))
+    end
+end
+
+local function restore_auto_clean(self, r, c, value)
+    local restored = {}
+    local value_bit = digit_bit(value)
+    each_peer(r, c, function(cr, cc)
+        local index = cell_index(cr, cc)
+        local cell_manual_removed = self.manual_removed[cr + 1][cc + 1]
+        if
+            self.board[index] == 0
+            and bit.band(cell_manual_removed, value_bit) == 0
+            and is_safe_board(self.board, cr, cc, value)
+            and bit.band(self.notes[cr + 1][cc + 1], value_bit) == 0
+        then
+            self.notes[cr + 1][cc + 1] = bit.bor(self.notes[cr + 1][cc + 1], value_bit)
+            restored[#restored + 1] = { cr, cc, value }
+        end
+    end)
+    return restored
 end
 
 local function toggle_note_digit(self, r, c, value, add)
@@ -164,6 +217,15 @@ local function toggle_note_digit(self, r, c, value, add)
     end
 end
 
+local function clear_fixed_revealed(self)
+    for key in pairs(self._revealed) do
+        local index = key + 1
+        if self.board[index] == 0 or self.board[index] == self.solution[index] then
+            self._revealed[key] = nil
+        end
+    end
+end
+
 local function commit(self, entry)
     self.undo_ptr = self.undo_ptr + 1
     self.history[self.undo_ptr] = entry
@@ -171,6 +233,7 @@ local function commit(self, entry)
         self.history[i] = nil
     end
     self._revision = self._revision + 1
+    clear_fixed_revealed(self)
 end
 
 local function wrong_cells(self)
@@ -184,10 +247,12 @@ local function wrong_cells(self)
 end
 
 local function finish_timer(self)
+    local timestamp = self.now()
     if self.timer.running then
-        self.timer.elapsed = self.timer.elapsed + math.max(0, self.now() - self.timer.started)
+        self.timer.elapsed = self.timer.elapsed + math.max(0, timestamp - self.timer.started)
         self.timer.running = false
     end
+    return timestamp
 end
 
 function game.new(options)
@@ -255,6 +320,7 @@ function game.new(options)
         solution = board.clone(solution),
         board = board.clone(puzzle),
         notes = notes,
+        manual_removed = new_mask_grid(),
         _difficulty = difficulty,
         now = now,
         timer = { running = true, started = now(), elapsed = 0 },
@@ -352,8 +418,13 @@ function mt:place(r, c, value)
 
     local old = self.board[index]
     local old_notes = self.notes[r + 1][c + 1]
-    local cleaned = auto_clean(self, r, c, value)
+    self.board[index] = 0
+    local restored = {}
+    if old ~= 0 then
+        restored = restore_auto_clean(self, r, c, old)
+    end
     self.board[index] = value
+    local cleaned = auto_clean(self, r, c, value)
     self.notes[r + 1][c + 1] = 0
     if conflicts_board(self.board, r, c) then
         self._mistakes = self._mistakes + 1
@@ -366,6 +437,7 @@ function mt:place(r, c, value)
         value = value,
         old = old,
         old_notes = old_notes,
+        restored = restored,
         cleaned = cleaned,
     })
     return true
@@ -389,9 +461,10 @@ function mt:erase(r, c)
 
     local old = self.board[index]
     self.board[index] = 0
-    self.notes[r + 1][c + 1] = legal_mask_for(self.board, r, c)
+    local restored = restore_auto_clean(self, r, c, old)
+    self.notes[r + 1][c + 1] = bit.band(legal_mask_for(self.board, r, c), bit.bnot(self.manual_removed[r + 1][c + 1]))
 
-    commit(self, { kind = "erase", r = r, c = c, old = old })
+    commit(self, { kind = "erase", r = r, c = c, old = old, restored = restored })
     return true
 end
 
@@ -418,7 +491,21 @@ function mt:toggle_note(r, c, value)
     end
 
     toggle_note_digit(self, r, c, value, not has)
-    commit(self, { kind = "note", r = r, c = c, value = value, added = not has })
+    local value_bit = digit_bit(value)
+    local old_manual_removed = self.manual_removed[r + 1][c + 1]
+    if has then
+        self.manual_removed[r + 1][c + 1] = bit.bor(old_manual_removed, value_bit)
+    else
+        self.manual_removed[r + 1][c + 1] = bit.band(old_manual_removed, bit.bnot(value_bit))
+    end
+    commit(self, {
+        kind = "note",
+        r = r,
+        c = c,
+        value = value,
+        added = not has,
+        old_manual_removed = old_manual_removed,
+    })
     return true
 end
 
@@ -439,8 +526,16 @@ function mt:clear_notes(r, c)
         return true
     end
     self.notes[r + 1][c + 1] = 0
+    local old_manual_removed = self.manual_removed[r + 1][c + 1]
+    self.manual_removed[r + 1][c + 1] = FULL_CANDIDATE_MASK
 
-    commit(self, { kind = "notes_clear", r = r, c = c, old_mask = old })
+    commit(self, {
+        kind = "notes_clear",
+        r = r,
+        c = c,
+        old_mask = old,
+        old_manual_removed = old_manual_removed,
+    })
     return true
 end
 
@@ -448,16 +543,28 @@ local function undo_entry(self, entry)
     if entry.kind == "place" then
         self.board[cell_index(entry.r, entry.c)] = entry.old
         self.notes[entry.r + 1][entry.c + 1] = entry.old_notes
+        for _, restored in ipairs(entry.restored or {}) do
+            remove_note_digit(self, restored[1], restored[2], restored[3])
+        end
         for _, cleaned in ipairs(entry.cleaned or {}) do
             add_note_digit(self, cleaned[1], cleaned[2], cleaned[3])
         end
     elseif entry.kind == "erase" then
         self.board[cell_index(entry.r, entry.c)] = entry.old
         self.notes[entry.r + 1][entry.c + 1] = 0
+        for _, restored in ipairs(entry.restored or {}) do
+            remove_note_digit(self, restored[1], restored[2], restored[3])
+        end
     elseif entry.kind == "note" then
+        if entry.old_manual_removed ~= nil then
+            self.manual_removed[entry.r + 1][entry.c + 1] = entry.old_manual_removed
+        end
         toggle_note_digit(self, entry.r, entry.c, entry.value, not entry.added)
     elseif entry.kind == "notes_clear" then
         self.notes[entry.r + 1][entry.c + 1] = entry.old_mask
+        if entry.old_manual_removed ~= nil then
+            self.manual_removed[entry.r + 1][entry.c + 1] = entry.old_manual_removed
+        end
     end
 end
 
@@ -468,11 +575,23 @@ local function redo_entry(self, entry)
         auto_clean(self, entry.r, entry.c, entry.value)
     elseif entry.kind == "erase" then
         self.board[cell_index(entry.r, entry.c)] = 0
-        self.notes[entry.r + 1][entry.c + 1] = legal_mask_for(self.board, entry.r, entry.c)
+        restore_auto_clean(self, entry.r, entry.c, entry.old)
+        self.notes[entry.r + 1][entry.c + 1] = bit.band(
+            legal_mask_for(self.board, entry.r, entry.c),
+            bit.bnot(self.manual_removed[entry.r + 1][entry.c + 1])
+        )
     elseif entry.kind == "note" then
+        local value_bit = digit_bit(entry.value)
+        local old_manual_removed = entry.old_manual_removed or self.manual_removed[entry.r + 1][entry.c + 1]
+        if entry.added then
+            self.manual_removed[entry.r + 1][entry.c + 1] = bit.band(old_manual_removed, bit.bnot(value_bit))
+        else
+            self.manual_removed[entry.r + 1][entry.c + 1] = bit.bor(old_manual_removed, value_bit)
+        end
         toggle_note_digit(self, entry.r, entry.c, entry.value, entry.added)
     elseif entry.kind == "notes_clear" then
         self.notes[entry.r + 1][entry.c + 1] = 0
+        self.manual_removed[entry.r + 1][entry.c + 1] = FULL_CANDIDATE_MASK
     end
 end
 
@@ -486,6 +605,7 @@ function mt:undo()
     undo_entry(self, self.history[self.undo_ptr])
     self.undo_ptr = self.undo_ptr - 1
     self._revision = self._revision + 1
+    clear_fixed_revealed(self)
     return true
 end
 
@@ -499,6 +619,7 @@ function mt:redo()
     redo_entry(self, self.history[self.undo_ptr + 1])
     self.undo_ptr = self.undo_ptr + 1
     self._revision = self._revision + 1
+    clear_fixed_revealed(self)
     return true
 end
 
@@ -586,7 +707,7 @@ function mt:is_won()
     return true
 end
 
-local function make_record(self, kind)
+local function make_record(self, kind, timestamp)
     local hint_ids = {}
     for i, entry in ipairs(self._hints) do
         hint_ids[i] = entry.technique
@@ -598,7 +719,7 @@ local function make_record(self, kind)
         hints = hint_ids,
         mistakes = self._mistakes,
         check_errors = self._check_errors,
-        timestamp = self.now(),
+        timestamp = timestamp,
     }
 end
 
@@ -609,8 +730,8 @@ function mt:finish()
     if not self:is_won() then
         return nil, "board is not solved"
     end
-    local record = make_record(self, "finished")
-    finish_timer(self)
+    local timestamp = finish_timer(self)
+    local record = make_record(self, "finished", timestamp)
     self.finished = true
     return record
 end
@@ -619,8 +740,8 @@ function mt:give_up()
     if self.finished then
         return nil, "game is already finished"
     end
-    local record = make_record(self, "give_up")
-    finish_timer(self)
+    local timestamp = finish_timer(self)
+    local record = make_record(self, "give_up", timestamp)
     self.finished = true
     return record
 end
@@ -690,13 +811,16 @@ function mt:apply_action(action)
     if bit.band(self.notes[action.row + 1][action.col + 1], v_bit) == 0 then
         return nil, "candidate is already absent"
     end
+    local old_manual_removed = self.manual_removed[action.row + 1][action.col + 1]
     toggle_note_digit(self, action.row, action.col, action.value, false)
+    self.manual_removed[action.row + 1][action.col + 1] = bit.bor(old_manual_removed, v_bit)
     commit(self, {
         kind = "note",
         r = action.row,
         c = action.col,
         value = action.value,
         added = false,
+        old_manual_removed = old_manual_removed,
     })
     return true
 end
@@ -726,16 +850,39 @@ function mt:serialize()
         solution = board.to_string(self.solution),
         board = board.to_string(self.board),
         notes = notes,
-        history = self.history,
+        manual_removed = deep_copy(self.manual_removed),
+        history = deep_copy(self.history),
         undo_ptr = self.undo_ptr,
         revision = self._revision,
         mistakes = self._mistakes,
         check_errors = self._check_errors,
         revealed = revealed,
-        timer = { running = self.timer.running, elapsed = self:elapsed() },
+        timer = { running = self.timer.running, elapsed = self.timer.elapsed, started = self.timer.started },
         hints = hints_copy,
         finished = self.finished,
     }
+end
+
+local function validate_history_mask(mask)
+    return type(mask) == "number" and is_finite(mask) and mask % 1 == 0 and mask >= 0 and mask <= FULL_CANDIDATE_MASK
+end
+
+local function validate_history_cells(cells, name)
+    if cells == nil then
+        return {}
+    end
+    if type(cells) ~= "table" then
+        return nil, "invalid history entry " .. name .. " list"
+    end
+    for _, cell in ipairs(cells) do
+        if type(cell) ~= "table" or not validate_cell(cell[1], cell[2]) then
+            return nil, "invalid history entry " .. name .. " cell"
+        end
+        if not validate_value(cell[3]) then
+            return nil, "invalid history entry " .. name .. " value"
+        end
+    end
+    return cells
 end
 
 local function validate_history(data)
@@ -752,11 +899,24 @@ local function validate_history(data)
             return nil, "invalid history entry: " .. cell_err
         end
         local kind = entry.kind
-        if kind == "place" or kind == "erase" then
-            if not validate_value(entry.value or entry.old) then
+        if kind == "place" then
+            if not validate_value(entry.value) then
                 return nil, "invalid history entry value"
             end
-            if entry.old ~= nil and (entry.old < 0 or entry.old > 9 or entry.old % 1 ~= 0) then
+            if
+                type(entry.old) ~= "number"
+                or not is_finite(entry.old)
+                or entry.old % 1 ~= 0
+                or entry.old < 0
+                or entry.old > 9
+            then
+                return nil, "invalid history entry old value"
+            end
+            if not validate_history_mask(entry.old_notes) then
+                return nil, "invalid history entry note mask"
+            end
+        elseif kind == "erase" then
+            if not validate_value(entry.old) then
                 return nil, "invalid history entry old value"
             end
         elseif kind == "note" then
@@ -767,41 +927,27 @@ local function validate_history(data)
                 return nil, "invalid history entry flag"
             end
         elseif kind == "notes_clear" then
-            if
-                type(entry.old_mask) ~= "number"
-                or entry.old_mask % 1 ~= 0
-                or entry.old_mask < 0
-                or entry.old_mask > FULL_CANDIDATE_MASK
-            then
+            if not validate_history_mask(entry.old_mask) then
                 return nil, "invalid history entry note mask"
             end
         else
             return nil, "unknown history entry kind"
         end
-        if entry.old_notes ~= nil then
-            if
-                type(entry.old_notes) ~= "number"
-                or entry.old_notes % 1 ~= 0
-                or entry.old_notes < 0
-                or entry.old_notes > FULL_CANDIDATE_MASK
-            then
-                return nil, "invalid history entry note mask"
-            end
+        if entry.old_manual_removed ~= nil and not validate_history_mask(entry.old_manual_removed) then
+            return nil, "invalid history entry manual note mask"
         end
-        if entry.cleaned ~= nil then
-            if type(entry.cleaned) ~= "table" then
-                return nil, "invalid history entry cleaned list"
-            end
-            for _, cleaned in ipairs(entry.cleaned) do
-                if not validate_cell(cleaned[1], cleaned[2]) then
-                    return nil, "invalid history entry cleaned cell"
-                end
-                if not validate_value(cleaned[3]) then
-                    return nil, "invalid history entry cleaned value"
-                end
-            end
+        local cleaned, cleaned_err = validate_history_cells(entry.cleaned, "cleaned")
+        if not cleaned then
+            return nil, cleaned_err
         end
-        history[i] = entry
+        local restored, restored_err = validate_history_cells(entry.restored, "restored")
+        if not restored then
+            return nil, restored_err
+        end
+        local copy = deep_copy(entry)
+        copy.cleaned = deep_copy(cleaned)
+        copy.restored = deep_copy(restored)
+        history[i] = copy
     end
     return history
 end
@@ -872,6 +1018,24 @@ function game.restore(data, opts)
             notes[r][c] = mask
         end
     end
+    local manual_removed = new_mask_grid()
+    if data.manual_removed ~= nil then
+        if type(data.manual_removed) ~= "table" then
+            return nil, "manual_removed must be a 9x9 table"
+        end
+        for r = 1, 9 do
+            if type(data.manual_removed[r]) ~= "table" then
+                return nil, "manual_removed must be a 9x9 table"
+            end
+            for c = 1, 9 do
+                local mask = data.manual_removed[r][c]
+                if type(mask) ~= "number" or mask % 1 ~= 0 or mask < 0 or mask > FULL_CANDIDATE_MASK then
+                    return nil, "manual_removed masks must be integers in the range 0..511"
+                end
+                manual_removed[r][c] = mask
+            end
+        end
+    end
     for r = 0, 8 do
         for c = 0, 8 do
             local mask = notes[r + 1][c + 1]
@@ -921,7 +1085,10 @@ function game.restore(data, opts)
     if type(data.timer) ~= "table" or type(data.timer.running) ~= "boolean" then
         return nil, "invalid timer state"
     end
-    if type(data.timer.elapsed) ~= "number" or data.timer.elapsed < 0 then
+    if type(data.timer.elapsed) ~= "number" or not is_finite(data.timer.elapsed) or data.timer.elapsed < 0 then
+        return nil, "invalid timer state"
+    end
+    if data.timer.started ~= nil and (type(data.timer.started) ~= "number" or not is_finite(data.timer.started)) then
         return nil, "invalid timer state"
     end
     if type(data.hints) ~= "table" then
@@ -949,9 +1116,10 @@ function game.restore(data, opts)
         solution = solution,
         board = current,
         notes = notes,
+        manual_removed = manual_removed,
         _difficulty = data.difficulty,
         now = now,
-        timer = { running = false, started = now(), elapsed = 0 },
+        timer = { running = false, started = now(), elapsed = data.timer.elapsed },
         _revision = data.revision,
         history = history,
         undo_ptr = data.undo_ptr,
@@ -963,9 +1131,12 @@ function game.restore(data, opts)
     }
     if data.timer.running then
         instance.timer.running = true
-        instance.timer.started = now() - data.timer.elapsed
-    else
-        instance.timer.elapsed = data.timer.elapsed
+        if data.timer.started ~= nil then
+            instance.timer.started = data.timer.started
+        else
+            instance.timer.elapsed = 0
+            instance.timer.started = now() - data.timer.elapsed
+        end
     end
     return setmetatable(instance, mt)
 end

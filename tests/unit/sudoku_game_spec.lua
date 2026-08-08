@@ -159,6 +159,28 @@ describe("game", function()
         assert.is_true(has_note(instance, 1, 7, 2), "non-peer notes are untouched")
     end)
 
+    it("preserves manually removed candidates when a filled cell is erased", function()
+        local instance = new_game()
+
+        assert.is_true(instance:toggle_note(0, 2, 4))
+        assert.is_false(has_note(instance, 0, 2, 4))
+        assert.is_true(instance:place(0, 2, 2))
+        assert.is_true(instance:erase(0, 2))
+
+        assert.is_false(has_note(instance, 0, 2, 4))
+    end)
+
+    it("restores auto-cleaned peer candidates when a filled cell is erased", function()
+        local instance = new_game()
+
+        assert.is_true(has_note(instance, 0, 3, 2))
+        assert.is_true(instance:place(0, 2, 2))
+        assert.is_false(has_note(instance, 0, 3, 2))
+        assert.is_true(instance:erase(0, 2))
+
+        assert.is_true(has_note(instance, 0, 3, 2))
+    end)
+
     it("marks live conflicts only for rule violations and counts mistakes per entry", function()
         local instance = new_game()
 
@@ -286,6 +308,26 @@ describe("game", function()
         assert.are.equal(25, instance:elapsed())
     end)
 
+    it("matches the completion record duration to the stopped timer", function()
+        local times = { 1000, 1010, 1020, 1030 }
+        local instance = assert(game.new({
+            puzzle = board.from_string(PUZZLE_WIN),
+            solution = board.from_string(SOLUTION),
+            difficulty = "medium",
+            now = function()
+                local time = times[1]
+                table.remove(times, 1)
+                return time
+            end,
+        }))
+
+        assert.is_true(instance:place(0, 6, 9))
+        assert.is_true(instance:place(0, 7, 1))
+        local record = assert(instance:finish())
+
+        assert.are.equal(record.duration, instance:elapsed())
+    end)
+
     it("reveals all wrong numbers and counts each cell once until fixed", function()
         local instance = new_game()
 
@@ -311,6 +353,21 @@ describe("game", function()
         assert.is_true(instance:place(0, 2, 2))
         instance:check_for_errors()
         assert.are.equal(2, instance:check_errors(), "re-break re-counts after a fix")
+    end)
+
+    it("clears a revealed error immediately when the cell is fixed", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 2, 2))
+        assert.are.equal(1, #instance:check_for_errors())
+        assert.are.equal(1, #instance:revealed())
+
+        assert.is_true(instance:place(0, 2, 4))
+        assert.are.equal(0, #instance:revealed())
+
+        assert.is_true(instance:place(0, 2, 2))
+        assert.are.equal(1, #instance:check_for_errors())
+        assert.are.equal(2, instance:check_errors())
     end)
 
     it("detects the win only when the board matches the solution", function()

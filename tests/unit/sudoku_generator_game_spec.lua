@@ -1,10 +1,15 @@
 package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 
+local bit = require("bit")
 local board = require("core.board")
 local generator = require("core.generator")
 local prng = require("core.prng")
+local solve_path = require("core.solve_path")
 local solver = require("core.solver")
 local sudoku = require("core.sudoku")
+local flags = require("core.techniques.flags")
+
+local ALL_TECHNIQUES = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.EXPERT)))
 
 describe("core.generator game payload", function()
     it("returns puzzle, solution, difficulty and clue count", function()
@@ -42,6 +47,23 @@ describe("core.generator game payload", function()
         assert.is_not_nil(payload.difficulty)
         assert.is_not_nil(payload.solution)
         assert.are.equal(board.count_clues(payload.board), payload.clues)
+    end)
+
+    it("does not label a guessing puzzle as a technique-only game", function()
+        local payload, err = generator.generate_game({ rng = prng.new(85) })
+        assert.is_nil(err)
+        assert.is_not_nil(payload)
+
+        local solutions = solver
+            .new(payload.board, {
+                techniques = ALL_TECHNIQUES,
+                rng = prng.new(85),
+            })
+            :solve_until(2)
+        assert.are.equal(1, #solutions)
+        local classification = solve_path.classify(solutions[1].solve_path)
+
+        assert.is_false(classification.requires_guessing)
     end)
 
     it("rejects invalid options like generate", function()

@@ -3,6 +3,7 @@ package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 local bit = require("bit")
 local board = require("core.board")
 local game = require("game")
+local json = require("json")
 
 local PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
 local SOLUTION = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
@@ -78,21 +79,38 @@ describe("game serialization", function()
         assert.are.equal("hard", restored:serialize().difficulty)
     end)
 
+    it("round-trips a game save through the JSON codec", function()
+        local instance = new_game()
+        play_some_moves(instance)
+
+        local encoded, encode_err = json.encode(instance:serialize())
+        assert.is_nil(encode_err)
+        local decoded, decode_err = json.decode(encoded)
+        assert.is_nil(decode_err)
+
+        local restored = restore(decoded, { t = 1000 })
+        assert.are.equal(board.to_string(instance.board), board.to_string(restored.board))
+        assert.are.equal(instance:revision(), restored:revision())
+        assert.are.equal(instance:get_notes(0, 3), restored:get_notes(0, 3))
+    end)
+
     it("restores a playable history: undo and redo still work", function()
         local instance = new_game()
         assert.is_true(instance:place(0, 2, 2))
         assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.is_true(instance:undo())
 
         local restored = restore(instance:serialize(), { t = 1000 })
         assert.is_true(restored:can_undo())
         assert.is_true(restored:can_redo())
 
         assert.is_true(restored:undo())
-        assert.is_false(has_note(restored, 0, 3, 6))
-        assert.is_true(restored:undo())
+        assert.is_true(has_note(restored, 0, 3, 6))
         assert.are.equal(0, restored:get(0, 2))
         assert.is_true(restored:redo())
         assert.are.equal(2, restored:get(0, 2))
+        assert.is_true(restored:redo())
+        assert.is_false(has_note(restored, 0, 3, 6))
 
         assert.is_true(restored:place(0, 3, 4))
         assert.is_false(restored:can_redo())
@@ -153,9 +171,15 @@ describe("game serialization", function()
         local restored = restore(instance:serialize(), { t = 1000 })
         assert.are.equal(2, #restored:conflicts())
         assert.are.equal(1, restored:mistakes())
-        assert.are.equal(1, restored:check_errors())
-        assert.are.equal(1, #restored:revealed())
-        assert.are.same({ 0, 2 }, restored:revealed()[1])
+        assert.are.equal(2, restored:check_errors())
+        local revealed = restored:revealed()
+        assert.are.equal(2, #revealed)
+        local found = {}
+        for _, cell in ipairs(revealed) do
+            found[cell[1] * 9 + cell[2]] = true
+        end
+        assert.is_true(found[0 * 9 + 2])
+        assert.is_true(found[0 * 9 + 7])
     end)
 
     it("does not share mutable state with the source instance", function()
@@ -169,6 +193,17 @@ describe("game serialization", function()
         assert.are.equal(0, instance:get(1, 1), "source board untouched")
         assert.are.equal(notes_before, instance:get_notes(1, 1), "source notes untouched")
         assert.are.equal(0, restored:get_notes(1, 1))
+    end)
+
+    it("does not expose mutable history through serialized state", function()
+        local instance = new_game()
+        assert.is_true(instance:place(0, 2, 2))
+
+        local data = instance:serialize()
+        data.history[1].old = 9
+
+        assert.is_true(instance:undo())
+        assert.are.equal(0, instance:get(0, 2))
     end)
 
     it("rejects malformed save data", function()
@@ -188,13 +223,19 @@ describe("game serialization", function()
         end
 
         local broken_givens = instance:serialize()
-        broken_givens.board = board.to_string(instance.board):sub(1, 80) .. "9"
+        broken_givens.board = board.to_string(instance.board):sub(1, 80) .. "8"
         local restored, err = game.restore(broken_givens, { now = now })
         assert.is_nil(restored)
         assert.is_string(err)
 
         local bad_timer = instance:serialize()
         bad_timer.timer = { running = true, elapsed = -1 }
+        restored, err = game.restore(bad_timer, { now = now })
+        assert.is_nil(restored)
+        assert.is_string(err)
+
+        bad_timer = instance:serialize()
+        bad_timer.timer = { running = true, elapsed = math.huge }
         restored, err = game.restore(bad_timer, { now = now })
         assert.is_nil(restored)
         assert.is_string(err)
@@ -238,6 +279,27 @@ describe("game serialization", function()
                 return 0
             end,
         })
+        assert.is_nil(restored)
+        assert.is_string(err)
+    end)
+
+    it("rejects malformed history fields without throwing", function()
+        local instance = new_game()
+        local now = function()
+            return 0
+        end
+
+        local bad_type = instance:serialize()
+        bad_type.history = { { kind = "place", r = 0, c = 2, value = 4, old = "bad" } }
+        local ok, restored, err = pcall(game.restore, bad_type, { now = now })
+        assert.is_true(ok)
+        assert.is_nil(restored)
+        assert.is_string(err)
+
+        local missing_old = instance:serialize()
+        missing_old.history = { { kind = "place", r = 0, c = 2, value = 4 } }
+        ok, restored, err = pcall(game.restore, missing_old, { now = now })
+        assert.is_true(ok)
         assert.is_nil(restored)
         assert.is_string(err)
     end)

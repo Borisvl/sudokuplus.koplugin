@@ -182,6 +182,32 @@ describe("stats", function()
         assert.are.equal(200, stats.summary(s).games_played)
     end)
 
+    it("caps record lists restored from persisted data", function()
+        local finished = {}
+        for i = 1, 201 do
+            finished[i] = record({ duration = i, timestamp = i })
+        end
+
+        local restored, err = stats.from_table({ version = 1, streak = 0, finished = finished, given_up = {} })
+
+        assert.is_nil(err)
+        assert.are.equal(200, #restored.finished)
+        assert.are.equal(2, restored.finished[1].duration)
+        assert.are.equal(201, restored.finished[200].duration)
+    end)
+
+    it("rejects non-finite record values", function()
+        local s = stats.new()
+
+        local duration_result, duration_err = stats.add(s, record({ duration = math.huge }))
+        assert.is_nil(duration_result)
+        assert.is_string(duration_err)
+
+        local timestamp_result, timestamp_err = stats.add(s, record({ timestamp = math.huge }))
+        assert.is_nil(timestamp_result)
+        assert.is_string(timestamp_err)
+    end)
+
     it("round-trips through to_table and from_table", function()
         local s = stats.new()
         stats.add(s, record({ difficulty = "medium", duration = 120, timestamp = 1 }))
