@@ -541,6 +541,68 @@ describe("sudoku view", function()
         assert.is_true(g.timer.running)
     end)
 
+    it("resumes the timer when the pause menu is dismissed by tapping outside", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        local view = new_view(g)
+        local dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            dialog = widget
+        end
+        view:openMenu()
+        UIManager.show = original_show
+        assert.is_not_nil(dialog, "the pause menu must be shown")
+        assert.is_false(g.timer.running)
+        local Geom = require("ui/geometry")
+        dialog:onTapClose({}, { pos = Geom:new { x = -100, y = -100 } })
+        assert.is_false(view.menu_open)
+        assert.is_true(g.timer.running, "the timer must resume after an outside tap")
+    end)
+
+    it("shows the hint count and resume/statistics in the pause menu", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        local view = new_view(g)
+        local dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons then
+                dialog = widget
+            end
+        end
+        view:openMenu()
+        UIManager.show = original_show
+        assert.is_not_nil(dialog)
+        assert.is_true(dialog.title:find("Hints: 0", 1, true) ~= nil, "the pause menu shows the hint count")
+
+        dialog.buttons[1][1].callback()
+        assert.is_true(g.timer.running, "the Resume button resumes the timer")
+    end)
+
+    it("opens the statistics screen from the pause menu", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        local view = new_view(g)
+        local UIManager = require("ui/uimanager")
+        local dialog
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons then
+                dialog = widget
+            end
+        end
+        view:openMenu()
+        assert.is_not_nil(dialog)
+        local shown
+        UIManager.show = function(_, widget)
+            shown = widget
+        end
+        dialog.buttons[1][2].callback()
+        UIManager.show = original_show
+        assert.is_not_nil(shown, "Statistics must open the stats view")
+        assert.are.equal("statsview", shown.name)
+    end)
+
     describe("refresh modes and regions", function()
         local UIManager
         local calls

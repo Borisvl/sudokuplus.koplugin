@@ -101,6 +101,11 @@ describe("sudoku plugin menu", function()
         assert.are.equal("statsview", shown.name)
     end)
 
+    it("keeps the menu open when showing statistics", function()
+        local stats_item = item_with("Statistics")
+        assert.is_true(stats_item.keep_menu_open, "closing the stats page must return to the menu")
+    end)
+
     it("enables Continue only when a save exists", function()
         local continue = item_with("Continue")
         assert.is_false(continue.enabled_func())

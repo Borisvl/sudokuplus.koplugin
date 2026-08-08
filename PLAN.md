@@ -539,6 +539,20 @@ views, pure). Hint requests are recorded **per request** (no dedupe): every
 in the emulator; all specs green, `./dev.sh lint` clean, PLAN.md + README
 updated, commit.
 
+M7 addendum (playtest round): the **pause menu** is now a `ButtonDialog`
+(Time/Mistakes/**Hints** title; Resume, Statistics, Give up, Quit) instead of
+a `MultiConfirmBox` — the old dialog's outside-tap dismissal never called the
+cancel callback, so the timer stayed paused after tapping outside; the
+`ButtonDialog` `tap_close_callback` fires on outside taps, the Back key and
+the Resume button, so the game always resumes exactly once. **Statistics is
+reachable from the pause menu** too (shown on top of the still-paused game,
+so it returns to the pause menu on close). The Tools-menu Statistics item is
+now `keep_menu_open`, so closing the stats page returns to the Sudoku menu
+instead of dropping back to the reader. The win dialog also reports the hint
+count. `statsview.lua` was reworked into a framed report (bordered card,
+centered title, bold section headers with separator rules, clamped to the
+frame bottom).
+
 ### M8 — Polish, i18n, deployment
 
 - [ ] gettext-marked strings, settings (e.g., notes on/off)

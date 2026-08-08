@@ -1,4 +1,5 @@
 local Device = require("device")
+local ButtonDialog = require("ui/widget/buttondialog")
 local Font = require("ui/font")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
@@ -500,9 +501,10 @@ function SudokuView:onWin()
     self:deleteSave()
     UIManager:show(MultiConfirmBox:new {
         text = T(
-            _("Puzzle solved!\n\nTime: %1\nMistakes: %2"),
+            _("Puzzle solved!\n\nTime: %1\nMistakes: %2\nHints: %3"),
             format_time(record.duration),
-            tostring(record.mistakes)
+            tostring(record.mistakes),
+            tostring(#record.hints)
         ),
         cancel_text = _("Close"),
         cancel_callback = function()
@@ -555,25 +557,79 @@ function SudokuView:onClose()
     self:onQuit()
 end
 
+-- Pauses the game and shows the in-game menu. Every dismissal path resumes
+-- the timer: the Resume button, the Back key and tapping outside the dialog
+-- all end in resumeFromPause() (ButtonDialog runs its tap_close_callback on
+-- outside taps / Back, which MultiConfirmBox did not — the old pause menu
+-- stayed paused when dismissed by tapping outside).
 function SudokuView:openMenu()
     self.game:pause()
     self.menu_open = true
-    UIManager:show(MultiConfirmBox:new {
-        text = T(_("Time: %1    Mistakes: %2"), format_time(self.game:elapsed()), tostring(self.game:mistakes())),
-        cancel_text = _("Resume"),
-        cancel_callback = function()
-            self:closeMenu()
-        end,
-        choice1_text = _("Give up"),
-        choice1_callback = function()
+    local function resumeFromPause()
+        if self.menu_open then
             self.menu_open = false
-            self:onGiveUp()
+            if not self.game:is_finished() then
+                self.game:resume()
+            end
+            self:refreshCoarse()
+        end
+    end
+    local dialog
+    dialog = ButtonDialog:new {
+        title = T(
+            _("Time: %1    Mistakes: %2    Hints: %3"),
+            format_time(self.game:elapsed()),
+            tostring(self.game:mistakes()),
+            tostring(#self.game:hints())
+        ),
+        buttons = {
+            {
+                {
+                    text = _("Resume"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        resumeFromPause()
+                    end,
+                },
+                {
+                    text = _("Statistics"),
+                    callback = function()
+                        self:showStats()
+                    end,
+                },
+            },
+            {
+                {
+                    text = _("Give up"),
+                    callback = function()
+                        self.menu_open = false
+                        UIManager:close(dialog)
+                        self:onGiveUp()
+                    end,
+                },
+                {
+                    text = _("Quit"),
+                    callback = function()
+                        self.menu_open = false
+                        UIManager:close(dialog)
+                        self:onQuit()
+                    end,
+                },
+            },
+        },
+        tap_close_callback = function()
+            resumeFromPause()
         end,
-        choice2_text = _("Quit"),
-        choice2_callback = function()
-            self.menu_open = false
-            self:onQuit()
-        end,
+    }
+    UIManager:show(dialog)
+end
+
+-- Opens the statistics screen on top of the open pause menu (the game stays
+-- paused; closing the stats view reveals the pause menu again).
+function SudokuView:showStats()
+    local StatsView = require("ui.statsview")
+    UIManager:show(StatsView:new {
+        summary = stats.summary(self.stats or stats.new()),
     })
 end
 

@@ -161,6 +161,7 @@ function Sudoku:addToMainMenu(menu_items)
             },
             {
                 text = _("Statistics"),
+                keep_menu_open = true,
                 callback = function()
                     self:showStatistics()
                 end,
