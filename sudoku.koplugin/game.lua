@@ -291,13 +291,17 @@ function game.new(options)
     if type(now) ~= "function" then
         return nil, "now must be a function returning the current time in seconds"
     end
+    local autofill_notes = options.autofill_notes
+    if autofill_notes ~= nil and type(autofill_notes) ~= "boolean" then
+        return nil, "autofill_notes must be a boolean"
+    end
 
     local notes = {}
     for r = 0, 8 do
         local row = {}
         for c = 0, 8 do
             local mask = 0
-            if board.is_empty(puzzle, r, c) then
+            if autofill_notes and board.is_empty(puzzle, r, c) then
                 mask = masks.compute_candidates_mask_for_cell(constraint_masks, r, c)
             end
             row[c + 1] = mask
@@ -433,6 +437,22 @@ function mt:place(r, c, value)
     return true
 end
 
+-- The note mask the cell had before its current value was placed (what an
+-- undo of that placement would restore), or 0 when it was untouched.
+local function previous_notes_for(self, r, c)
+    for i = self.undo_ptr, 1, -1 do
+        local entry = self.history[i]
+        if entry.kind == "place" and entry.r == r and entry.c == c then
+            return entry.old_notes
+        end
+    end
+    return 0
+end
+
+local function restored_cell_notes(self, r, c)
+    return bit.band(previous_notes_for(self, r, c), legal_mask_for(self.board, r, c))
+end
+
 function mt:erase(r, c)
     local ok, err = validate_cell(r, c)
     if not ok then
@@ -452,7 +472,7 @@ function mt:erase(r, c)
     local old = self.board[index]
     self.board[index] = 0
     local restored = restore_auto_clean(self, r, c, old)
-    self.notes[r + 1][c + 1] = bit.band(legal_mask_for(self.board, r, c), bit.bnot(self.manual_removed[r + 1][c + 1]))
+    self.notes[r + 1][c + 1] = restored_cell_notes(self, r, c)
 
     commit(self, { kind = "erase", r = r, c = c, old = old, restored = restored })
     return true
@@ -566,10 +586,7 @@ local function redo_entry(self, entry)
     elseif entry.kind == "erase" then
         self.board[cell_index(entry.r, entry.c)] = 0
         restore_auto_clean(self, entry.r, entry.c, entry.old)
-        self.notes[entry.r + 1][entry.c + 1] = bit.band(
-            legal_mask_for(self.board, entry.r, entry.c),
-            bit.bnot(self.manual_removed[entry.r + 1][entry.c + 1])
-        )
+        self.notes[entry.r + 1][entry.c + 1] = restored_cell_notes(self, entry.r, entry.c)
     elseif entry.kind == "note" then
         local value_bit = digit_bit(entry.value)
         local old_manual_removed = entry.old_manual_removed or self.manual_removed[entry.r + 1][entry.c + 1]
@@ -748,9 +765,23 @@ function mt:hint()
             return nil, "board does not match the solution"
         end
     end
+    -- Notes are ground truth once the user has started them; untouched
+    -- empty cells are substituted with their board-legal candidates so the
+    -- hint engine can assume fully filled notes.
+    local derived = {}
+    for r = 0, 8 do
+        derived[r + 1] = {}
+        for c = 0, 8 do
+            local mask = self.notes[r + 1][c + 1]
+            if self.board[cell_index(r, c)] == 0 and mask == 0 and self.manual_removed[r + 1][c + 1] == 0 then
+                mask = legal_mask_for(self.board, r, c)
+            end
+            derived[r + 1][c + 1] = mask
+        end
+    end
     local result, err = hints.next({
         board = self.board,
-        notes = self.notes,
+        notes = derived,
         solution = self.solution,
         revision = self._revision,
     })

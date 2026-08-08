@@ -123,4 +123,23 @@ describe("sudoku numberbar", function()
         local width = numberbar.render_centered(bb, face, "Menu", false, rect, theme.digit)
         assert.is_true(width > 0)
     end)
+
+    it("centers rendered text vertically inside its rect", function()
+        local face = require("ui/font"):getFace("cfont", l.fonts.label)
+        local rect = l.tool_row.buttons[1]
+        numberbar.render_centered(bb, face, "5", false, rect, theme.digit)
+        local min_y, max_y
+        for y = rect.y, rect.y + rect.h - 1 do
+            for x = rect.x, rect.x + rect.w - 1 do
+                if pixel(bb, x, y) == tonumber(theme.digit.a) then
+                    min_y = math.min(min_y or y, y)
+                    max_y = math.max(max_y or y, y)
+                end
+            end
+        end
+        assert.is_not_nil(min_y, "no ink rendered")
+        local ink_center = (min_y + max_y) / 2
+        local rect_center = rect.y + rect.h / 2
+        assert.is_true(math.abs(ink_center - rect_center) <= 2, "ink is not vertically centered")
+    end)
 end)

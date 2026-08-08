@@ -160,12 +160,11 @@ describe("sudoku view", function()
         tap_button(view, "tool_row", "notes")
         local value = solution_cell(0, 3)
         local v_bit = bit.lshift(1, value - 1)
-        -- the note is present by default (legal candidates); a tap removes it,
-        -- a second tap re-adds it
-        tap_button(view, "number_row", value)
-        assert.are.equal(0, bit.band(view.game:get_notes(0, 3), v_bit))
+        -- notes start empty; a tap adds the note, a second tap removes it
         tap_button(view, "number_row", value)
         assert.is_true(bit.band(view.game:get_notes(0, 3), v_bit) ~= 0)
+        tap_button(view, "number_row", value)
+        assert.are.equal(0, bit.band(view.game:get_notes(0, 3), v_bit))
     end)
 
     it("erases a value from the selected cell", function()
@@ -217,6 +216,31 @@ describe("sudoku view", function()
             end
         end
         assert.is_true(found, "no note ink in cell")
+        bb:free()
+    end)
+
+    it("centers a placed digit vertically inside its cell", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 0)
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        view:paintTo(bb, 0, 0)
+        local rect = layout.cell_rect(view.layout, 0, 3)
+        local min_y, max_y
+        for y = rect.y, rect.y + rect.h - 1 do
+            for x = rect.x, rect.x + rect.w - 1 do
+                if tonumber(bb:getPixel(x, y).a) == tonumber(theme.digit.a) then
+                    min_y = math.min(min_y or y, y)
+                    max_y = math.max(max_y or y, y)
+                end
+            end
+        end
+        assert.is_not_nil(min_y, "no digit ink in cell")
+        local ink_center = (min_y + max_y) / 2
+        local rect_center = rect.y + rect.h / 2
+        assert.is_true(math.abs(ink_center - rect_center) <= 3, "digit not vertically centered in cell")
         bb:free()
     end)
 

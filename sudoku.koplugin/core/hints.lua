@@ -218,13 +218,10 @@ local function validate_notes(state, constraint_masks)
                         values = candidates.from_mask(illegal),
                     }
                 end
-                if mask == 0 then
-                    errors[#errors + 1] = {
-                        reason = "empty_candidate_mask",
-                        row = r,
-                        col = c,
-                    }
-                end
+                -- An empty mask is legitimate state, not an error: the game
+                -- layer substitutes board-legal candidates for untouched
+                -- cells, and a user-cleared cell is ground truth. Deduction
+                -- simply cannot use the cell.
                 if solution then
                     local value = board.get(solution, r, c)
                     if bit.band(mask, bit.lshift(1, value - 1)) == 0 then

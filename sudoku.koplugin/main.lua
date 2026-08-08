@@ -1,4 +1,5 @@
 local DataStorage = require("datastorage")
+local G_reader_settings = require("luasettings")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -19,6 +20,7 @@ local Sudoku = WidgetContainer:extend {
 
 local SAVE_PATH = DataStorage:getDataDir() .. "/sudoku_save"
 local STATS_PATH = DataStorage:getDataDir() .. "/sudoku_stats"
+local AUTOFILL_SETTING = "sudoku_autofill_notes"
 
 function Sudoku:init()
     self.ui.menu:registerToMainMenu(self)
@@ -55,6 +57,7 @@ function Sudoku:startGame()
         now = function()
             return UIManager:getTime() / 1000
         end,
+        autofill_notes = G_reader_settings:isTrue(AUTOFILL_SETTING),
     }
     if not g then
         UIManager:show(InfoMessage:new {
@@ -74,9 +77,23 @@ function Sudoku:addToMainMenu(menu_items)
     menu_items.sudoku = {
         text = _("Sudoku"),
         sorting_hint = "more_tools",
-        callback = function()
-            self:startGame()
-        end,
+        sub_item_table = {
+            {
+                text = _("New game"),
+                callback = function()
+                    self:startGame()
+                end,
+            },
+            {
+                text = _("Auto-fill notes"),
+                checked_func = function()
+                    return G_reader_settings:isTrue(AUTOFILL_SETTING)
+                end,
+                callback = function()
+                    G_reader_settings:flipNilOrFalse(AUTOFILL_SETTING)
+                end,
+            },
+        },
     }
 end
 

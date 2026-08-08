@@ -237,19 +237,23 @@ hints.next({
 }, opts)
 ```
 
-`notes` are authoritative candidate masks, initialized from board-legal
-candidates and updated by the game layer. The core returns one complete
-deduction with technique, pattern, action, revision, and stable hint ID; it
-does not accept or track a reveal level. The UI owns progressive display of
-the technique name, pattern cells, and action. Candidate eliminations already
-absent from `notes` are skipped, while empty/illegal masks and removal of a
-known solution candidate return `note_error` results and block deduction.
-Notes on given cells are also errors. A candidate removal that is not the
-solution value is accepted as user state, even when the user cannot justify
-it; callers that need solution-aware validation must provide `solution`.
-Without `solution`, deduction and structural contradiction checks still run,
-but the engine cannot detect removal of the correct candidate. Missing,
-illegal, or empty note masks are malformed state and return an error result.
+`notes` are authoritative candidate masks, updated by the game layer; empty
+cells start with empty notes (an auto-fill setting seeds board-legal
+candidates instead — see M5/M6). The core returns one complete deduction
+with technique, pattern, action, revision, and stable hint ID; it does not
+accept or track a reveal level. The UI owns progressive display of the
+technique name, pattern cells, and action. Candidate eliminations already
+absent from `notes` are skipped; illegal masks and removal of a known
+solution candidate return `note_error` results and block deduction, while an
+empty mask is legitimate state (the game layer substitutes board-legal
+candidates for untouched cells, and a user-cleared cell is ground truth that
+deduction simply cannot use). Notes on given cells are also errors. A
+candidate removal that is not the solution value is accepted as user state,
+even when the user cannot justify it; callers that need solution-aware
+validation must provide `solution`. Without `solution`, deduction and
+structural contradiction checks still run, but the engine cannot detect
+removal of the correct candidate. Missing or illegal note masks are malformed
+state and return an error result.
 
 **Exit criteria**: hints and note-state semantics verified against HoDoKu
 examples; complete-result/UI-reveal contract documented; stats feed point
@@ -267,7 +271,12 @@ legal candidates after every move (user removals are never re-added);
 mistakes and check-revealed errors are cumulative; stats store per-game
 records (capped at 200 each, oldest dropped); storage uses two files
 (stats + active save); streak resets on hint-used wins and give-ups;
-undo/redo survives save/restore.
+undo/redo survives save/restore. M6 divergence: notes start **empty** by
+default (`autofill_notes` game option seeds board-legal candidates when
+on — user-facing setting in the Tools submenu), and erasing a digit
+restores the cell's **previous note state** (pruned to candidates still
+legal) instead of repopulating all legal candidates; an untouched cell
+therefore stays empty through place/erase cycles.
 
 Hint contract: the game passes `solution` to `hints.next`; hints are
 blocked while the board has rule conflicts or diverges from the solution
@@ -275,7 +284,10 @@ blocked while the board has rule conflicts or diverges from the solution
 so deductions are always solution-sound; `note_error` results are surfaced
 to the UI; only `"available"` results record the missed strategy (the M4
 stats feed point). Hint actions applied via `apply_action` go through the
-move machinery and are undoable.
+move machinery and are undoable. M6 divergence: `game:hint()` derives the
+notes it hands to the engine — an untouched empty cell (`notes == 0` and
+no manual removals) is substituted with its board-legal candidates, while
+cells the user has started filling are passed verbatim (ground truth).
 
 - [x] `generator.generate_game(opts)` + facade: `{ board, solution,
       difficulty, clues }`; `generate` unchanged (no caller breakage)
@@ -317,6 +329,15 @@ picker, Continue, and Statistics are M7); **portrait-first layout** (the
 grid never overflows in landscape, but landscape is not tuned); quit
 auto-saves to `sudoku_save` while give-up/win clear it (Continue lands in
 M7); givens use the NotoSans bold variant via `Font.bold_font_variant`.
+M6 addendum (post-smoke fixes): digits are **vertically centered** in cells
+and buttons (baseline formula fix in `numberbar.render_centered`, covered
+by pixel-bbox specs); the Tools entry is now a **submenu** with "New game"
+and a checkable **"Auto-fill notes"** toggle (`sudoku_autofill_notes`
+reader setting, default off) driving the `autofill_notes` game option; see
+the M5 section for the resulting notes/hint semantics (empty notes by
+default, erase restores the previous note state, `game:hint()` substitutes
+board-legal candidates for untouched cells, empty note masks are no longer
+`note_error`).
 
 - [x] `ui/layout.lua` + `sudoku_layout_spec.lua` — geometry, hit-testing,
       grid-line positions across 6" (Glo/Clara), 7.8" (Aura One), and
@@ -324,13 +345,15 @@ M7); givens use the NotoSans bold variant via `Font.bold_font_variant`.
 - [x] `ui/theme.lua` + `sudoku_theme_spec.lua` — ink table, contrast
       invariants
 - [x] `ui/numberbar.lua` + `sudoku_numberbar_spec.lua` — paint-to-BB,
-      separators, disabled/active states, notes-mode inversion
+      separators, disabled/active states, notes-mode inversion, vertical
+      text centering
 - [x] `ui/sudokuview.lua` + `sudoku_view_spec.lua` — paint smoke + pixel
-      checks, tap dispatch (select/place/notes/erase/undo/redo/check),
-      givens lock, win → stats record + save cleared, give-up, quit →
-      save round-trip, suspend/resume timer pause, pause menu
-- [x] `main.lua` wiring — Tools menu starts an Easy game (wall-clock-seeded
-      PRNG, stats loaded, view shown)
+      checks (incl. cell-centered digits), tap dispatch
+      (select/place/notes/erase/undo/redo/check), givens lock, win → stats
+      record + save cleared, give-up, quit → save round-trip,
+      suspend/resume timer pause, pause menu
+- [x] `main.lua` wiring — Tools submenu: New game + Auto-fill notes toggle;
+      wall-clock-seeded PRNG, stats loaded, view shown
 - [x] Emulator smoke check — boots clean with the plugin on
       `kobo-aura-one` and `kobo-clara` (6") profiles, no errors; the
       interactive loop is covered headlessly by `sudoku_view_spec` (the
@@ -343,7 +366,11 @@ profiles, PLAN.md + README updated, commit.
 ### M7 — Menus, hint display, stats screen
 
 - [ ] Tools menu: New Game (difficulty picker), Continue, Statistics
-- [ ] Hint overlay with pattern highlighting (progressive reveal)
+- [ ] Hint overlay with pattern highlighting (progressive reveal). Note:
+      `game:hint()` already derives engine notes (untouched cells are
+      substituted with board-legal candidates); a cell the user cleared of
+      all candidates is ground truth and may block deduction — surface a
+      friendly "notes needed" message instead of a bare "no hint"
 - [ ] `statsview.lua`: avg/best time per difficulty, hints per technique,
       most missed strategies, streak, games played/given up
 - [ ] Expert difficulty behind a setting

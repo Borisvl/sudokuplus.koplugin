@@ -17,7 +17,9 @@ local LABELS = {
 -- Renders `text` centered inside `rect` and returns the rendered width.
 function numberbar.render_centered(bb, face, text, bold, rect, color)
     local size = RenderText:sizeUtf8Text(0, rect.w, face, text, false, bold)
-    local baseline = rect.y + math.floor((rect.h - size.y_top + size.y_bottom) / 2)
+    -- Glyphs are blitted from baseline - y_top down to baseline + y_bottom,
+    -- so centering the ink vertically means:
+    local baseline = rect.y + math.floor((rect.h + size.y_top - size.y_bottom) / 2)
     return RenderText:renderUtf8Text(
         bb,
         rect.x + math.floor((rect.w - size.x) / 2),

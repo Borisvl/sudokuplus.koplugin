@@ -93,16 +93,32 @@ describe("game", function()
         assert.is_string(bad_clock_err)
     end)
 
-    it("initializes notes as the board-legal candidate masks", function()
+    it("starts with empty notes unless auto-fill is enabled", function()
         local instance = new_game()
         local puzzle = board.from_string(PUZZLE)
 
         for r = 0, 8 do
             for c = 0, 8 do
+                assert.are.equal(0, instance:get_notes(r, c), "empty cell must start without notes")
+            end
+        end
+
+        local clock = { t = 1000 }
+        local filled = assert(game.new({
+            puzzle = board.from_string(PUZZLE),
+            solution = board.from_string(SOLUTION),
+            difficulty = "medium",
+            now = function()
+                return clock.t
+            end,
+            autofill_notes = true,
+        }))
+        for r = 0, 8 do
+            for c = 0, 8 do
                 if board.is_empty(puzzle, r, c) then
-                    assert.is_true(instance:get_notes(r, c) ~= 0, "empty cell must have notes")
+                    assert.is_true(filled:get_notes(r, c) ~= 0, "auto-fill must seed candidate notes")
                 else
-                    assert.are.equal(0, instance:get_notes(r, c), "given cell must not have notes")
+                    assert.are.equal(0, filled:get_notes(r, c), "given cell must not have notes")
                 end
             end
         end
@@ -112,6 +128,21 @@ describe("game", function()
         assert.are.equal(0, instance:check_errors())
         assert.are.equal("medium", instance:difficulty())
         assert.is_false(instance:is_finished())
+    end)
+
+    it("rejects a non-boolean autofill_notes option", function()
+        local clock = { t = 1000 }
+        local instance, err = game.new({
+            puzzle = board.from_string(PUZZLE),
+            solution = board.from_string(SOLUTION),
+            difficulty = "medium",
+            now = function()
+                return clock.t
+            end,
+            autofill_notes = "yes",
+        })
+        assert.is_nil(instance)
+        assert.is_string(err)
     end)
 
     it("locks given cells against every kind of mutation", function()
@@ -150,6 +181,10 @@ describe("game", function()
     it("auto-cleans the placed digit from peer notes and prunes to legal candidates", function()
         local instance = new_game()
 
+        assert.is_true(instance:toggle_note(0, 3, 2))
+        assert.is_true(instance:toggle_note(1, 2, 2))
+        assert.is_true(instance:toggle_note(1, 1, 2))
+        assert.is_true(instance:toggle_note(1, 7, 2))
         assert.is_true(has_note(instance, 0, 3, 2))
         assert.is_true(instance:place(0, 2, 2))
 
@@ -163,6 +198,8 @@ describe("game", function()
         local instance = new_game()
 
         assert.is_true(instance:toggle_note(0, 2, 4))
+        assert.is_true(has_note(instance, 0, 2, 4))
+        assert.is_true(instance:toggle_note(0, 2, 4))
         assert.is_false(has_note(instance, 0, 2, 4))
         assert.is_true(instance:place(0, 2, 2))
         assert.is_true(instance:erase(0, 2))
@@ -173,12 +210,37 @@ describe("game", function()
     it("restores auto-cleaned peer candidates when a filled cell is erased", function()
         local instance = new_game()
 
+        assert.is_true(instance:toggle_note(0, 3, 2))
         assert.is_true(has_note(instance, 0, 3, 2))
         assert.is_true(instance:place(0, 2, 2))
         assert.is_false(has_note(instance, 0, 3, 2))
         assert.is_true(instance:erase(0, 2))
 
         assert.is_true(has_note(instance, 0, 3, 2))
+    end)
+
+    it("erasing restores the cell's previous note state", function()
+        local instance = new_game()
+
+        assert.is_true(instance:toggle_note(0, 2, 4))
+        assert.is_true(instance:toggle_note(0, 2, 1))
+        assert.is_true(has_note(instance, 0, 2, 4))
+        assert.is_true(instance:place(0, 2, 2))
+        assert.are.equal(0, instance:get_notes(0, 2))
+        assert.is_true(instance:erase(0, 2))
+
+        assert.is_true(has_note(instance, 0, 2, 4), "previous notes restored")
+        assert.is_true(has_note(instance, 0, 2, 1), "previous notes restored")
+        assert.is_false(has_note(instance, 0, 2, 2), "the erased digit is not a note")
+    end)
+
+    it("erasing a digit placed in an untouched cell leaves its notes empty", function()
+        local instance = new_game()
+
+        assert.is_true(instance:place(0, 2, 2))
+        assert.is_true(instance:erase(0, 2))
+
+        assert.are.equal(0, instance:get_notes(0, 2))
     end)
 
     it("marks live conflicts only for rule violations and counts mistakes per entry", function()
@@ -235,44 +297,50 @@ describe("game", function()
         assert.is_string(err)
 
         assert.is_true(instance:toggle_note(0, 3, 6))
-        assert.is_false(has_note(instance, 0, 3, 6))
-        assert.is_true(instance:toggle_note(0, 3, 6))
         assert.is_true(has_note(instance, 0, 3, 6))
+        assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.is_false(has_note(instance, 0, 3, 6))
     end)
 
     it("clears all notes of a cell", function()
         local instance = new_game()
 
-        local mask = instance:get_notes(0, 3)
-        assert.is_true(mask ~= 0)
+        assert.is_true(instance:toggle_note(0, 3, 6))
+        assert.is_true(has_note(instance, 0, 3, 6))
         assert.is_true(instance:clear_notes(0, 3))
         assert.are.equal(0, instance:get_notes(0, 3))
 
         assert.is_true(instance:undo())
-        assert.are.equal(mask, instance:get_notes(0, 3))
+        assert.is_true(has_note(instance, 0, 3, 6))
     end)
 
     it("undoes and redoes moves restoring notes exactly", function()
         local instance = new_game()
 
+        assert.is_true(instance:toggle_note(0, 3, 2))
         assert.is_true(instance:place(0, 2, 2))
+        assert.is_false(has_note(instance, 0, 3, 2), "placed digit auto-cleaned")
         assert.is_true(instance:toggle_note(0, 3, 6))
 
         assert.is_true(instance:undo())
-        assert.is_true(has_note(instance, 0, 3, 6), "note toggle undone")
+        assert.is_false(has_note(instance, 0, 3, 6), "note toggle undone")
         assert.is_true(instance:undo())
         assert.are.equal(0, instance:get(0, 2))
         assert.is_true(has_note(instance, 0, 3, 2), "auto-cleaned note restored")
+        assert.is_true(instance:undo())
+        assert.is_false(has_note(instance, 0, 3, 2), "note toggle undone")
 
         local no_undo, undo_err = instance:undo()
         assert.is_nil(no_undo)
         assert.is_string(undo_err)
 
         assert.is_true(instance:redo())
+        assert.is_true(has_note(instance, 0, 3, 2))
+        assert.is_true(instance:redo())
         assert.are.equal(2, instance:get(0, 2))
         assert.is_false(has_note(instance, 0, 3, 2))
         assert.is_true(instance:redo())
-        assert.is_false(has_note(instance, 0, 3, 6))
+        assert.is_true(has_note(instance, 0, 3, 6))
     end)
 
     it("clears the redo stack on a new move", function()
@@ -483,6 +551,32 @@ describe("game", function()
         assert.are.equal(0, #instance:hints())
     end)
 
+    it("substitutes board-legal candidates for untouched cells when hinting", function()
+        local instance = new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION)
+
+        -- no notes anywhere: the hint engine must assume fully filled
+        -- candidates for untouched cells
+        local result, err = instance:hint()
+        assert.is_nil(err)
+        assert.are.equal("available", result.status)
+        assert.are.equal("naked_singles", result.technique.id)
+        assert.are.same({ 8, 8 }, { result.action.row, result.action.col })
+    end)
+
+    it("treats started notes as ground truth for hinting", function()
+        local instance = new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION)
+
+        -- the user touched (8,8) and removed its only candidate
+        assert.is_true(instance:toggle_note(8, 8, 6))
+        assert.is_true(instance:toggle_note(8, 8, 6))
+        assert.is_false(has_note(instance, 8, 8, 6))
+
+        local result, err = instance:hint()
+        assert.is_nil(err)
+        assert.are.equal("note_error", result.status)
+        assert.are.equal(0, #instance:hints())
+    end)
+
     it("blocks hints when the board diverges from the solution", function()
         local instance = new_game()
 
@@ -496,8 +590,9 @@ describe("game", function()
     it("surfaces note errors and does not record them as missed strategies", function()
         local instance = new_game()
 
-        assert.is_true(has_note(instance, 0, 2, 4), "solution candidate present in notes")
         assert.is_true(instance:toggle_note(0, 2, 4))
+        assert.is_true(instance:toggle_note(0, 2, 4))
+        assert.is_false(has_note(instance, 0, 2, 4), "solution candidate removed by the user")
         local result, err = instance:hint()
         assert.is_nil(err)
         assert.is_not_nil(result)
@@ -508,28 +603,14 @@ describe("game", function()
 
     it("applies elimination actions as undoable note changes", function()
         local instance = new_game()
-        local puzzle = board.from_string(PUZZLE)
 
-        local cell, value
-        for r = 0, 8 do
-            for c = 0, 8 do
-                if cell == nil and board.is_empty(puzzle, r, c) then
-                    local mask = instance:get_notes(r, c)
-                    for v = 1, 9 do
-                        if bit.band(mask, digit_bit(v)) ~= 0 then
-                            cell, value = { r, c }, v
-                            break
-                        end
-                    end
-                end
-            end
-        end
-        assert.is_not_nil(cell)
+        assert.is_true(instance:toggle_note(0, 2, 4))
+        assert.is_true(has_note(instance, 0, 2, 4))
 
-        assert.is_true(instance:apply_action({ type = "elim", row = cell[1], col = cell[2], value = value }))
-        assert.is_false(has_note(instance, cell[1], cell[2], value))
+        assert.is_true(instance:apply_action({ type = "elim", row = 0, col = 2, value = 4 }))
+        assert.is_false(has_note(instance, 0, 2, 4))
         assert.is_true(instance:undo())
-        assert.is_true(has_note(instance, cell[1], cell[2], value))
+        assert.is_true(has_note(instance, 0, 2, 4))
     end)
 
     it("counts mistakes into the finish record", function()
