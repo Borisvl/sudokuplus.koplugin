@@ -9,7 +9,7 @@ local theme = {
     grid_thin = Blitbuffer.COLOR_GRAY,
     grid_thick = Blitbuffer.COLOR_BLACK,
     digit = Blitbuffer.COLOR_BLACK,
-    note = Blitbuffer.COLOR_DARK_GRAY,
+    note = Blitbuffer.COLOR_GRAY_3,
     wrong_fill = Blitbuffer.COLOR_GRAY,
     disabled = Blitbuffer.COLOR_GRAY_7,
     -- Ink for digits/notes drawn on the inverted (black) selection cell

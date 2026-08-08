@@ -32,4 +32,12 @@ describe("sudoku theme", function()
         assert.is_true(luminance(theme.wrong_fill) > luminance(theme.grid_thick))
         assert.is_true(luminance(theme.disabled) > luminance(theme.digit))
     end)
+
+    it("keeps the notes ink dark enough to read", function()
+        local function luminance(color)
+            return tonumber(color.a)
+        end
+        assert.is_true(luminance(theme.note) < 0x40, "notes must be at least ~75% black ink")
+        assert.are_not.equal(theme.digit, theme.note, "notes stay distinct from digits")
+    end)
 end)

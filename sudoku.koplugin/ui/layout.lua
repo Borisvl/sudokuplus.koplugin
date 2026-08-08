@@ -10,9 +10,9 @@ local THICK_BORDER_DP = 3
 local THIN_BORDER_DP = 1
 local FONT_GIVEN_DP = 32
 local FONT_USER_DP = 28
-local FONT_NOTES_DP = 15
-local FONT_DIGIT_DP = 24
-local FONT_LABEL_DP = 16
+local FONT_NOTES_DP = 18
+local FONT_DIGIT_DP = 26
+local FONT_LABEL_DP = 20
 
 local NUMBER_ROW = { 1, 2, 3, 4, 5, 6, 7, 8, 9, "erase" }
 local TOOL_ROW = { "undo", "redo", "notes", "check", "menu" }
