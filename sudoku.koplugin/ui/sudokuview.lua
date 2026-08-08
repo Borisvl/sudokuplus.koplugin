@@ -87,7 +87,7 @@ function SudokuView:paintGrid(bb)
     bb:paintRect(grid.x + grid.w - l.thick, grid.y, l.thick, grid.h, theme.grid_thick)
 end
 
-function SudokuView:paintNotes(bb, rect, mask)
+function SudokuView:paintNotes(bb, rect, mask, inverted)
     local third = math.floor(rect.w / 3)
     for value = 1, 9 do
         if bit.band(mask, bit.lshift(1, value - 1)) ~= 0 then
@@ -97,7 +97,14 @@ function SudokuView:paintNotes(bb, rect, mask)
                 w = third,
                 h = third,
             }
-            numberbar.render_centered(bb, self.faces.notes, tostring(value), false, sub, theme.note)
+            numberbar.render_centered(
+                bb,
+                self.faces.notes,
+                tostring(value),
+                false,
+                sub,
+                inverted and theme.invert_fg or theme.note
+            )
         end
     end
 end
@@ -117,31 +124,22 @@ function SudokuView:paintCells(bb)
             local rect = layout.cell_rect(self.layout, row, col)
             local key = row * 9 + col
             local is_selected = self.selected ~= nil and self.selected.row == row and self.selected.col == col
-            if conflict_set[key] or revealed_set[key] then
+            if is_selected then
+                bb:invertRect(rect.x, rect.y, rect.w, rect.h)
+            elseif conflict_set[key] or revealed_set[key] then
                 bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.wrong_fill)
             end
 
             local value = self.game:get(row, col)
             if value ~= 0 then
                 local face = self.game:is_given(row, col) and self.faces.given or self.faces.user
-                numberbar.render_centered(bb, face, tostring(value), false, rect, theme.digit)
+                local ink = is_selected and theme.invert_fg or theme.digit
+                numberbar.render_centered(bb, face, tostring(value), false, rect, ink)
             elseif self.game:get_notes(row, col) ~= 0 then
-                self:paintNotes(bb, rect, self.game:get_notes(row, col))
-            end
-
-            if is_selected then
-                self:paintSelection(bb, rect)
+                self:paintNotes(bb, rect, self.game:get_notes(row, col), is_selected)
             end
         end
     end
-end
-
-function SudokuView:paintSelection(bb, rect)
-    local t = self.layout.thick
-    bb:paintRect(rect.x, rect.y, rect.w, t, theme.digit)
-    bb:paintRect(rect.x, rect.y + rect.h - t, rect.w, t, theme.digit)
-    bb:paintRect(rect.x, rect.y, t, rect.h, theme.digit)
-    bb:paintRect(rect.x + rect.w - t, rect.y, t, rect.h, theme.digit)
 end
 
 function SudokuView:paintTo(bb, x, y)

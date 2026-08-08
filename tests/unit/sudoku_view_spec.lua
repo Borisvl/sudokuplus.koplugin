@@ -156,26 +156,31 @@ describe("sudoku view", function()
         bb:free()
     end)
 
-    it("selects the tapped cell and outlines it without hiding its content", function()
+    it("inverts the selected cell but keeps its digit readable", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        tap_cell(view, 0, 4)
+        tap_cell(view, 0, 0)
         assert.are.equal(0, view.selected.row)
-        assert.are.equal(4, view.selected.col)
+        assert.are.equal(0, view.selected.col)
         local bb = Blitbuffer.new(758, 1024)
         bb:fill(Blitbuffer.COLOR_WHITE)
         view:paintTo(bb, 0, 0)
-        local rect = layout.cell_rect(view.layout, 0, 4)
-        assert.are.equal(
-            tonumber(theme.digit.a),
-            tonumber(bb:getPixel(rect.x + 1, rect.y + 1).a),
-            "selection outline on the cell border"
-        )
+        local rect = layout.cell_rect(view.layout, 0, 0)
+        assert.are.equal(0x00, tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a), "selected cell is inverted")
+        local white = false
+        for y = rect.y + 2, rect.y + rect.h - 3 do
+            for x = rect.x + 2, rect.x + rect.w - 3 do
+                if tonumber(bb:getPixel(x, y).a) == 0xFF then
+                    white = true
+                end
+            end
+        end
+        assert.is_true(white, "digit must stay readable on the inverted cell")
         tap_cell(view, 1, 4)
         view:paintTo(bb, 0, 0)
         assert.are.equal(
             tonumber(theme.background.a),
-            tonumber(bb:getPixel(rect.x + 1, rect.y + 1).a),
-            "outline cleared when the selection moves"
+            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
+            "cell restored when the selection moves"
         )
         bb:free()
     end)
@@ -245,6 +250,7 @@ describe("sudoku view", function()
         tap_button(view, "tool_row", "notes")
         local value = solution_cell(0, 3)
         tap_button(view, "number_row", value)
+        tap_cell(view, 0, 0)
         local bb = Blitbuffer.new(758, 1024)
         bb:fill(Blitbuffer.COLOR_WHITE)
         view:paintTo(bb, 0, 0)
@@ -258,6 +264,28 @@ describe("sudoku view", function()
             end
         end
         assert.is_true(found, "no note ink in cell")
+        bb:free()
+    end)
+
+    it("keeps notes readable on the inverted selection", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_cell(view, 0, 3)
+        tap_button(view, "tool_row", "notes")
+        local value = solution_cell(0, 3)
+        tap_button(view, "number_row", value)
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        view:paintTo(bb, 0, 0)
+        local rect = layout.cell_rect(view.layout, 0, 3)
+        local white = false
+        for y = rect.y + 2, rect.y + rect.h - 3 do
+            for x = rect.x + 2, rect.x + rect.w - 3 do
+                if tonumber(bb:getPixel(x, y).a) == 0xFF then
+                    white = true
+                end
+            end
+        end
+        assert.is_true(white, "note must stay readable on the inverted cell")
         bb:free()
     end)
 

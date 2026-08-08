@@ -347,6 +347,13 @@ placement history instead of re-seeding all legal candidates); the timer
 is formatted **HH:MM:SS**; closing the view (quit / give up / win) forces
 a full **flashui** refresh so no ghosted board remains on the reader
 behind it.
+M6 addendum (playtest round 2): the selection is an **inverted black cell
+with white digits/notes** again (readable both ways); the game timer uses
+the **wall clock** (`os.time()`, restart/reboot-proof — the previous
+`UIManager:getTime()/1000` fed an fts-encoded value ~10⁶× too large into
+`format_time`); the Tools submenu gained a **"Resume game"** entry that is
+enabled only while a save exists, and starting a fresh game discards the
+old save.
 
 - [x] `ui/layout.lua` + `sudoku_layout_spec.lua` — geometry, hit-testing,
       grid-line positions across 6" (Glo/Clara), 7.8" (Aura One), and

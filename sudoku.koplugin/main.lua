@@ -40,7 +40,8 @@ end
 
 function Sudoku:startGame()
     -- core/ is deterministic; seed the PRNG from the wall clock and the
-    -- UI timer in the plugin layer.
+    -- UI timer in the plugin layer. A fresh game abandons any previous save.
+    storage.delete(SAVE_PATH)
     local rng = prng.new(os.time() + UIManager:getTime())
     local payload, gen_err = generator.generate_game { difficulty = "easy", rng = rng }
     if not payload then
@@ -53,9 +54,7 @@ function Sudoku:startGame()
         puzzle = payload.board,
         solution = payload.solution,
         difficulty = payload.difficulty,
-        now = function()
-            return UIManager:getTime() / 1000
-        end,
+        now = os.time,
         autofill_notes = G_reader_settings:isTrue(AUTOFILL_SETTING),
     }
     if not g then
@@ -72,11 +71,48 @@ function Sudoku:startGame()
     })
 end
 
+function Sudoku:continueGame()
+    local data, load_err = storage.load(SAVE_PATH)
+    if not data then
+        UIManager:show(InfoMessage:new {
+            text = _("No saved game found.") .. "\n" .. tostring(load_err),
+        })
+        return
+    end
+    local g, err = game.restore(data, { now = os.time })
+    if not g then
+        UIManager:show(InfoMessage:new {
+            text = _("Failed to restore the saved game.") .. "\n" .. tostring(err),
+        })
+        return
+    end
+    UIManager:show(SudokuView:new {
+        game = g,
+        stats = self:loadStats(),
+        save_path = SAVE_PATH,
+        stats_path = STATS_PATH,
+    })
+end
+
 function Sudoku:addToMainMenu(menu_items)
     menu_items.sudoku = {
         text = _("Sudoku"),
         sorting_hint = "more_tools",
         sub_item_table = {
+            {
+                text = _("Resume game"),
+                enabled_func = function()
+                    local file = io.open(SAVE_PATH, "rb")
+                    if file then
+                        file:close()
+                        return true
+                    end
+                    return false
+                end,
+                callback = function()
+                    self:continueGame()
+                end,
+            },
             {
                 text = _("New game"),
                 callback = function()
