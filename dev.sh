@@ -24,6 +24,97 @@ link_plugin() {
     ln -sfn "$PLUGIN_SOURCE" "$plugin_link"
 }
 
+deploy_to_device() {
+    local volume="${KOBO_VOLUME:-}"
+    local dry_run=0
+    local no_eject=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --volume)
+                volume="${2:?--volume requires a path}"
+                shift 2
+                ;;
+            --volume=*)
+                volume="${1#*=}"
+                shift
+                ;;
+            --dry-run)
+                dry_run=1
+                shift
+                ;;
+            --no-eject)
+                no_eject=1
+                shift
+                ;;
+            *)
+                printf 'unknown deploy option: %s\n' "$1" >&2
+                return 1
+                ;;
+        esac
+    done
+
+    local candidates=()
+    if [[ -n "$volume" ]]; then
+        candidates=("$volume")
+    else
+        local v
+        for v in /Volumes/*; do
+            [[ -d "$v/.adds/koreader/plugins" ]] && candidates+=("$v")
+        done
+    fi
+    if [[ ${#candidates[@]} -eq 0 ]]; then
+        printf 'no KOReader volume found; plug in the Kobo and retry\n' >&2
+        printf '  (or pass --volume <path>)\n' >&2
+        return 1
+    fi
+    if [[ ${#candidates[@]} -gt 1 ]]; then
+        printf 'multiple volumes contain KOReader:\n' >&2
+        printf '  %s\n' "${candidates[@]}" >&2
+        printf 'pass --volume <path>\n' >&2
+        return 1
+    fi
+    volume="${candidates[0]}"
+    local dest="$volume/.adds/koreader/plugins/sudoku.koplugin"
+
+    # Syntax gate: never land a file that fails to compile on the device.
+    local luajit luajit_file
+    luajit="$(ls "$KOREADER/base/build"/*/luajit 2>/dev/null | head -1 || true)"
+    if [[ -n "$luajit" ]]; then
+        while IFS= read -r -d '' luajit_file; do
+            if ! KOBO_LUAFILE="$luajit_file" "$luajit" -e 'local f, err = loadfile(os.getenv("KOBO_LUAFILE")); if not f then io.stderr:write(err .. "\n"); os.exit(1) end'; then
+                printf 'syntax error in %s\n' "$luajit_file" >&2
+                return 1
+            fi
+        done < <(find "$PLUGIN_SOURCE" -name '*.lua' -print0)
+    else
+        printf 'warning: checkout luajit not found, skipping syntax gate\n' >&2
+    fi
+
+    local rsync_args=(-rltDc --delete --no-perms --no-owner --no-group)
+    ((dry_run)) && rsync_args+=(--dry-run)
+    rsync "${rsync_args[@]}" "$PLUGIN_SOURCE/" "$dest/"
+
+    if ((dry_run)); then
+        printf 'dry run only; nothing was changed\n'
+        return 0
+    fi
+
+    if ((no_eject)); then
+        printf 'synced to %s\n' "$dest"
+        printf 'eject the volume (diskutil eject %s), unplug, restart KOReader\n' "$volume"
+        return 0
+    fi
+
+    if diskutil eject "$volume"; then
+        printf 'synced and ejected %s\n' "$volume"
+        printf 'unplug the Kobo and restart KOReader\n'
+    else
+        printf 'sync done, but ejecting %s failed\n' "$volume" >&2
+        printf 'eject manually (diskutil eject %s) before unplugging\n' "$volume" >&2
+        return 1
+    fi
+}
+
 case "${1:-}" in
     lint)
         luacheck sudoku.koplugin/ tests/ tools/
@@ -32,6 +123,10 @@ case "${1:-}" in
         ;;
     fmt)
         stylua sudoku.koplugin/ tests/ tools/
+        exit 0
+        ;;
+    deploy)
+        deploy_to_device "${@:2}"
         exit 0
         ;;
 esac

@@ -169,10 +169,22 @@ Unix endings). Note: stylua renders `WidgetContainer:extend {` with a space
 before `{`, slightly diverging from KOReader's `extend{` idiom — accepted
 for project-wide consistency.
 
-### Deployment to a device (later)
+### Deployment to a device
 
-Copy the `sudoku.koplugin/` folder onto the Kobo's
-`.adds/koreader/plugins/` directory over USB.
+`./dev.sh deploy` syncs `sudoku.koplugin/` to a USB-connected Kobo running
+KOReader (plugins land in `.adds/koreader/plugins/` on the device's internal
+storage):
+
+- auto-detects the mounted Kobo volume (any volume containing
+  `.adds/koreader/plugins/`); override with `KOBO_VOLUME` or `--volume <path>`
+- compile-checks every Lua file with the checkout's luajit first, so a
+  syntax error never lands on the device
+- rsyncs with checksums (`-c`) and `--delete`, so renames and removals are
+  mirrored too (checksums matter here because Kobo's FAT driver reports
+  unreliable mtimes)
+- ejects the volume after syncing (`--no-eject` to skip), then unplug and
+  restart KOReader — plugins are only loaded at startup
+- `--dry-run` shows what would be copied without changing anything
 
 ## Status
 
