@@ -625,12 +625,17 @@ function SudokuView:openMenu()
 end
 
 -- Opens the statistics screen on top of the open pause menu (the game stays
--- paused; closing the stats view reveals the pause menu again).
+-- paused; closing the stats view reveals the pause menu again). "full":
+-- like the Tools-menu path, the pause dialog stays open underneath, so the
+-- new fullscreen page must refresh the whole screen itself.
 function SudokuView:showStats()
     local StatsView = require("ui.statsview")
-    UIManager:show(StatsView:new {
-        summary = stats.summary(self.stats or stats.new()),
-    })
+    UIManager:show(
+        StatsView:new {
+            summary = stats.summary(self.stats or stats.new()),
+        },
+        "full"
+    )
 end
 
 function SudokuView:closeMenu()

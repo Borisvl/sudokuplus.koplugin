@@ -594,13 +594,16 @@ describe("sudoku view", function()
         view:openMenu()
         assert.is_not_nil(dialog)
         local shown
-        UIManager.show = function(_, widget)
+        local refreshtype
+        UIManager.show = function(_, widget, mode)
             shown = widget
+            refreshtype = mode
         end
         dialog.buttons[1][2].callback()
         UIManager.show = original_show
         assert.is_not_nil(shown, "Statistics must open the stats view")
         assert.are.equal("statsview", shown.name)
+        assert.are.equal("full", refreshtype, "the stats page must refresh the whole screen")
     end)
 
     describe("refresh modes and regions", function()

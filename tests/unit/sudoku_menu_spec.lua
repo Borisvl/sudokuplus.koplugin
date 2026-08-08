@@ -90,15 +90,18 @@ describe("sudoku plugin menu", function()
 
     it("shows the statistics view from the menu", function()
         local shown
+        local refreshtype
         local UIManager = require("ui/uimanager")
         local original_show = UIManager.show
-        UIManager.show = function(_, widget)
+        UIManager.show = function(_, widget, mode)
             shown = widget
+            refreshtype = mode
         end
         item_with("Statistics").callback()
         UIManager.show = original_show
         assert.is_not_nil(shown)
         assert.are.equal("statsview", shown.name)
+        assert.are.equal("full", refreshtype, "the stats page must refresh the whole screen")
     end)
 
     it("keeps the menu open when showing statistics", function()

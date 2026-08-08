@@ -551,7 +551,10 @@ now `keep_menu_open`, so closing the stats page returns to the Sudoku menu
 instead of dropping back to the reader. The win dialog also reports the hint
 count. `statsview.lua` was reworked into a framed report (bordered card,
 centered title, bold section headers with separator rules, clamped to the
-frame bottom).
+frame bottom). Follow-up: the stats page is shown with a `"full"` refresh —
+since the Tools menu (and the pause dialog) now stays open underneath
+(`keep_menu_open`), nothing else triggers a whole-screen update, so without
+it only the tapped menu-row slice reached the display.
 
 ### M8 — Polish, i18n, deployment
 

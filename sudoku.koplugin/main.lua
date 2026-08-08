@@ -122,9 +122,14 @@ end
 
 function Sudoku:showStatistics()
     local summary = stats.summary(self:loadStats())
-    UIManager:show(StatsView:new {
-        summary = summary,
-    })
+    -- "full": the Tools menu stays open underneath (keep_menu_open), so the
+    -- new fullscreen page must refresh the whole screen itself.
+    UIManager:show(
+        StatsView:new {
+            summary = summary,
+        },
+        "full"
+    )
 end
 
 function Sudoku:addToMainMenu(menu_items)
