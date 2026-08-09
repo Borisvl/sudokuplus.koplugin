@@ -17,9 +17,22 @@ local ALL_TECHNIQUES = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.H
 
 local DIFFICULTY_RANGES = {
     easy = { min = 34, max = 42 },
-    medium = { min = 28, max = 34 },
+    -- 25..31 is where medium classifications actually concentrate: measured
+    -- 2026-08-09, 28..34 (the old rustoku range) classified ~90% "easy" and
+    -- only ~2-6% "medium", forcing dozens of retries (and occasional
+    -- exhaustion); 25..31 yields roughly 3-13% medium per attempt.
+    medium = { min = 25, max = 31 },
     hard = { min = 22, max = 28 },
     expert = { min = 17, max = 22 },
+}
+
+-- Rank used to pick the closest usable fallback when an exact difficulty
+-- match cannot be found within max_attempts.
+local DIFFICULTY_ORDER = {
+    easy = 1,
+    medium = 2,
+    hard = 3,
+    expert = 4,
 }
 
 local SYMMETRIES = {
@@ -142,12 +155,25 @@ local function validate_options(options)
         return nil, "rng must provide next, int, and shuffle methods"
     end
 
+    -- The generation seed: recorded so the exact puzzle can be reproduced.
+    -- Prefer the explicit option; otherwise snapshot the rng's initial state
+    -- (a fresh prng.new(seed) stores the normalized seed in state, so
+    -- prng.new(seed) with the snapshot reproduces the puzzle).
+    local seed = options.seed
+    if seed == nil and type(rng.state) == "number" then
+        seed = rng.state
+    end
+    if seed ~= nil and (type(seed) ~= "number" or seed % 1 ~= 0) then
+        return nil, "seed must be an integer"
+    end
+
     return {
         clues = clues,
         symmetry = symmetry,
         difficulty = difficulty,
         max_attempts = max_attempts,
         rng = rng,
+        seed = seed,
     }
 end
 
@@ -252,13 +278,36 @@ local function classify_puzzle(puzzle, options)
     return solve_path.classify(solutions[1].solve_path)
 end
 
-local function game_payload(payload, classification)
+local function game_payload(payload, classification, options)
     return {
         board = payload.board,
         solution = payload.solution,
         difficulty = classification.difficulty,
         clues = board.count_clues(payload.board),
+        seed = options.seed,
     }
+end
+
+-- Runs one difficulty-targeted attempt: generates to a random clue count in
+-- `range`, then classifies. Returns (payload, nil, classification) for a
+-- usable (uniquely solvable) puzzle, nil for a failed attempt, or
+-- (nil, err) for a hard generation error.
+local function attempt_puzzle(options, range)
+    local target = range.min + options.rng:int(range.max - range.min + 1) - 1
+    local payload, generate_err = generate_single(options, target)
+    if not payload then
+        return nil, generate_err
+    end
+
+    local classification, classify_err = classify_puzzle(payload.board, options)
+    if classify_err then
+        return nil, classify_err
+    end
+    if not classification then
+        return nil
+    end
+
+    return payload, nil, classification
 end
 
 function generator.generate(options)
@@ -275,21 +324,17 @@ function generator.generate(options)
         return payload.board
     end
 
+    -- Strict API: a requested difficulty is an exact-match contract. The
+    -- game-facing generate_game adds the best-effort fallback below; here
+    -- exhaustion is still an error (the caller asked for a specific board).
     local range = DIFFICULTY_RANGES[normalized.difficulty]
     for _ = 1, normalized.max_attempts do
-        local target = range.min + normalized.rng:int(range.max - range.min + 1) - 1
-        local payload, generate_err = generate_single(normalized, target)
-        if payload then
-            local classification, classify_err = classify_puzzle(payload.board, normalized)
-            if not classification then
-                if classify_err then
-                    return nil, classify_err
-                end
-            elseif not classification.requires_guessing and classification.difficulty == normalized.difficulty then
-                return payload.board
-            end
-        elseif generate_err then
-            err = generate_err
+        local payload, attempt_err, classification = attempt_puzzle(normalized, range)
+        if attempt_err then
+            return nil, attempt_err
+        end
+        if payload and not classification.requires_guessing and classification.difficulty == normalized.difficulty then
+            return payload.board
         end
     end
 
@@ -310,7 +355,7 @@ function generator.generate_game(options)
                 if classify_err then
                     return nil, classify_err
                 elseif classification and not classification.requires_guessing then
-                    return game_payload(payload, classification)
+                    return game_payload(payload, classification, normalized)
                 end
             elseif generate_err then
                 err = generate_err
@@ -319,24 +364,36 @@ function generator.generate_game(options)
         return nil, err or "failed to generate a non-guessing game"
     end
 
+    -- Best-effort difficulty targeting: prefer an exact match, but never
+    -- hard-fail — if max_attempts is exhausted, return the closest usable
+    -- (unique, no-guessing) puzzle with its ACTUAL difficulty so the game
+    -- labels it correctly.
     local range = DIFFICULTY_RANGES[normalized.difficulty]
+    local requested_rank = DIFFICULTY_ORDER[normalized.difficulty]
+    local best
     for _ = 1, normalized.max_attempts do
-        local target = range.min + normalized.rng:int(range.max - range.min + 1) - 1
-        local payload, generate_err = generate_single(normalized, target)
-        if payload then
-            local classification, classify_err = classify_puzzle(payload.board, normalized)
-            if not classification then
-                if classify_err then
-                    return nil, classify_err
-                end
-            elseif not classification.requires_guessing and classification.difficulty == normalized.difficulty then
-                return game_payload(payload, classification)
+        local payload, attempt_err, classification = attempt_puzzle(normalized, range)
+        if attempt_err then
+            return nil, attempt_err
+        end
+        if payload and not classification.requires_guessing then
+            if classification.difficulty == normalized.difficulty then
+                return game_payload(payload, classification, normalized)
             end
-        elseif generate_err then
-            err = generate_err
+            local distance = math.abs(requested_rank - DIFFICULTY_ORDER[classification.difficulty])
+            if not best or distance < best.distance then
+                best = {
+                    payload = payload,
+                    classification = classification,
+                    distance = distance,
+                }
+            end
         end
     end
 
+    if best then
+        return game_payload(best.payload, best.classification, normalized)
+    end
     return nil, err or ("failed to generate a " .. normalized.difficulty .. " game")
 end
 

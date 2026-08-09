@@ -210,6 +210,12 @@ and its step number. `generator.generate(opts)` returns a puzzle board or
 removes stable symmetry groups only while preserving uniqueness and the
 minimum clue target. Supported symmetry modes match rustoku. Difficulty
 targets use rustoku's clue ranges and require an exact no-guessing human solve.
+M3 addendum (RM4): the **medium clue range diverges from rustoku** (25..31,
+not 28..34) — measured 2026-08-09, 28..34 boards classify ~90% "easy" and only
+~2-6% "medium", forcing dozens of retries and occasional total failure; 25..31
+concentrates the medium classifications (~3-13% per attempt). `generate_game`
+also records the generation **seed** in its payload (and the game saves it),
+so any puzzle can be recreated exactly; see RM4 in `review_plan.md`.
 
 - [x] Difficulty classification: hardest technique used in solve path
 - [x] `generator.lua`: solved-board sampling → clue removal preserving unique

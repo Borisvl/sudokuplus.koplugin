@@ -210,6 +210,45 @@ describe("game serialization", function()
         assert.are.equal(0, instance:get(0, 2))
     end)
 
+    it("round-trips a reproduction seed through save and restore", function()
+        local clock = { t = 1000 }
+        local seeded = assert(game.new({
+            puzzle = board.from_string(PUZZLE),
+            solution = board.from_string(SOLUTION),
+            difficulty = "easy",
+            seed = 424242,
+            now = function()
+                return clock.t
+            end,
+        }))
+
+        local data = seeded:serialize()
+        assert.are.equal(424242, data.seed, "the save must carry the reproduction seed")
+
+        local restored = restore(data, { t = 1000 })
+        assert.are.equal(424242, restored.seed, "restore must keep the reproduction seed")
+    end)
+
+    it("rejects a non-integer seed in save data", function()
+        local instance = new_game()
+        local data = instance:serialize()
+        data.seed = 1.5
+        local now = function()
+            return 0
+        end
+        local restored, err = game.restore(data, { now = now })
+        assert.is_nil(restored)
+        assert.is_string(err)
+    end)
+
+    it("restores saves written before the seed field existed", function()
+        local instance = new_game()
+        local data = instance:serialize()
+        data.seed = nil
+        local restored = restore(data, { t = 1000 })
+        assert.is_nil(restored.seed, "a missing seed must stay nil for older saves")
+    end)
+
     it("rejects malformed save data", function()
         local now = function()
             return 0

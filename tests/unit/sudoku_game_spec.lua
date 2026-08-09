@@ -99,6 +99,33 @@ describe("game", function()
         local bad_clock, bad_clock_err = game.new({ puzzle = puzzle, solution = solution, difficulty = "easy" })
         assert.is_nil(bad_clock)
         assert.is_string(bad_clock_err)
+
+        local bad_seed, bad_seed_err = game.new({
+            puzzle = puzzle,
+            solution = solution,
+            difficulty = "easy",
+            seed = 1.5,
+            now = now,
+        })
+        assert.is_nil(bad_seed)
+        assert.is_string(bad_seed_err)
+    end)
+
+    it("stores an optional reproduction seed", function()
+        local instance = new_game()
+        assert.is_nil(instance.seed, "no seed by default")
+
+        local clock = { t = 1000 }
+        local seeded = assert(game.new({
+            puzzle = board.from_string(PUZZLE),
+            solution = board.from_string(SOLUTION),
+            difficulty = "easy",
+            seed = 987654,
+            now = function()
+                return clock.t
+            end,
+        }))
+        assert.are.equal(987654, seeded.seed, "the reproduction seed must be stored on the game")
     end)
 
     it("starts with empty notes unless auto-fill is enabled", function()

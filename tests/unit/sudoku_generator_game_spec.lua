@@ -92,4 +92,80 @@ describe("core.generator game payload", function()
         assert.is_not_nil(payload.solution)
         assert.are.equal("hard", payload.difficulty)
     end)
+
+    it("records the generation seed when one is provided", function()
+        local payload, err = generator.generate_game({
+            difficulty = "easy",
+            seed = 1234567,
+            rng = prng.new(1234567),
+        })
+
+        assert.is_nil(err)
+        assert.is_not_nil(payload)
+        assert.are.equal(1234567, payload.seed, "the payload must expose the seed for reproduction")
+    end)
+
+    it("snapshots the rng state as the seed when none is provided", function()
+        -- A fresh prng.new(seed) stores the normalized seed in state; recording
+        -- it lets the puzzle be reproduced with prng.new(payload.seed).
+        local payload, err = generator.generate_game({ difficulty = "easy", rng = prng.new(4242) })
+
+        assert.is_nil(err)
+        assert.is_not_nil(payload)
+        assert.are.equal(prng.new(4242).state, payload.seed, "seed must be the rng's initial state")
+
+        local replay, replay_err = generator.generate_game({
+            difficulty = "easy",
+            rng = prng.new(payload.seed),
+        })
+        assert.is_nil(replay_err)
+        assert.is_not_nil(replay)
+        assert.are.equal(
+            board.to_string(payload.board),
+            board.to_string(replay.board),
+            "the recorded seed must reproduce the exact puzzle"
+        )
+    end)
+
+    it("rejects a non-integer seed", function()
+        local payload, err = generator.generate_game({
+            difficulty = "easy",
+            seed = 1.5,
+            rng = prng.new(4242),
+        })
+
+        assert.is_nil(payload)
+        assert.is_string(err)
+    end)
+
+    it("never hard-fails on an exact difficulty match: returns the closest valid puzzle", function()
+        -- Force every attempt to classify as "hard" so "medium" can never
+        -- match exactly; the generator must fall back to the closest usable
+        -- puzzle (labeled with its actual difficulty) instead of failing.
+        local solve_path_mod = require("core.solve_path")
+        local original_classify = solve_path_mod.classify
+        solve_path_mod.classify = function()
+            return {
+                difficulty = "hard",
+                requires_guessing = false,
+                hardest_flags = flags.X_WING,
+                hardest_step_number = 1,
+            }
+        end
+        finally(function()
+            solve_path_mod.classify = original_classify
+        end)
+
+        local payload, err = generator.generate_game({
+            difficulty = "medium",
+            max_attempts = 20,
+            rng = prng.new(9999),
+        })
+
+        assert.is_nil(err)
+        assert.is_not_nil(payload, "a best-effort puzzle must be returned instead of failing")
+        assert.are.equal("hard", payload.difficulty, "the payload reports the actual classification")
+        assert.are.equal(board.count_clues(payload.board), payload.clues)
+        assert.is_not_nil(payload.solution)
+    end)
 end)

@@ -54,10 +54,9 @@ function Sudoku:loadStats()
 end
 
 function Sudoku:startGame(difficulty)
-    -- core/ is deterministic; seed the PRNG from the wall clock and the
-    -- UI timer in the plugin layer. A fresh game abandons any previous
-    -- save, but only once a new puzzle exists: a failed generation must
-    -- not destroy the saved game.
+    -- core/ is deterministic: seed the PRNG from the wall clock (ms) in the
+    -- plugin layer. A fresh game abandons any previous save, but only once a
+    -- new puzzle exists: a failed generation must not destroy the saved game.
     difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
     -- Generation (expert especially) can take a few seconds; the emulator
     -- and the device are single-threaded, so explain the wait up front.
@@ -67,7 +66,12 @@ function Sudoku:startGame(difficulty)
     local generating = Notification:new { text = _("Generating…") }
     UIManager:show(generating)
     UIManager:forceRePaint()
-    local payload, gen_err = generator.generate_game { difficulty = difficulty, rng = prng.new(seed_from_wall_clock()) }
+    local seed = seed_from_wall_clock()
+    local payload, gen_err = generator.generate_game {
+        difficulty = difficulty,
+        seed = seed,
+        rng = prng.new(seed),
+    }
     UIManager:close(generating)
     if not payload then
         UIManager:show(InfoMessage:new {
@@ -80,6 +84,7 @@ function Sudoku:startGame(difficulty)
         puzzle = payload.board,
         solution = payload.solution,
         difficulty = payload.difficulty,
+        seed = payload.seed,
         now = os.time,
         autofill_notes = G_reader_settings:isTrue(AUTOFILL_SETTING),
     }

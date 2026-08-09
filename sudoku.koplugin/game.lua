@@ -282,6 +282,12 @@ function game.new(options)
     if autofill_notes ~= nil and type(autofill_notes) ~= "boolean" then
         return nil, "autofill_notes must be a boolean"
     end
+    -- Optional reproduction seed (from generator.generate_game); lets a saved
+    -- game be recreated exactly.
+    local seed = options.seed
+    if seed ~= nil and (type(seed) ~= "number" or seed % 1 ~= 0) then
+        return nil, "seed must be an integer"
+    end
 
     local notes = {}
     for r = 0, 8 do
@@ -313,6 +319,7 @@ function game.new(options)
         _revealed = {},
         _hints = {},
         finished = false,
+        seed = seed,
     }
     return setmetatable(instance, mt)
 end
@@ -989,6 +996,7 @@ function mt:serialize()
         timer = { running = self.timer.running, elapsed = self.timer.elapsed, started = self.timer.started },
         hints = hints_copy,
         finished = self.finished,
+        seed = self.seed,
     }
 end
 
@@ -1245,6 +1253,11 @@ function game.restore(data, opts)
     if type(data.finished) ~= "boolean" then
         return nil, "invalid finished flag"
     end
+    -- Optional reproduction seed; older saves predate the field and stay nil.
+    local seed = data.seed
+    if seed ~= nil and (type(seed) ~= "number" or seed % 1 ~= 0) then
+        return nil, "invalid seed"
+    end
 
     local now = opts.now
     local instance = {
@@ -1264,6 +1277,7 @@ function game.restore(data, opts)
         _revealed = revealed,
         _hints = hints_copy,
         finished = data.finished,
+        seed = seed,
     }
     if data.timer.running then
         if data.timer.started == nil then
