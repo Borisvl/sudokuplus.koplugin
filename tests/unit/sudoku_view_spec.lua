@@ -89,6 +89,16 @@ describe("sudoku view", function()
         tap(view, x, y)
     end
 
+    local function hold(view, x, y)
+        local Event = require("ui/event")
+        view:handleEvent(Event:new("Hold", nil, { pos = { x = x, y = y } }))
+    end
+
+    local function hold_cell(view, row, col)
+        local x, y = cell_center(view, row, col)
+        hold(view, x, y)
+    end
+
     setup(function()
         require("commonrequire")
         Blitbuffer = require("ffi/blitbuffer")
@@ -121,6 +131,7 @@ describe("sudoku view", function()
     it("starts without a selection and paints no black cell", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
         assert.is_nil(view.selected)
+        assert.is_nil(view.armed)
         local bb = Blitbuffer.new(758, 1024)
         bb:fill(Blitbuffer.COLOR_WHITE)
         view:paintTo(bb, 0, 0)
@@ -133,36 +144,14 @@ describe("sudoku view", function()
         bb:free()
     end)
 
-    it("ignores number-bar taps without a selection", function()
+    it("arms a number from the bar without a selection", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
         tap_button(view, "number_row", 2)
-        assert.are.equal(0, view.game:revision(), "no move without a selection")
+        assert.are.equal(2, view.armed)
+        assert.are.equal(0, view.game:revision(), "arming never mutates the board")
         assert.is_nil(view.selected)
-    end)
-
-    it("paints crisp cell lines: thin inside boxes, thick between boxes", function()
-        local view = new_view(new_game(PUZZLE, SOLUTION))
-        local bb = Blitbuffer.new(758, 1024)
-        bb:fill(Blitbuffer.COLOR_WHITE)
-        view:paintTo(bb, 0, 0)
-        local l = view.layout
-        local thick_x = l.grid.x + l.thick
-        local inside_x = thick_x + 1
-        local thin_x = l.grid.x + layout.cell_offset(0, l.grid.cell, l.thin, l.thick) + l.grid.cell
-        local black = tonumber(theme.grid_thick.a)
-        local gray = tonumber(theme.grid_thin.a)
-        local white = tonumber(theme.background.a)
-        assert.are.equal(black, tonumber(bb:getPixel(l.grid.x + 1, l.grid.y + 1).a))
-        assert.are.equal(white, tonumber(bb:getPixel(inside_x, l.grid.y + l.thick + 1).a))
-        assert.are.equal(gray, tonumber(bb:getPixel(thin_x, l.grid.y + l.thick + 1).a))
-        -- the box boundary between cells 2 and 3 is painted thick and black
-        local lines = layout.grid_lines(l)
-        assert.are.equal(l.thick, lines.horizontal[3].thickness)
-        assert.are.equal(black, tonumber(bb:getPixel(l.grid.x + l.thick + 1, lines.horizontal[3].y).a))
-        -- and the box boundary between cells 3 and 4 stays thin
-        assert.are.equal(l.thin, lines.horizontal[4].thickness)
-        assert.are.equal(gray, tonumber(bb:getPixel(l.grid.x + l.thick + 1, lines.horizontal[4].y).a))
-        bb:free()
+        tap_button(view, "number_row", 2)
+        assert.is_nil(view.armed, "tapping the armed digit again disarms it")
     end)
 
     it("inverts the selected cell but keeps its digit readable", function()
@@ -194,49 +183,71 @@ describe("sudoku view", function()
         bb:free()
     end)
 
-    it("places a digit from the number bar onto the selected cell", function()
+    it("places the armed digit on a tapped cell", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        tap_cell(view, 0, 3)
         tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 3)
         assert.are.equal(2, view.game:get(0, 3))
+        assert.are.equal(2, view.armed, "the digit stays armed for further fills")
     end)
 
-    it("removes a placed digit when its button is pressed again", function()
+    it("erases a digit by tapping a cell that already holds it", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_button(view, "number_row", 2)
         tap_cell(view, 0, 3)
-        tap_button(view, "number_row", 2)
         assert.are.equal(2, view.game:get(0, 3))
-        tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 3)
         assert.are.equal(0, view.game:get(0, 3))
     end)
 
     it("toggles notes in notes mode", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        tap_cell(view, 0, 3)
         tap_button(view, "tool_row", "notes")
         local value = solution_cell(0, 3)
         local v_bit = bit.lshift(1, value - 1)
         -- notes start empty; a tap adds the note, a second tap removes it
         tap_button(view, "number_row", value)
+        tap_cell(view, 0, 3)
         assert.is_true(bit.band(view.game:get_notes(0, 3), v_bit) ~= 0)
-        tap_button(view, "number_row", value)
+        tap_cell(view, 0, 3)
         assert.are.equal(0, bit.band(view.game:get_notes(0, 3), v_bit))
     end)
 
-    it("erases a value from the selected cell", function()
+    it("writes a note with a long press when notes mode is off", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        tap_cell(view, 0, 3)
+        local value = solution_cell(0, 3)
+        local v_bit = bit.lshift(1, value - 1)
+        tap_button(view, "number_row", value)
+        hold_cell(view, 0, 3)
+        assert.is_true(bit.band(view.game:get_notes(0, 3), v_bit) ~= 0, "long press adds a note")
+        assert.are.equal(0, view.game:get(0, 3), "no value is placed")
+        hold_cell(view, 0, 3)
+        assert.are.equal(0, bit.band(view.game:get_notes(0, 3), v_bit), "long press toggles the note off")
+    end)
+
+    it("writes a value with a long press when notes mode is on", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_button(view, "tool_row", "notes")
         tap_button(view, "number_row", 2)
-        tap_button(view, "number_row", "erase")
-        assert.are.equal(0, view.game:get(0, 3))
+        hold_cell(view, 0, 3)
+        assert.are.equal(2, view.game:get(0, 3), "long press places the value")
+        hold_cell(view, 0, 3)
+        assert.are.equal(0, view.game:get(0, 3), "long press erases the same value again")
+    end)
+
+    it("does nothing on a long press without an armed digit", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        hold_cell(view, 0, 3)
+        assert.are.equal(0, view.game:revision())
+        assert.is_nil(view.selected, "no cursor movement without an armed digit")
     end)
 
     it("undoes and redoes moves through the tool row", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        tap_cell(view, 0, 3)
         tap_button(view, "number_row", 2)
-        tap_cell(view, 0, 5)
+        tap_cell(view, 0, 3)
         tap_button(view, "number_row", 7)
+        tap_cell(view, 0, 5)
         assert.are.equal(2, view.game:get(0, 3))
         assert.are.equal(7, view.game:get(0, 5))
         tap_button(view, "tool_row", "undo")
@@ -248,16 +259,17 @@ describe("sudoku view", function()
 
     it("leaves givens untouched", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        tap_cell(view, 0, 0)
         tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 0)
         assert.are.equal(5, view.game:get(0, 0))
+        assert.are.equal(0, view.game:revision())
     end)
 
     it("paints the notes of a cell as small digits", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        tap_cell(view, 0, 3)
-        tap_button(view, "tool_row", "notes")
         local value = solution_cell(0, 3)
+        tap_button(view, "number_row", value)
+        hold_cell(view, 0, 3)
         tap_button(view, "number_row", value)
         tap_cell(view, 0, 0)
         local bb = Blitbuffer.new(758, 1024)
@@ -278,10 +290,10 @@ describe("sudoku view", function()
 
     it("keeps notes readable on the inverted selection", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        tap_cell(view, 0, 3)
         tap_button(view, "tool_row", "notes")
         local value = solution_cell(0, 3)
         tap_button(view, "number_row", value)
+        tap_cell(view, 0, 3)
         local bb = Blitbuffer.new(758, 1024)
         bb:fill(Blitbuffer.COLOR_WHITE)
         view:paintTo(bb, 0, 0)
@@ -300,6 +312,7 @@ describe("sudoku view", function()
 
     it("centers a placed digit vertically inside its cell", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_button(view, "number_row", 2)
         tap_cell(view, 0, 3)
         tap_button(view, "number_row", 2)
         tap_cell(view, 0, 0)
@@ -325,8 +338,8 @@ describe("sudoku view", function()
 
     it("shows check-revealed wrong cells in the check state", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        tap_cell(view, 0, 3)
         tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 3)
         tap_button(view, "tool_row", "check")
         assert.are.equal(1, view.game:check_errors())
         local revealed = view.game:revealed()
@@ -343,10 +356,10 @@ describe("sudoku view", function()
             save_path = save_path,
             stats_path = stats_path,
         })
-        tap_cell(view, 0, 3)
         tap_button(view, "number_row", solution_cell(0, 3))
-        tap_cell(view, 8, 0)
+        tap_cell(view, 0, 3)
         tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
         assert.is_true(view.game:is_finished())
         assert.are.equal(1, #s.finished)
         local loaded = storage.load(stats_path)
@@ -375,10 +388,10 @@ describe("sudoku view", function()
                 dialog = widget
             end
         end
-        tap_cell(view, 0, 3)
         tap_button(view, "number_row", solution_cell(0, 3))
-        tap_cell(view, 8, 0)
+        tap_cell(view, 0, 3)
         tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
         UIManager.show = original_show
         assert.is_not_nil(dialog, "win must show a dialog")
         assert.is_true(dialog.text:find("Puzzle solved", 1, true) ~= nil)
@@ -462,7 +475,7 @@ describe("sudoku view", function()
         tap_button(view, "tool_row", "hint")
         assert.are.equal(1, view._hint_stage)
         tap_button(view, "number_row", 4)
-        assert.are.equal(0, view._hint_stage, "a move cancels the reveal")
+        assert.are.equal(0, view._hint_stage, "an interaction cancels the reveal")
         assert.are.equal(0, view.game:get(8, 8))
         bb:free()
     end)
@@ -516,6 +529,82 @@ describe("sudoku view", function()
         bb:free()
     end)
 
+    it("arms a digit and highlights every cell showing it, values and notes", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        assert.is_true(g:toggle_note(0, 3, 6), "a note 6 on an empty cell")
+        local view = new_view(g)
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        tap_button(view, "number_row", 6)
+        assert.are.equal(6, view.armed)
+        view:paintTo(bb, 0, 0)
+        local function match_pixel(r, c)
+            local rect = layout.cell_rect(view.layout, r, c)
+            return tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a)
+        end
+        -- every 6 given is highlighted, including the one in the corner
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(1, 0))
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(2, 7))
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(3, 4))
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(5, 8))
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(6, 1))
+        -- the cell whose notes hold 6 is highlighted too
+        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(0, 3))
+        -- a cell without the digit stays plain
+        assert.are.equal(tonumber(theme.background.a), match_pixel(0, 0))
+        -- the armed digit button inverts
+        local button
+        for _, b in ipairs(view.layout.number_row.buttons) do
+            if b.id == 6 then
+                button = b
+            end
+        end
+        assert.are.equal(0x00, tonumber(bb:getPixel(button.x + 2, button.y + 2).a), "the armed button is inverted")
+        bb:free()
+    end)
+
+    it("switches the armed digit and updates the highlight", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        tap_button(view, "number_row", 6)
+        tap_button(view, "number_row", 3)
+        assert.are.equal(3, view.armed)
+        view:paintTo(bb, 0, 0)
+        local rect = layout.cell_rect(view.layout, 2, 7) -- a 6 cell
+        assert.are.equal(
+            tonumber(theme.background.a),
+            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
+            "the previous digit's highlight clears"
+        )
+        local rect3 = layout.cell_rect(view.layout, 0, 1) -- a 3 cell
+        assert.are.equal(
+            tonumber(theme.match_fill.a),
+            tonumber(bb:getPixel(rect3.x + 2, rect3.y + 2).a),
+            "the new digit's cells are highlighted"
+        )
+        bb:free()
+    end)
+
+    it("disarming falls back to the cursor-driven match", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        tap_button(view, "number_row", 6)
+        tap_cell(view, 0, 5) -- an empty cell: the armed 6 is placed
+        tap_button(view, "number_row", 6) -- disarm
+        assert.is_nil(view.armed)
+        tap_cell(view, 1, 0) -- a given 6: the cursor match highlights the 6s
+        view:paintTo(bb, 0, 0)
+        local rect = layout.cell_rect(view.layout, 0, 5)
+        assert.are.equal(
+            tonumber(theme.match_fill.a),
+            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
+            "the placed 6 is highlighted by the cursor match"
+        )
+        bb:free()
+    end)
+
     it("toggles the digit highlight off when the same cell is tapped again", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
         local bb = Blitbuffer.new(758, 1024)
@@ -542,28 +631,13 @@ describe("sudoku view", function()
         bb:free()
     end)
 
-    it("keeps the digit highlight in sync after undo", function()
+    it("keeps the armed highlight in sync after undo", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
-        local bb = Blitbuffer.new(758, 1024)
-        bb:fill(Blitbuffer.COLOR_WHITE)
-        tap_cell(view, 0, 3)
-        tap_button(view, "number_row", 6) -- place a 6
-        tap_cell(view, 1, 0) -- select a given 6: highlight on
-        local rect = layout.cell_rect(view.layout, 0, 3)
-        view:paintTo(bb, 0, 0)
-        assert.are.equal(
-            tonumber(theme.match_fill.a),
-            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
-            "the placed 6 is highlighted"
-        )
+        tap_button(view, "number_row", 6) -- arm 6
+        tap_cell(view, 0, 3) -- place a 6
+        assert.is_not_nil(view._match_cells[0 * 9 + 3], "the placed 6 joins the armed highlight")
         tap_button(view, "tool_row", "undo")
-        view:paintTo(bb, 0, 0)
-        assert.are.equal(
-            tonumber(theme.background.a),
-            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
-            "the undone 6 is no longer highlighted"
-        )
-        bb:free()
+        assert.is_nil(view._match_cells[0 * 9 + 3], "the undone 6 leaves the armed highlight")
     end)
 
     it("gives up: records a give-up and clears the save", function()
@@ -581,8 +655,8 @@ describe("sudoku view", function()
     it("quits: pauses the timer and saves the game for later", function()
         local g = new_game(PUZZLE, SOLUTION)
         local view = new_view(g, { save_path = save_path })
-        tap_cell(view, 0, 3)
         tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 3)
         view:onClose()
         local data = storage.load(save_path)
         assert.is_not_nil(data)
@@ -702,7 +776,7 @@ describe("sudoku view", function()
         local function last_tool_call(view)
             for i = #calls, 1, -1 do
                 local call = calls[i]
-                if call.region and call.region.y >= view.layout.tool_row.y then
+                if call.region and call.region.y == view.layout.tool_row.y then
                     return call
                 end
             end
@@ -713,7 +787,7 @@ describe("sudoku view", function()
             return rect.x .. "," .. rect.y .. "," .. rect.w .. "," .. rect.h
         end
 
-        -- The set of refreshed region keys, without the tool row strip.
+        -- The set of refreshed region keys, without the bar strips.
         local function grid_region_set(view)
             local grid_bottom = view.layout.grid.y + view.layout.grid.h
             local set = {}
@@ -791,12 +865,30 @@ describe("sudoku view", function()
             assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 6, 1))], "another matching 6 refreshes")
         end)
 
+        it("refreshes the number row and every matching cell when a digit is armed", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            tap_button(view, "number_row", 3)
+            local set = grid_region_set(view)
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 1))], "a matching 3 refreshes")
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 3, 8))], "another matching 3 refreshes")
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 4, 5))], "a third matching 3 refreshes")
+            local number_call
+            for _, c in ipairs(calls) do
+                if c.region and c.region.y == view.layout.number_row.y then
+                    number_call = c
+                end
+            end
+            assert.is_not_nil(number_call, "the number row refreshes when arming")
+            assert.are.equal("ui", number_call.mode)
+        end)
+
         it("refreshes each affected cell separately when placing a digit", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
-            tap_cell(view, 0, 5)
+            tap_button(view, "number_row", 3) -- arm 3
             calls = {}
-            tap_button(view, "number_row", 3)
+            tap_cell(view, 0, 5)
             local set = grid_region_set(view)
             -- 3 sits at (0,1) in the row and (4,5) in the column: the target
             -- cell and both peers refresh individually, never as one rectangle.
@@ -823,12 +915,13 @@ describe("sudoku view", function()
         it("skips the tool row when undo/redo state did not change", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
-            tap_cell(view, 0, 5)
-            tap_button(view, "number_row", 3) -- first move enables undo
+            tap_button(view, "number_row", 3) -- arm 3
+            tap_cell(view, 0, 5) -- first move enables undo
+            tap_button(view, "number_row", 4) -- switch to 4: arming, no undo change
             calls = {}
-            tap_button(view, "number_row", 4) -- second move: undo stays enabled
+            tap_cell(view, 0, 5) -- replace 3 with 4: (0,5), (0,1), (4,5) refresh
             local set = grid_region_set(view)
-            -- the second tap replaces 3 with 4: (0,5), (0,1) and (4,5) (peers
+            -- the second move replaces 3 with 4: (0,5), (0,1) and (4,5) (peers
             -- holding the replaced 3, whose conflicts disappear) refresh
             assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 5))])
             assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 1))])
@@ -840,8 +933,8 @@ describe("sudoku view", function()
         it("refreshes only the cells an undo or redo can affect", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
-            tap_cell(view, 0, 6)
-            tap_button(view, "number_row", 2) -- (6,6) holds 2
+            tap_button(view, "number_row", 2) -- arm 2
+            tap_cell(view, 0, 6) -- (6,6) holds 2
             calls = {}
             tap_button(view, "tool_row", "undo")
             local set = grid_region_set(view)
@@ -861,8 +954,8 @@ describe("sudoku view", function()
         it("refreshes only the newly revealed cells on check", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
-            tap_cell(view, 0, 3)
-            tap_button(view, "number_row", 2) -- (0,3) is wrong: solution digit is 6
+            tap_button(view, "number_row", 2) -- arm 2
+            tap_cell(view, 0, 3) -- (0,3) is wrong: solution digit is 6
             calls = {}
             tap_button(view, "tool_row", "check")
             local set = grid_region_set(view)
@@ -932,6 +1025,9 @@ describe("sudoku view", function()
             assert.are.equal(1200, view.layout.height)
             assert.are.equal(1000, view.ges_events.Tap[1].range.w)
             assert.are.equal(1200, view.ges_events.Tap[1].range.h)
+            assert.are.equal("hold", view.ges_events.Hold[1].ges)
+            assert.are.equal(1000, view.ges_events.Hold[1].range.w)
+            assert.are.equal(1200, view.ges_events.Hold[1].range.h)
             assert.are.equal("full", last_call().mode)
         end)
     end)

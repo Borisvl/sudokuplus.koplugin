@@ -15,7 +15,7 @@ local FONT_NOTES_DP = 18
 local FONT_DIGIT_DP = 26
 local FONT_LABEL_DP = 20
 
-local NUMBER_ROW = { 1, 2, 3, 4, 5, 6, 7, 8, 9, "erase" }
+local NUMBER_ROW = { 1, 2, 3, 4, 5, 6, 7, 8, 9 }
 local TOOL_ROW = { "undo", "redo", "notes", "check", "hint", "menu" }
 
 local function default_scale(dp)

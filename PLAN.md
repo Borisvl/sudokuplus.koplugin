@@ -575,6 +575,46 @@ the generation finishes. `main.lua` now calls `UIManager:forceRePaint()` after
 showing it, draining the paint/refresh queues immediately so the wait is
 actually announced on screen.
 
+### M7.1 — Number-first entry & long-press mode flip
+
+Planned (UI rework): entry becomes **number-first** — the digit row (1–9, no
+Erase button) is a *pen* that stays armed across cells. A resolved behavior
+set, agreed with the user before coding:
+
+- **Arming**: tapping a digit arms it (the button inverts, like Notes mode);
+  tapping it again disarms, another digit switches. Arming never mutates the
+  board. The cursor cell is retained and moves on every tap/hold.
+- **Armed highlight**: while a digit is armed, every cell showing it — as a
+  value or as a note — is highlighted with `match_fill` (reuses the M7
+  digit-match machinery via `game:digit_cells`). The highlight follows moves
+  and undo/redo. Requesting a hint clears it (existing "hint clears match"
+  rule); the button stays armed.
+- **Tap while armed**: empty cell → place; same digit → erase (toggle);
+  different digit → replace; given → notification. Notes mode toggles the
+  digit as a note.
+- **Long press while armed** (`hold` gesture, ~500 ms): flips the mode for
+  that one cell — notes off → write/toggle a note, notes on → write/erase a
+  value. Long-pressing without an armed digit is a no-op.
+- **Cursor fallback**: with nothing armed, cell taps keep the M7 behavior
+  exactly (select + digit-match highlight on digit cells).
+
+- [x] `ui/layout.lua`: number row is now 9 buttons (1–9); layout spec updated
+- [x] `ui/numberbar.lua`: `erase` label dropped; the armed digit button
+      inverts (`state.armed`); numberbar spec covers the inversion
+- [x] `ui/sudokuview.lua`: `armed` state + `hold` gesture; number-row dirty
+      tracking; `_arm`/`_disarm` (disarm falls back to the cursor match),
+      `_applyArmed` shared by tap/hold; `onTap` reworked (no erase branch,
+      no "Select a cell first."); `onHold` mode flip; `armed` passed to paint
+- [x] `sudoku_view_spec.lua`: interaction tests reworked number-first; new
+      tests for arm/highlight, switch, disarm fallback, tap-to-place/toggle,
+      long-press note/value flip, no-op without armed, undo-sync, number-row
+      refresh region, `hold` gesture in `onSetDimensions`
+
+**Exit criteria**: all sudoku specs green via `./dev.sh test` (the KOReader
+`version_spec` failure is a pre-existing `git describe` environment issue,
+unrelated), `./dev.sh lint` clean, emulator boot smoke on `kobo-aura-one`
+with no errors, PLAN.md updated, commit.
+
 ### M8 — Polish, i18n, deployment
 
 - [ ] gettext-marked strings, settings (e.g., notes on/off)

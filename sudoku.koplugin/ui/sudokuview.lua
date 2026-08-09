@@ -55,10 +55,12 @@ function SudokuView:init()
     }
 
     self.selected = nil
+    self.armed = nil
     self.notes_mode = false
     self.menu_open = false
     self._dirty_cells = {}
     self._dirty_tool_row = false
+    self._dirty_number_row = false
     self._dirty_banner = false
     self._painted = false
     self._undo_state = { can_undo = false, can_redo = false }
@@ -71,6 +73,12 @@ function SudokuView:init()
     self.ges_events.Tap = {
         GestureRange:new {
             ges = "tap",
+            range = Geom:new { x = 0, y = 0, w = self.width, h = self.height },
+        },
+    }
+    self.ges_events.Hold = {
+        GestureRange:new {
+            ges = "hold",
             range = Geom:new { x = 0, y = 0, w = self.width, h = self.height },
         },
     }
@@ -105,6 +113,11 @@ function SudokuView:refresh()
         local row = self.layout.tool_row
         regions[#regions + 1] = { x = row.x, y = row.y, w = row.w, h = row.h }
         self._dirty_tool_row = false
+    end
+    if self._dirty_number_row then
+        local row = self.layout.number_row
+        regions[#regions + 1] = { x = row.x, y = row.y, w = row.w, h = row.h }
+        self._dirty_number_row = false
     end
     if self._dirty_banner then
         local banner = self.layout.banner
@@ -153,6 +166,10 @@ function SudokuView:markToolRowIfChanged()
         self._undo_state = { can_undo = can_undo, can_redo = can_redo }
         self:markToolRow()
     end
+end
+
+function SudokuView:markNumberRow()
+    self._dirty_number_row = true
 end
 
 function SudokuView:markBanner()
@@ -262,6 +279,73 @@ function SudokuView:_onSelectionChanged(previous)
     self:_applyMatchCells(self.game:digit_cells(value))
 end
 
+-- Moves the cursor to (row, col), marking the old and new cell for repaint.
+function SudokuView:_moveSelection(row, col)
+    local previous = self.selected
+    if previous then
+        self:markCell(previous.row, previous.col)
+    end
+    self.selected = { row = row, col = col }
+    self:markCell(row, col)
+end
+
+-- Arms `value` as the active number-bar digit: the button inverts and every
+-- cell showing the digit (as a value or in its notes) is highlighted, so the
+-- player sees where the digit can go.
+function SudokuView:_arm(value)
+    self.armed = value
+    self._match_value = value
+    self:_applyMatchCells(self.game:digit_cells(value))
+    self:markNumberRow()
+end
+
+-- Disarms the number bar; the highlight falls back to the cursor-derived
+-- digit match (the pre-armed behavior).
+function SudokuView:_disarm()
+    self.armed = nil
+    if self.selected then
+        self:_onSelectionChanged(nil)
+    else
+        self:_clearMatch()
+    end
+    self:markNumberRow()
+end
+
+-- Applies the armed digit to (row, col). With `as_note` the digit is toggled
+-- as a note; otherwise it is written (placed, or erased when the cell already
+-- holds it). Shared by tap (notes mode decides) and hold (the opposite mode),
+-- so the two gesture paths cannot drift.
+function SudokuView:_applyArmed(row, col, as_note)
+    self:_moveSelection(row, col)
+    local ok, err
+    if as_note then
+        self:markCell(row, col)
+        ok, err = self.game:toggle_note(row, col, self.armed)
+    else
+        self:markCells(self.game:affected_cells(row, col, self.armed))
+        if self.game:get(row, col) == self.armed then
+            ok, err = self.game:erase(row, col)
+        else
+            ok, err = self.game:place(row, col, self.armed)
+        end
+    end
+    self:markToolRowIfChanged()
+    self:afterMove()
+    if not ok and err ~= nil then
+        UIManager:show(Notification:new { text = err })
+    end
+end
+
+-- Cursor-only tap: moves the selection and drives the digit-match highlight
+-- (a digit cell highlights every cell sharing its digit).
+function SudokuView:_selectCell(hit)
+    self:_clearHintState()
+    local previous = self.selected
+    self:_moveSelection(hit.row, hit.col)
+    self:_onSelectionChanged(previous)
+    self:refresh()
+end
+
 function SudokuView:paintGrid(bb)
     local l = self.layout
     local grid = l.grid
@@ -344,6 +428,7 @@ function SudokuView:paintTo(bb, x, y)
     self:paintCells(bb)
     numberbar.paint(bb, self.layout, {
         notes_mode = self.notes_mode,
+        armed = self.armed,
         can_undo = self.game:can_undo(),
         can_redo = self.game:can_redo(),
     })
@@ -367,52 +452,25 @@ function SudokuView:onTap(ev_args, ges)
         return true
     end
     if hit.kind == "cell" then
-        self:_clearHintState()
-        local previous = self.selected
-        if previous then
-            self:markCell(previous.row, previous.col)
+        if self.armed then
+            self:_clearHintState()
+            self:_applyArmed(hit.row, hit.col, self.notes_mode)
+        else
+            self:_selectCell(hit)
         end
-        self.selected = { row = hit.row, col = hit.col }
-        self:markCell(hit.row, hit.col)
-        self:_onSelectionChanged(previous)
-        self:refresh()
         return true
-    end
-
-    if type(hit.id) == "number" or hit.id == "erase" then
-        if not self.selected then
-            UIManager:show(Notification:new { text = _("Select a cell first.") })
-            return true
-        end
     end
 
     local ok, err
     if type(hit.id) == "number" then
+        -- The number bar is the "pen": arming never mutates the board. Tapping
+        -- the armed digit again disarms it, any other digit switches to it.
         self:_clearHintState()
-        if self.notes_mode then
-            self:markCell(self.selected.row, self.selected.col)
-            ok, err = self.game:toggle_note(self.selected.row, self.selected.col, hit.id)
+        if self.armed == hit.id then
+            self:_disarm()
         else
-            -- affected cells are computed from the pre-mutation state
-            self:markCells(self.game:affected_cells(self.selected.row, self.selected.col, hit.id))
-            if self.game:get(self.selected.row, self.selected.col) == hit.id then
-                ok, err = self.game:erase(self.selected.row, self.selected.col)
-            else
-                ok, err = self.game:place(self.selected.row, self.selected.col, hit.id)
-            end
+            self:_arm(hit.id)
         end
-        self:markToolRowIfChanged()
-    elseif hit.id == "erase" then
-        self:_clearHintState()
-        local value = self.game:get(self.selected.row, self.selected.col)
-        if value ~= 0 then
-            self:markCells(self.game:affected_cells(self.selected.row, self.selected.col, value))
-            ok, err = self.game:erase(self.selected.row, self.selected.col)
-        else
-            self:markCell(self.selected.row, self.selected.col)
-            ok, err = self.game:clear_notes(self.selected.row, self.selected.col)
-        end
-        self:markToolRowIfChanged()
     elseif hit.id == "undo" then
         self:_clearHintState()
         ok, err = self.game:undo()
@@ -444,6 +502,18 @@ function SudokuView:onTap(ev_args, ges)
         UIManager:show(Notification:new { text = err })
     end
     self:afterMove()
+    return true
+end
+
+-- A long press in a cell while a digit is armed flips the entry mode for that
+-- cell: with notes off it writes a note, with notes on it writes a value.
+function SudokuView:onHold(ev_args, ges)
+    local hit = layout.hit(self.layout, ges.pos.x, ges.pos.y)
+    if not hit or hit.kind ~= "cell" or not self.armed then
+        return true
+    end
+    self:_clearHintState()
+    self:_applyArmed(hit.row, hit.col, not self.notes_mode)
     return true
 end
 
@@ -748,6 +818,12 @@ function SudokuView:onSetDimensions(dimen)
     self.ges_events.Tap = {
         GestureRange:new {
             ges = "tap",
+            range = Geom:new { x = 0, y = 0, w = self.width, h = self.height },
+        },
+    }
+    self.ges_events.Hold = {
+        GestureRange:new {
+            ges = "hold",
             range = Geom:new { x = 0, y = 0, w = self.width, h = self.height },
         },
     }

@@ -98,6 +98,34 @@ describe("sudoku numberbar", function()
         assert.are.equal(pixel(bb, notes_button.x + 2, notes_button.y + 2), 0x00)
     end)
 
+    it("inverts the armed digit button only", function()
+        local function digit_button(value)
+            for _, button in ipairs(l.number_row.buttons) do
+                if button.id == value then
+                    return button
+                end
+            end
+            error("no number button " .. tostring(value))
+        end
+        numberbar.paint(bb, l, { armed = 5 })
+        assert.are.equal(
+            pixel(bb, digit_button(5).x + 2, digit_button(5).y + 2),
+            0x00,
+            "the armed digit button is inverted"
+        )
+        assert.are.equal(
+            pixel(bb, digit_button(3).x + 2, digit_button(3).y + 2),
+            0xFF,
+            "other digit buttons stay plain"
+        )
+        numberbar.paint(bb, l, {})
+        assert.are.equal(
+            pixel(bb, digit_button(5).x + 2, digit_button(5).y + 2),
+            0xFF,
+            "the armed highlight clears when no number is armed"
+        )
+    end)
+
     it("dims undo/redo labels when there is nothing to undo or redo", function()
         numberbar.paint(bb, l, { can_undo = false, can_redo = false })
         for _, button in ipairs(l.tool_row.buttons) do

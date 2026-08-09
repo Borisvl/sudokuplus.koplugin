@@ -6,7 +6,6 @@ local _ = require("gettext")
 local numberbar = {}
 
 local LABELS = {
-    erase = _("Erase"),
     undo = _("Undo"),
     redo = _("Redo"),
     notes = _("Notes"),
@@ -56,6 +55,9 @@ function numberbar.paint(bb, layout, state)
     for _, button in ipairs(layout.number_row.buttons) do
         local face = type(button.id) == "number" and digit_face or label_face
         numberbar.render_centered(bb, face, label_for(button.id), false, button, theme.digit)
+        if state.armed and button.id == state.armed then
+            bb:invertRect(button.x, button.y, button.w, button.h)
+        end
     end
 
     paint_row(bb, layout.tool_row)
