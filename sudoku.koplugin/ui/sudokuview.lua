@@ -289,12 +289,16 @@ function SudokuView:_moveSelection(row, col)
     self:markCell(row, col)
 end
 
--- Arms `value` as the active number-bar digit: the button inverts and every
--- cell showing the digit (as a value or in its notes) is highlighted, so the
--- player sees where the digit can go.
+-- Arms `value` as the active number-bar digit: the button inverts, the board
+-- selection clears, and every cell showing the digit (as a value or in its
+-- notes) is highlighted, so the player sees where the digit can go.
 function SudokuView:_arm(value)
     self.armed = value
     self._match_value = value
+    if self.selected then
+        self:markCell(self.selected.row, self.selected.col)
+        self.selected = nil
+    end
     self:_applyMatchCells(self.game:digit_cells(value))
     self:markNumberRow()
 end

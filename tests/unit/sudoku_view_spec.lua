@@ -154,6 +154,15 @@ describe("sudoku view", function()
         assert.is_nil(view.armed, "tapping the armed digit again disarms it")
     end)
 
+    it("clears the board selection when a digit is armed", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_cell(view, 0, 0) -- select a given 5
+        assert.is_not_nil(view.selected)
+        tap_button(view, "number_row", 2)
+        assert.are.equal(2, view.armed)
+        assert.is_nil(view.selected, "arming clears the board selection")
+    end)
+
     it("inverts the selected cell but keeps its digit readable", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
         tap_cell(view, 0, 0)
@@ -881,6 +890,16 @@ describe("sudoku view", function()
             end
             assert.is_not_nil(number_call, "the number row refreshes when arming")
             assert.are.equal("ui", number_call.mode)
+        end)
+
+        it("repaints the previously selected cell when a digit is armed", function()
+            local view = new_view(new_game(PUZZLE, SOLUTION))
+            paint_view(view)
+            tap_cell(view, 0, 1) -- select a given 3
+            calls = {}
+            tap_button(view, "number_row", 3)
+            local set = grid_region_set(view)
+            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 1))], "the unselected cell repaints")
         end)
 
         it("refreshes each affected cell separately when placing a digit", function()
