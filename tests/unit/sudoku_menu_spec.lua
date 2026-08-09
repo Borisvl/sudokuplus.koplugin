@@ -166,6 +166,42 @@ describe("sudoku plugin menu", function()
         assert.is_true(t >= os.time() - 2 and t <= os.time() + 2, "timer must use wall-clock seconds")
     end)
 
+    it("seeds the puzzle PRNG from the wall clock at millisecond resolution", function()
+        local board = require("core.board")
+        local generator = require("core.generator")
+        local time = require("ui/time")
+        local original_generate = generator.generate_game
+        local original_realtime = time.realtime
+        local captured
+        generator.generate_game = function(opts)
+            captured = opts.rng
+            return {
+                board = board.from_string(
+                    "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+                ),
+                solution = board.from_string(
+                    "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+                ),
+                difficulty = "easy",
+                clues = 30,
+            }
+        end
+        -- 1234.567s after the epoch -> epoch ms 1234567 -> masked 32-bit state.
+        time.realtime = function()
+            return time.s(1234) + time.ms(567)
+        end
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function() end
+        Sudoku:startGame()
+        UIManager.show = original_show
+        generator.generate_game = original_generate
+        time.realtime = original_realtime
+
+        assert.is_not_nil(captured, "generation must receive a seeded rng")
+        assert.are.equal(1234567, captured.state, "seed must be wall-clock milliseconds, masked to 32 bits")
+    end)
+
     it("shows a generating notification before generating and closes it after", function()
         local generator = require("core.generator")
         local original_generate = generator.generate_game

@@ -282,9 +282,11 @@ function mt:solve_until(bound)
     local state = clone_state(self)
     if state.techniques ~= 0 then
         local prop = new_propagator(state)
-        if not prop:propagate_constraints(path, 0) then
-            return solutions
-        end
+        -- A propagation dead-end is rolled back to the pre-propagation state;
+        -- falling through to plain backtracking means a technique dead-end can
+        -- never hide real solutions (parity with the technique-less solver).
+        -- Genuinely unsolvable boards still report zero solutions.
+        prop:propagate_constraints(path, 0)
     end
     solve_until_recursive(state, solutions, path, bound)
     return solutions
@@ -376,9 +378,9 @@ function mt:count_solutions(limit)
     local path = solve_path.new()
     if state.techniques ~= 0 then
         local prop = new_propagator(state)
-        if not prop:propagate_constraints(path, 0) then
-            return 0
-        end
+        -- Same fallback as solve_until: a technique dead-end must not report
+        -- a false zero (see mt:solve_until).
+        prop:propagate_constraints(path, 0)
     end
     return count_solutions_recursive(state, 0, normalized_limit)
 end

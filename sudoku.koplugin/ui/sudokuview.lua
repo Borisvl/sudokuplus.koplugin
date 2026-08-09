@@ -652,7 +652,8 @@ function SudokuView:onWin()
         self:persistStats()
     end
     self:deleteSave()
-    UIManager:show(MultiConfirmBox:new {
+    local dialog
+    dialog = MultiConfirmBox:new {
         text = T(
             _("Puzzle solved!\n\nTime: %1\nMistakes: %2\nHints: %3"),
             format_time(record.duration),
@@ -661,11 +662,13 @@ function SudokuView:onWin()
         ),
         cancel_text = _("Close"),
         cancel_callback = function()
+            UIManager:close(dialog)
             UIManager:close(self, "flashui")
         end,
         choice1_text = _("New game"),
         choice1_callback = function()
             local difficulty = self.game:difficulty()
+            UIManager:close(dialog)
             UIManager:close(self, "flashui")
             if self.new_game_cb then
                 self.new_game_cb(difficulty)
@@ -673,12 +676,14 @@ function SudokuView:onWin()
         end,
         choice2_text = _("Statistics"),
         choice2_callback = function()
+            UIManager:close(dialog)
             UIManager:close(self, "flashui")
             if self.show_stats_cb then
                 self.show_stats_cb()
             end
         end,
-    })
+    }
+    UIManager:show(dialog)
 end
 
 function SudokuView:onGiveUp()

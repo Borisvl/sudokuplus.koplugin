@@ -392,26 +392,43 @@ describe("sudoku view", function()
         local dialog
         local UIManager = require("ui/uimanager")
         local original_show = UIManager.show
+        local original_close = UIManager.close
+        local closed = {}
+        local function count_closed(widget)
+            local n = 0
+            for _, entry in ipairs(closed) do
+                if entry == widget then
+                    n = n + 1
+                end
+            end
+            return n
+        end
         UIManager.show = function(_, widget)
             if widget and widget.cancel_text then
                 dialog = widget
             end
         end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
         tap_button(view, "number_row", solution_cell(0, 3))
         tap_cell(view, 0, 3)
         tap_button(view, "number_row", solution_cell(8, 0))
         tap_cell(view, 8, 0)
-        UIManager.show = original_show
         assert.is_not_nil(dialog, "win must show a dialog")
         assert.is_true(dialog.text:find("Puzzle solved", 1, true) ~= nil)
         assert.are.equal("New game", dialog.choice1_text)
         assert.are.equal("Statistics", dialog.choice2_text)
         assert.is_nil(started)
         dialog.choice1_callback()
+        assert.are.equal(dialog, closed[1], "the win dialog must be closed before starting a new game")
         assert.are.equal("easy", started, "new game restarts at the same difficulty")
         assert.is_nil(stats_requested)
         dialog.choice2_callback()
+        assert.are.equal(2, count_closed(dialog), "the win dialog must be closed again before opening statistics")
         assert.is_true(stats_requested, "statistics open from the win dialog")
+        UIManager.show = original_show
+        UIManager.close = original_close
     end)
 
     it("reveals a hint in three taps: name, pattern, apply", function()

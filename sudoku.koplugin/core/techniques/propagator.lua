@@ -21,7 +21,6 @@ local cand_count = candidates.count
 local cand_rollback = candidates.rollback
 local cand_set = candidates.set
 local cand_update_for = candidates.update_affected_cells_for
-local cand_update = candidates.update_affected_cells
 local path_push = solve_path.push
 local path_placement = solve_path.placement_step
 local path_elimination = solve_path.elimination_step
@@ -286,20 +285,20 @@ end
 
 function mt:rollback(path, initial_path_len)
     local first_step = path.steps[initial_path_len + 1]
-    local candidate_marker = first_step and self.candidate_step_markers[first_step]
-
-    if candidate_marker ~= nil then
-        while #path.steps > initial_path_len do
-            local step = path.steps[#path.steps]
-            path.steps[#path.steps] = nil
-            if step.type == "place" then
-                board_set(self.board, step.row, step.col, 0)
-                masks_remove(self.masks, step.row, step.col, step.value)
-            end
-            self.candidate_step_markers[step] = nil
-        end
-        cand_rollback(self.candidates, self.candidate_trail, candidate_marker)
+    if first_step == nil then
+        -- Nothing new beyond the checkpoint (e.g. the initial state already
+        -- dead-ended): no steps and no candidate changes to undo.
         return
+    end
+
+    -- Every step pushed by this propagator records the trail marker captured
+    -- before its mutation. A step without one was pushed directly into the
+    -- path (a technique bypassing the place/eliminate helpers); rebuilding
+    -- candidates from the board would silently discard earlier eliminations,
+    -- so this is a hard error instead of a corrupted rollback.
+    local candidate_marker = self.candidate_step_markers[first_step]
+    if candidate_marker == nil then
+        error("rollback: step at path index " .. (initial_path_len + 1) .. " has no candidate marker")
     end
 
     while #path.steps > initial_path_len do
@@ -308,12 +307,10 @@ function mt:rollback(path, initial_path_len)
         if step.type == "place" then
             board_set(self.board, step.row, step.col, 0)
             masks_remove(self.masks, step.row, step.col, step.value)
-            cand_update(self.candidates, step.row, step.col, self.masks, self.board)
-        else
-            local m = cand_get(self.candidates, step.row, step.col)
-            cand_set(self.candidates, step.row, step.col, bit.bor(m, bit.lshift(1, step.value - 1)))
         end
+        self.candidate_step_markers[step] = nil
     end
+    cand_rollback(self.candidates, self.candidate_trail, candidate_marker)
 end
 
 function mt:propagate_constraints(path, initial_path_len, stop_after_change)

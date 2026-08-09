@@ -11,6 +11,10 @@ mt.__index = mt
 
 local VERSION = 1
 local FULL_CANDIDATE_MASK = 0x1FF
+-- Saves are only ever written while paused, so a save claiming a *running*
+-- timer must have a wall-clock start timestamp close to now; anything further
+-- out is a corrupted/edited save whose started value would inflate elapsed().
+local MAX_TIMER_STARTED_DRIFT = 7 * 24 * 3600
 
 local function new_mask_grid(value)
     local grid = {}
@@ -1294,6 +1298,9 @@ function game.restore(data, opts)
     }
     if data.timer.running then
         if data.timer.started == nil then
+            return nil, "invalid timer state"
+        end
+        if math.abs(data.timer.started - now()) > MAX_TIMER_STARTED_DRIFT then
             return nil, "invalid timer state"
         end
         instance.timer.running = true

@@ -315,10 +315,48 @@ describe("core.techniques.propagator", function()
         assert.are.equal(0x1FF, empty_prop:cand(0, 0))
     end)
 
-    it("solve_until returns no solutions when propagation dead-ends", function()
+    it("solve_until reports no solutions for a logically inconsistent board", function()
+        -- The propagation dead-end is rolled back and falls through to plain
+        -- backtracking; the board is genuinely unsolvable, so the result is
+        -- still empty (never a wrong non-zero count).
         local s = solver.new(board.from_string(INCONSISTENT), { techniques = flags.NAKED_SINGLES })
         assert.is_nil(s:solve_any())
         assert.are.equal(0, #s:solve_all())
+    end)
+
+    it("falls back to backtracking when the technique pass dead-ends on a solvable board", function()
+        -- Simulate an unsound technique: strip candidates from cell (0, 2)
+        -- until it is empty, forcing a propagation dead-end on a board that is
+        -- still solvable. The dead-end must not hide the real solution: the
+        -- rolled-back state is handed to plain backtracking.
+        local naked_singles_mod = require("core.techniques.naked_singles")
+        local original_apply = naked_singles_mod.apply
+        naked_singles_mod.apply = function(prop, path)
+            local mask = prop:cand(0, 2)
+            if mask ~= 0 then
+                local lowest = bit.band(mask, bit.bnot(bit.band(mask, mask - 1)))
+                prop:eliminate_candidate(0, 2, lowest, flags.NAKED_SINGLES, path)
+                return true
+            end
+            return false
+        end
+        finally(function()
+            naked_singles_mod.apply = original_apply
+        end)
+
+        local s = solver.new(board.from_string(ONE_PUZZLE), {
+            techniques = flags.NAKED_SINGLES,
+            rng = prng.new(7),
+        })
+        local solutions = s:solve_all()
+        assert.are.equal(1, #solutions, "a technique dead-end must not hide the real solution")
+
+        local plain = solver.new(board.from_string(ONE_PUZZLE), { rng = prng.new(7) })
+        assert.are.equal(
+            board.to_string(plain:solve_any().board),
+            board.to_string(solutions[1].board),
+            "the fallback result must match the plain solver"
+        )
     end)
 
     it("without techniques the backtracking path keeps empty flags", function()
@@ -458,6 +496,28 @@ describe("core.techniques.propagator", function()
         assert.are.equal(0, #path.steps)
         assert.are.equal(before0, p:cand(0, 0))
         assert.are.equal(before32, p:cand(3, 2))
+    end)
+
+    it("refuses to roll back a step with no candidate marker", function()
+        local s = solver.new(board.from_string(INCONSISTENT), { techniques = 0 })
+        local p = propagator.new(s.board, s.masks, s.candidates, 0)
+        local path = solve_path.new()
+        -- A foreign step pushed directly into the path never went through
+        -- place_and_update/eliminate_candidate, so no trail marker exists; a
+        -- silent full recompute could corrupt earlier eliminations.
+        solve_path.push(path, solve_path.placement_step(0, 0, 1, flags.NAKED_SINGLES))
+        assert.has_error(function()
+            p:rollback(path, 0)
+        end)
+    end)
+
+    it("rollback is a no-op at a checkpoint past the pushed steps", function()
+        local s = solver.new(board.from_string(INCONSISTENT), { techniques = 0 })
+        local p = propagator.new(s.board, s.masks, s.candidates, 0)
+        local path = solve_path.new()
+        solve_path.push(path, solve_path.placement_step(0, 0, 1, flags.NAKED_SINGLES))
+        p:rollback(path, 1)
+        assert.are.equal(1, #path.steps, "steps at or before the checkpoint must be preserved")
     end)
 
     it("keeps earlier eliminations when rolling back a later placement", function()

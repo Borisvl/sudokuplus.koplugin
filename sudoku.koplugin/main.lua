@@ -5,6 +5,7 @@ local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
 local _ = require("gettext")
+local time = require("ui/time")
 
 local difficulties = require("ui.difficulties")
 local generator = require("core.generator")
@@ -24,6 +25,16 @@ local Sudoku = WidgetContainer:extend {
 local SAVE_PATH = DataStorage:getDataDir() .. "/sudoku_save"
 local STATS_PATH = DataStorage:getDataDir() .. "/sudoku_stats"
 local AUTOFILL_SETTING = "sudoku_autofill_notes"
+
+-- Puzzle-generation seed from the wall clock at millisecond resolution.
+-- os.time() alone has one-second granularity, so back-to-back games would
+-- share a puzzle; UIManager:getTime() is an fts-encoded MONOTONIC value, so
+-- mixing it into the seed conflates two clocks. time.realtime() is wall-clock
+-- fts; its epoch-millisecond value is masked to the PRNG's 32-bit state by
+-- prng.new.
+local function seed_from_wall_clock()
+    return math.floor(time.to_ms(time.realtime()))
+end
 
 function Sudoku:init()
     self.ui.menu:registerToMainMenu(self)
@@ -56,8 +67,7 @@ function Sudoku:startGame(difficulty)
     local generating = Notification:new { text = _("Generating…") }
     UIManager:show(generating)
     UIManager:forceRePaint()
-    local rng = prng.new(os.time() + UIManager:getTime())
-    local payload, gen_err = generator.generate_game { difficulty = difficulty, rng = rng }
+    local payload, gen_err = generator.generate_game { difficulty = difficulty, rng = prng.new(seed_from_wall_clock()) }
     UIManager:close(generating)
     if not payload then
         UIManager:show(InfoMessage:new {
