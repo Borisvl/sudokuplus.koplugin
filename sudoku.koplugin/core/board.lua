@@ -60,6 +60,9 @@ function board.get(b, r, c)
     return b[i]
 end
 
+-- Stores `value` in cell (r, c). Preconditions (validated by solver.validate
+-- at the public boundary, not here — this is a hot path): `value` must be an
+-- integer in 0..9 (0 = empty), or the board invariants silently break.
 function board.set(b, r, c, value)
     if type(b) ~= "table" then
         return nil, "board must be a table"

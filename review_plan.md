@@ -202,23 +202,52 @@ Committed as `RM1` (see git log).
 **Exit criteria**: technique specs + parity spec green, all six M2c / six M2d
 examples still solve guess-free, `./dev.sh lint` clean, commit `RM2`.
 
-### RM3 — Hygiene & deduplication
+### RM3 — Hygiene & deduplication ✅
 
-- [ ] #8 `game.lua`: reuse `core.masks` (`compute_candidates_mask_for_cell`)
-      and `core.techniques.units` (`peers_of`-style iteration) instead of
-      `is_safe_board` / `legal_mask_for` / `each_peer`; keep `game.lua` pure
-      and headless-testable (game specs stay green, no behavior change).
-- [ ] #9 remove dead `closeMenu` (or wire it to the pause menu) and delete the
-      now-unused specs.
-- [ ] #11 add preconditions/docs to `board.set`, `candidates.set`,
-      `masks.remove_number` (or move validation into `solver.validate` — the
-      real gate).
-- [ ] #10 note the monoliths; extract only if it pays for itself (e.g. move
-      serialization validation out of `game.lua`).
-- [ ] #28 fold `review.old.md` into this file / PLAN.md and remove the stray
-      file.
+- [x] #8 `game.lua` now reuses core for the shared logic: peer enumeration is
+      `units.each_peer` (a new non-allocating iterator in
+      `core/techniques/units.lua`; `peers_of` is built on top of it), so
+      `is_safe_board` / `conflicts_board` / `each_peer` no longer re-scan
+      peers by hand; `legal_mask_for` delegates to
+      `masks.compute_candidates_mask_for_cell` over a board-derived mask
+      structure (`constraint_masks_for`), built once in the `hint` and
+      `restore` loops. `game.lua` stays pure and board-centric (no parallel
+      mask cache to drift). Game/units specs unchanged and green.
+- [x] #9 dead `SudokuView:closeMenu` removed (the pause menu's only real close
+      path is `resumeFromPause` via the `ButtonDialog`); the two specs that
+      called it were removed/rewritten to drive the real `onTapClose`
+      dismissal (timer pause/resume and the coarse `"ui"` refresh are still
+      asserted).
+- [x] #11 documented the low-level mutator preconditions instead of adding
+      per-call validation to hot paths: `board.set` (value 0..9),
+      `candidates.set` (0..511 mask consistent with the board), and
+      `masks.remove_number` (presence sets, not occurrence counts — callers
+      uphold the no-duplicate-in-unit invariant; `solver.validate` remains the
+      public gate).
+- [x] #10 monoliths noted (see Architecture note below); no extraction done —
+      `game.lua` (state machine + validation) and `sudokuview.lua` (input +
+      paint) are large but cohesive, and splitting serialization validation
+      would churn heavily-tested code for marginal gain. Revisit if either
+      file grows further.
+- [x] #28 `review.old.md` folded into this document (see the M2-findings note
+      below) and deleted.
 
-**Exit criteria**: specs green, lint clean, `review.old.md` removed, commit.
+**Exit criteria**: specs green, lint clean, `review.old.md` removed, commit
+`RM3`.
+
+**Architecture note (was #10):** `game.lua` (~1.3 k lines) mixes the state
+machine, undo/redo and save validation; `sudokuview.lua` (~840 lines) mixes
+input, painting and refresh tracking. Both are internally coherent and fully
+spec-covered; keep them as-is unless a concrete extraction target pays for
+itself.
+
+**Folded M2 findings (was `review.old.md`):** the four open M2-era findings
+are all accounted for here: #13 (propagation dominated by full-board scans,
+no device budget) → RM4 #13; #14 (incomplete standalone technique detectors)
+→ RM2 ✅; #15 (mutation helpers don't enforce preconditions) → RM3 #11 ✅;
+#16 (masks are presence sets, not counts) → RM3 #11 ✅. The M2 test-gap list
+(negative/no-op tests per technique, orientation coverage, AIC link
+invariants) is covered by RM5 #24 and the technique-spec additions.
 
 ### RM4 — Generation responsiveness (architecture, on-device win)
 

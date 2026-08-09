@@ -706,17 +706,6 @@ describe("sudoku view", function()
         assert.is_true(g:elapsed() > paused)
     end)
 
-    it("pauses the timer while the pause menu is open", function()
-        local g = new_game(PUZZLE, SOLUTION)
-        local view = new_view(g)
-        view:openMenu()
-        assert.is_true(view.menu_open)
-        assert.is_false(g.timer.running)
-        view:closeMenu()
-        assert.is_false(view.menu_open)
-        assert.is_true(g.timer.running)
-    end)
-
     it("resumes the timer when the pause menu is dismissed by tapping outside", function()
         local g = new_game(PUZZLE, SOLUTION)
         local view = new_view(g)
@@ -1003,11 +992,23 @@ describe("sudoku view", function()
         it("uses a coarse full-screen partial when closing the pause menu", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
+            local dialog
+            local original_show = UIManager.show
+            UIManager.show = function(_, widget)
+                dialog = widget
+            end
             view:openMenu()
-            view:closeMenu()
-            local call = last_call()
-            assert.are.equal("ui", call.mode)
-            assert.is_nil(call.region)
+            UIManager.show = original_show
+            calls = {}
+            local Geom = require("ui/geometry")
+            dialog:onTapClose({}, { pos = Geom:new { x = -100, y = -100 } })
+            local coarse
+            for _, call in ipairs(calls) do
+                if call.mode == "ui" and call.region == nil then
+                    coarse = call
+                end
+            end
+            assert.is_not_nil(coarse, "closing the pause menu must issue a coarse ui refresh")
         end)
 
         it("refreshes the banner and pattern cells through the hint reveal", function()

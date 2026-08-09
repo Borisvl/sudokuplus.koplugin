@@ -152,18 +152,18 @@ function units.bivalue_cells(c, b)
     return result
 end
 
--- Lists every cell sharing a row, column, or box with (r, c), excluding
--- itself, each cell exactly once.
-function units.peers_of(r, c)
-    local result = {}
+-- Calls visitor(r, c) for every peer of (r, c) — row, column and box peers,
+-- excluding the cell itself — each exactly once, without allocating. This is
+-- the canonical peer iteration; peers_of() builds a list from it.
+function units.each_peer(r, c, visitor)
     for col = 0, 8 do
         if col ~= c then
-            result[#result + 1] = { r, col }
+            visitor(r, col)
         end
     end
     for row = 0, 8 do
         if row ~= r then
-            result[#result + 1] = { row, c }
+            visitor(row, c)
         end
     end
     local box_r = math.floor(r / 3) * 3
@@ -171,10 +171,19 @@ function units.peers_of(r, c)
     for br = box_r, box_r + 2 do
         for bc = box_c, box_c + 2 do
             if br ~= r and bc ~= c then
-                result[#result + 1] = { br, bc }
+                visitor(br, bc)
             end
         end
     end
+end
+
+-- Lists every cell sharing a row, column, or box with (r, c), excluding
+-- itself, each cell exactly once.
+function units.peers_of(r, c)
+    local result = {}
+    units.each_peer(r, c, function(cell_r, cell_c)
+        result[#result + 1] = { cell_r, cell_c }
+    end)
     return result
 end
 

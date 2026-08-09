@@ -4,6 +4,7 @@ local hints = require("core.hints")
 local masks = require("core.masks")
 local solver = require("core.solver")
 local util = require("core.util")
+local units = require("core.techniques.units")
 
 local game = {}
 local mt = {}
@@ -70,36 +71,35 @@ local function cell_index(r, c)
     return r * 9 + c + 1
 end
 
-local function is_safe_board(b, r, c, value)
-    for i = 0, 8 do
-        if i ~= c and b[r * 9 + i + 1] == value then
-            return false
-        end
-        if i ~= r and b[i * 9 + c + 1] == value then
-            return false
-        end
-    end
-    local br = math.floor(r / 3) * 3
-    local bc = math.floor(c / 3) * 3
-    for dr = 0, 2 do
-        for dc = 0, 2 do
-            local cr, cc = br + dr, bc + dc
-            if cr ~= r and cc ~= c and b[cr * 9 + cc + 1] == value then
-                return false
-            end
+-- Builds the constraint-mask structure (core.masks) that reflects `b`, so the
+-- game layer reuses core's "which digits are legal in a cell" implementation
+-- instead of re-deriving it. Built on demand (the game state keeps the board
+-- as its source of truth; no parallel mask cache to drift).
+local function constraint_masks_for(b)
+    local m = masks.new()
+    for i = 1, 81 do
+        local value = b[i]
+        if value ~= 0 then
+            masks.add_number(m, math.floor((i - 1) / 9), (i - 1) % 9, value)
         end
     end
-    return true
+    return m
 end
 
 local function legal_mask_for(b, r, c)
-    local mask = 0
-    for value = 1, 9 do
-        if is_safe_board(b, r, c, value) then
-            mask = bit.bor(mask, digit_bit(value))
+    return masks.compute_candidates_mask_for_cell(constraint_masks_for(b), r, c)
+end
+
+-- Peer enumeration is shared with the core techniques via units.each_peer, so
+-- the game layer and the solver can never disagree on what a peer is.
+local function is_safe_board(b, r, c, value)
+    local safe = true
+    units.each_peer(r, c, function(cr, cc)
+        if b[cell_index(cr, cc)] == value then
+            safe = false
         end
-    end
-    return mask
+    end)
+    return safe
 end
 
 local function conflicts_board(b, r, c)
@@ -107,46 +107,13 @@ local function conflicts_board(b, r, c)
     if value == 0 then
         return false
     end
-    for i = 0, 8 do
-        if i ~= c and b[r * 9 + i + 1] == value then
-            return true
+    local conflict = false
+    units.each_peer(r, c, function(cr, cc)
+        if b[cell_index(cr, cc)] == value then
+            conflict = true
         end
-        if i ~= r and b[i * 9 + c + 1] == value then
-            return true
-        end
-    end
-    local br = math.floor(r / 3) * 3
-    local bc = math.floor(c / 3) * 3
-    for dr = 0, 2 do
-        for dc = 0, 2 do
-            local cr, cc = br + dr, bc + dc
-            if cr ~= r and cc ~= c and b[cr * 9 + cc + 1] == value then
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function each_peer(r, c, visitor)
-    for i = 0, 8 do
-        if i ~= c then
-            visitor(r, i)
-        end
-        if i ~= r then
-            visitor(i, c)
-        end
-    end
-    local br = math.floor(r / 3) * 3
-    local bc = math.floor(c / 3) * 3
-    for dr = 0, 2 do
-        for dc = 0, 2 do
-            local cr, cc = br + dr, bc + dc
-            if cr ~= r and cc ~= c then
-                visitor(cr, cc)
-            end
-        end
-    end
+    end)
+    return conflict
 end
 
 -- Removes `value` from the notes of empty peer cells and returns the list of
@@ -154,7 +121,7 @@ end
 local function auto_clean(self, r, c, value)
     local cleaned = {}
     local v_bit = digit_bit(value)
-    each_peer(r, c, function(cr, cc)
+    units.each_peer(r, c, function(cr, cc)
         local index = cell_index(cr, cc)
         if self.board[index] == 0 then
             local cell_notes = self.notes[cr + 1][cc + 1]
@@ -427,7 +394,7 @@ local function entry_affected(self, entry)
     local affected = { [entry.r * 9 + entry.c] = true }
     local function peers_with(value)
         if value ~= 0 then
-            each_peer(entry.r, entry.c, function(cr, cc)
+            units.each_peer(entry.r, entry.c, function(cr, cc)
                 if self.board[cell_index(cr, cc)] == value then
                     affected[cr * 9 + cc] = true
                 end
@@ -467,7 +434,7 @@ function mt:affected_cells(r, c, value)
     end
     local cleaned = {}
     local v_bit = digit_bit(value)
-    each_peer(r, c, function(cr, cc)
+    units.each_peer(r, c, function(cr, cc)
         if bit.band(self.notes[cr + 1][cc + 1], v_bit) ~= 0 then
             cleaned[#cleaned + 1] = { cr, cc, value }
         end
@@ -908,13 +875,14 @@ function mt:hint()
     -- Notes are ground truth once the user has started them; untouched
     -- empty cells are substituted with their board-legal candidates so the
     -- hint engine can assume fully filled notes.
+    local constraint_masks = constraint_masks_for(self.board)
     local derived = {}
     for r = 0, 8 do
         derived[r + 1] = {}
         for c = 0, 8 do
             local mask = self.notes[r + 1][c + 1]
             if self.board[cell_index(r, c)] == 0 and mask == 0 and self.manual_removed[r + 1][c + 1] == 0 then
-                mask = legal_mask_for(self.board, r, c)
+                mask = masks.compute_candidates_mask_for_cell(constraint_masks, r, c)
             end
             derived[r + 1][c + 1] = mask
         end
@@ -1201,11 +1169,12 @@ function game.restore(data, opts)
             end
         end
     end
+    local restore_masks = constraint_masks_for(current)
     for r = 0, 8 do
         for c = 0, 8 do
             local mask = notes[r + 1][c + 1]
             if current[cell_index(r, c)] == 0 then
-                local legal = legal_mask_for(current, r, c)
+                local legal = masks.compute_candidates_mask_for_cell(restore_masks, r, c)
                 if bit.band(mask, bit.bnot(legal)) ~= 0 then
                     return nil, "notes contain an illegal candidate"
                 end

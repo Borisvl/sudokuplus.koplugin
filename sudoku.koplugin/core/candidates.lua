@@ -51,6 +51,10 @@ function candidates.get(c, r, col)
     return c[r + 1][col + 1]
 end
 
+-- Stores `mask` in cell (r, col), recording the previous value on the trail
+-- when one is given. Precondition: `mask` must be a 0..511 candidate bitmask
+-- consistent with the board constraints (solver.validate is the gate; this is
+-- a hot path and does not re-check).
 function candidates.set(c, r, col, mask, trail)
     local row = c[r + 1]
     local column = col + 1

@@ -28,6 +28,12 @@ function masks.add_number(m, r, c, num)
     m.box[box_idx + 1] = bit.bor(m.box[box_idx + 1], bitmask)
 end
 
+-- Removes `num` from the row/column/box presence masks for cell (r, c).
+-- Precondition: `num` was previously added (or is otherwise absent) — the
+-- masks are presence sets, not occurrence counts, so removing a digit that is
+-- still present in another cell of the same unit would wrongly clear the bit.
+-- Callers must uphold the no-duplicate-in-unit invariant (validated by
+-- solver.validate at the public boundary).
 function masks.remove_number(m, r, c, num)
     local bitmask = mask_for(num)
     local box_idx = masks.get_box_idx(r, c)

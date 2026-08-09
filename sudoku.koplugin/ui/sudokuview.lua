@@ -796,12 +796,6 @@ function SudokuView:showStats()
     )
 end
 
-function SudokuView:closeMenu()
-    self.menu_open = false
-    self.game:resume()
-    self:refreshCoarse()
-end
-
 function SudokuView:onSuspend()
     self.game:pause()
     return true

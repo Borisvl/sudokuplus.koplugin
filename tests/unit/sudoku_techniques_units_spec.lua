@@ -213,4 +213,23 @@ describe("core.techniques.units", function()
         assert.is_true(seen["5,5"])
         assert.is_nil(seen["0,0"])
     end)
+
+    it("each_peer visits exactly the same peers as peers_of, without a list", function()
+        local peers = units.peers_of(2, 6)
+        local visited = {}
+        units.each_peer(2, 6, function(r, c)
+            visited[#visited + 1] = { r, c }
+        end)
+        assert.are.equal(#peers, #visited, "each_peer must visit every peer")
+        for _, cell in ipairs(peers) do
+            local found = false
+            for _, other in ipairs(visited) do
+                if other[1] == cell[1] and other[2] == cell[2] then
+                    found = true
+                    break
+                end
+            end
+            assert.is_true(found, "each_peer missed peer " .. cell[1] .. "," .. cell[2])
+        end
+    end)
 end)
