@@ -128,6 +128,43 @@ describe("game", function()
         assert.are.equal(987654, seeded.seed, "the reproduction seed must be stored on the game")
     end)
 
+    it("tracks which digits are fully placed on the board", function()
+        -- Blank two of the 5s in the solution so digit 5 starts at 7 givens.
+        local five_indices = {}
+        for i = 1, 81 do
+            if SOLUTION:sub(i, i) == "5" then
+                five_indices[#five_indices + 1] = i
+            end
+        end
+        local chars = {}
+        for i = 1, 81 do
+            chars[i] = SOLUTION:sub(i, i)
+        end
+        chars[five_indices[1]] = "0"
+        chars[five_indices[2]] = "0"
+        local clock = { t = 1000 }
+        local instance = assert(game.new({
+            puzzle = board.from_string(table.concat(chars)),
+            solution = board.from_string(SOLUTION),
+            difficulty = "medium",
+            now = function()
+                return clock.t
+            end,
+        }))
+
+        assert.is_nil(instance:completed_digits()[5], "5 is not fully placed yet")
+        assert.is_true(instance:completed_digits()[1], "1 is fully placed as givens")
+
+        local r1, c1 = math.floor((five_indices[1] - 1) / 9), (five_indices[1] - 1) % 9
+        local r2, c2 = math.floor((five_indices[2] - 1) / 9), (five_indices[2] - 1) % 9
+        assert.is_true(instance:place(r1, c1, 5))
+        assert.is_true(instance:place(r2, c2, 5))
+        assert.is_true(instance:completed_digits()[5], "5 completes once placed nine times")
+
+        assert.is_true(instance:erase(r1, c1))
+        assert.is_nil(instance:completed_digits()[5], "erasing breaks the completion")
+    end)
+
     it("starts with empty notes unless auto-fill is enabled", function()
         local instance = new_game()
         local puzzle = board.from_string(PUZZLE)

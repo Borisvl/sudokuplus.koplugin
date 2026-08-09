@@ -126,6 +126,44 @@ describe("sudoku numberbar", function()
         )
     end)
 
+    it("dims a fully placed digit but leaves others normal", function()
+        local function digit_button(value)
+            for _, button in ipairs(l.number_row.buttons) do
+                if button.id == value then
+                    return button
+                end
+            end
+            error("no number button " .. tostring(value))
+        end
+        numberbar.paint(bb, l, { completed = { [5] = true } })
+        assert.is_false(
+            scan_rect(bb, digit_button(5), tonumber(theme.digit.a)),
+            "completed digit must not use normal ink"
+        )
+        assert.is_true(
+            scan_rect(bb, digit_button(5), tonumber(theme.disabled.a)),
+            "completed digit uses the dimmed ink"
+        )
+        assert.is_true(scan_rect(bb, digit_button(3), tonumber(theme.digit.a)), "other digits stay normal")
+    end)
+
+    it("still inverts an armed digit even when it is completed", function()
+        local function digit_button(value)
+            for _, button in ipairs(l.number_row.buttons) do
+                if button.id == value then
+                    return button
+                end
+            end
+            error("no number button " .. tostring(value))
+        end
+        numberbar.paint(bb, l, { armed = 5, completed = { [5] = true } })
+        assert.are.equal(
+            pixel(bb, digit_button(5).x + 2, digit_button(5).y + 2),
+            0x00,
+            "a completed digit stays selectable (its button can still be armed)"
+        )
+    end)
+
     it("dims undo/redo labels when there is nothing to undo or redo", function()
         numberbar.paint(bb, l, { can_undo = false, can_redo = false })
         for _, button in ipairs(l.tool_row.buttons) do

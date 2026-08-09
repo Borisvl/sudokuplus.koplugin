@@ -134,6 +134,12 @@ function Sudoku:continueGame()
             stats = self:loadStats(),
             save_path = SAVE_PATH,
             stats_path = STATS_PATH,
+            new_game_cb = function(new_difficulty)
+                self:startGame(new_difficulty)
+            end,
+            show_stats_cb = function()
+                self:showStatistics()
+            end,
         },
         "full"
     )

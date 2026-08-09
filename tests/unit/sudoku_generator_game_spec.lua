@@ -168,4 +168,34 @@ describe("core.generator game payload", function()
         assert.are.equal(board.count_clues(payload.board), payload.clues)
         assert.is_not_nil(payload.solution)
     end)
+
+    it("property: every generated game is unique and matches its solution under an independent plain solve", function()
+        for _, entry in ipairs({
+            { "easy", 101 },
+            { "medium", 102 },
+            { "hard", 103 },
+            { "expert", 104 },
+        }) do
+            local payload, err = generator.generate_game {
+                difficulty = entry[1],
+                seed = entry[2],
+                rng = prng.new(entry[2]),
+            }
+
+            assert.is_nil(err)
+            assert.is_not_nil(payload)
+
+            -- The plain (technique-less) solver is independent of the
+            -- generator's techniques-based classification.
+            local solutions = solver.new(payload.board):solve_all()
+            assert.are.equal(1, #solutions, entry[1] .. " must be uniquely solvable by the plain solver")
+            assert.are.equal(
+                board.to_string(payload.solution),
+                board.to_string(solutions[1].board),
+                entry[1] .. " payload solution must match the plain solve"
+            )
+            assert.are.equal(entry[1], payload.difficulty, entry[1] .. " difficulty claim")
+            assert.is_not_nil(payload.seed, entry[1] .. " must record a reproduction seed")
+        end
+    end)
 end)

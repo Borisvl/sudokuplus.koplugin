@@ -13,6 +13,7 @@ local T = require("ffi/util").template
 local _ = require("gettext")
 
 local layout = require("ui.layout")
+local difficulties = require("ui.difficulties")
 local numberbar = require("ui.numberbar")
 local stats = require("stats")
 local storage = require("storage")
@@ -69,6 +70,7 @@ function SudokuView:init()
     self._hint_cells = {}
     self._match_value = nil
     self._match_cells = {}
+    self._completed_digits = self.game:completed_digits()
 
     self.ges_events.Tap = {
         GestureRange:new {
@@ -435,6 +437,7 @@ function SudokuView:paintTo(bb, x, y)
         armed = self.armed,
         can_undo = self.game:can_undo(),
         can_redo = self.game:can_redo(),
+        completed = self._completed_digits,
     })
     if self._hint_stage >= 1 and self._hint_result then
         local banner = self.layout.banner
@@ -521,8 +524,27 @@ function SudokuView:onHold(ev_args, ges)
     return true
 end
 
+-- Marks the number row only when the set of fully placed digits changes, so a
+-- digit completing (or an undo/erase breaking it) repaints the row but
+-- ordinary moves pay no extra EPD update.
+function SudokuView:_syncCompletedDigits()
+    local completed = self.game:completed_digits()
+    local changed = false
+    for v = 1, 9 do
+        if (completed[v] ~= nil) ~= (self._completed_digits[v] ~= nil) then
+            changed = true
+            break
+        end
+    end
+    if changed then
+        self._completed_digits = completed
+        self:markNumberRow()
+    end
+end
+
 function SudokuView:afterMove()
     self:_refreshMatchAfterMove()
+    self:_syncCompletedDigits()
     self:refresh()
     if self.game:is_won() then
         self:onWin()
@@ -735,7 +757,8 @@ function SudokuView:openMenu()
     local dialog
     dialog = ButtonDialog:new {
         title = T(
-            _("Time: %1    Mistakes: %2    Hints: %3"),
+            _("%1 — Time: %2    Mistakes: %3    Hints: %4"),
+            difficulties.label(self.game:difficulty()) or self.game:difficulty(),
             format_time(self.game:elapsed()),
             tostring(self.game:mistakes()),
             tostring(#self.game:hints())
@@ -758,6 +781,17 @@ function SudokuView:openMenu()
             },
             {
                 {
+                    text = _("New game"),
+                    callback = function()
+                        self.menu_open = false
+                        UIManager:close(dialog)
+                        UIManager:close(self, "flashui")
+                        if self.new_game_cb then
+                            self.new_game_cb(self.game:difficulty())
+                        end
+                    end,
+                },
+                {
                     text = _("Give up"),
                     callback = function()
                         self.menu_open = false
@@ -765,6 +799,8 @@ function SudokuView:openMenu()
                         self:onGiveUp()
                     end,
                 },
+            },
+            {
                 {
                     text = _("Quit"),
                     callback = function()
@@ -798,6 +834,12 @@ end
 
 function SudokuView:onSuspend()
     self.game:pause()
+    if self.save_path then
+        local ok, err = storage.save(self.save_path, self.game:serialize())
+        if not ok then
+            logger.warn("sudoku: failed to save on suspend: " .. tostring(err))
+        end
+    end
     return true
 end
 

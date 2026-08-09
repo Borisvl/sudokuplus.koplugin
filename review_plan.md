@@ -290,25 +290,41 @@ invariants) is covered by RM5 #24 and the technique-spec additions.
 sub-second (measured above), seed round-trip speced, specs green, lint clean,
 commit `RM4`.
 
-### RM5 — Missing features & test gaps (batch)
+### RM5 — Missing features & test gaps (batch) ✅
 
-- [ ] #19 difficulty label in the game view (and/or pause menu title).
-- [ ] #20 "New game" entry in the pause menu (same difficulty, or difficulty
-      submenu), wired through `new_game_cb`.
-- [ ] #22 review-the-solution / same-puzzle replay option in the win dialog.
-- [ ] #18 auto-save on `onSuspend` (writes the same `serialize` the quit path
-      does) with a view-spec.
-- [ ] #24 negative/no-op specs for every technique.
-- [ ] #25 specs for the RM2 edge cases (hidden pair once/twice, naked subsets
-      with singletons).
-- [ ] #26 property test: generated game → plain-solver uniqueness + solution
-      match; difficulty claim checked against an independent classification.
-- [ ] #23 stats screen: clamp/scroll the technique list on small screens.
-- [ ] #21 optional: per-difficulty stats (already aggregated) surfaced in the
-      pause menu.
+- [x] **#30 new feature: fully placed digits grey out in the number selector.**
+      `game:completed_digits()` returns the set of digits placed exactly nine
+      times; `numberbar.paint` renders those buttons in `theme.disabled` ink
+      while they stay selectable (arming still inverts). The view tracks the
+      completed set and repaints the number row only when it changes (same
+      dirty-tracking pattern as the tool row, so ordinary moves pay no extra
+      EPD update); synced on every move including undo/redo and hint applies.
+- [x] #19 difficulty label in the pause menu title (e.g. "Easy — Time: …
+      Mistakes: … Hints: …").
+- [x] #20 "New game" entry in the pause menu (same difficulty), wired through
+      `new_game_cb`; `main.lua:continueGame` now passes `new_game_cb` /
+      `show_stats_cb` too, so a continued game can start fresh or open stats.
+- [x] #18 auto-save on `onSuspend` (writes the same `serialize` the quit path
+      does) with a view-spec; the game is saved paused.
+- [x] #24 negative/no-op specs for **every** technique: new
+      `sudoku_technique_noop_spec.lua` runs each of the 17 technique `apply`
+      functions on a solved board and asserts no change / no steps.
+- [x] #25 specs for the RM2 edge cases (hidden pair once/twice, naked subsets
+      with singletons) — already landed with RM2.
+- [x] #26 property test: every generated difficulty is uniquely solvable by the
+      **plain** (technique-less) solver, the payload solution matches that
+      solve, and the difficulty claim + reproduction seed hold.
+- [ ] #21 optional: per-difficulty stats surfaced in the pause menu (the stats
+      screen already has them) — deferred, low value.
+- [ ] #22 review-the-solution / same-puzzle replay option in the win dialog —
+      deferred (would need a review view; "New game" + Statistics already
+      cover the main exits).
+- [ ] #23 stats screen clamp/scroll on small screens — deferred (the 6"
+      profile fits the current report; revisit if a longer technique list
+      overflows).
 
 **Exit criteria**: all new specs green, lint clean, emulator smoke on
-`kobo-aura-one` and `kobo-clara`, PLAN.md/README updated, commit.
+`kobo-aura-one` and `kobo-clara`, PLAN.md/README updated, commit `RM5`.
 
 ---
 

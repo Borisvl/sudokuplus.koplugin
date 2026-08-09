@@ -28,6 +28,17 @@ describe("sudoku view", function()
         return tonumber(SOLUTION:sub(row * 9 + col + 1, row * 9 + col + 1))
     end
 
+    local function first_cell_with(value)
+        for r = 0, 8 do
+            for c = 0, 8 do
+                if solution_cell(r, c) == value then
+                    return r, c
+                end
+            end
+        end
+        error("no cell with value " .. tostring(value))
+    end
+
     local function blank_solution(cells)
         local chars = {}
         for i = 1, 81 do
@@ -706,6 +717,19 @@ describe("sudoku view", function()
         assert.is_true(g:elapsed() > paused)
     end)
 
+    it("auto-saves the paused game on suspend", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION), { save_path = save_path })
+        tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 3)
+        view:onSuspend()
+        local data = storage.load(save_path)
+        assert.is_not_nil(data, "suspend must persist the game")
+        local restored, err = game.restore(data, { now = now })
+        assert.is_not_nil(restored, err)
+        assert.are.equal(2, restored:get(0, 3))
+        assert.is_false(restored.timer.running, "the suspended game is saved paused")
+    end)
+
     it("resumes the timer when the pause menu is dismissed by tapping outside", function()
         local g = new_game(PUZZLE, SOLUTION)
         local view = new_view(g)
@@ -743,6 +767,61 @@ describe("sudoku view", function()
 
         dialog.buttons[1][1].callback()
         assert.is_true(g.timer.running, "the Resume button resumes the timer")
+    end)
+
+    it("names the difficulty in the pause menu title", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        local view = new_view(g)
+        local dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons then
+                dialog = widget
+            end
+        end
+        view:openMenu()
+        UIManager.show = original_show
+        assert.is_not_nil(dialog)
+        assert.is_true(dialog.title:find("Easy", 1, true) ~= nil, "the pause menu title names the difficulty")
+    end)
+
+    it("starts a new game at the same difficulty from the pause menu", function()
+        local started
+        local view = new_view(new_game(PUZZLE, SOLUTION), {
+            new_game_cb = function(difficulty)
+                started = difficulty
+            end,
+        })
+        local dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        local closed = {}
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons then
+                dialog = widget
+            end
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        view:openMenu()
+        assert.is_not_nil(dialog)
+        local new_game_button
+        for _, row in ipairs(dialog.buttons) do
+            for _, button in ipairs(row) do
+                if button.text == "New game" then
+                    new_game_button = button
+                end
+            end
+        end
+        assert.is_not_nil(new_game_button, "the pause menu offers a new game")
+        new_game_button.callback()
+        UIManager.show = original_show
+        UIManager.close = original_close
+        assert.are.equal("easy", started, "new game restarts at the same difficulty")
+        assert.are.equal(dialog, closed[1], "the pause dialog is closed before starting a new game")
     end)
 
     it("opens the statistics screen from the pause menu", function()
@@ -906,6 +985,25 @@ describe("sudoku view", function()
             tap_button(view, "number_row", 3)
             local set = grid_region_set(view)
             assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 1))], "the unselected cell repaints")
+        end)
+
+        it("refreshes the number row when a digit becomes fully placed", function()
+            -- Blank one 5: placing it back completes digit 5, which must
+            -- repaint the number row (the button greys out).
+            local r, c = first_cell_with(5)
+            local view = new_view(new_game(blank_solution({ { r, c } }), SOLUTION))
+            paint_view(view)
+            calls = {}
+            tap_button(view, "number_row", 5)
+            tap_cell(view, r, c)
+            local number_call
+            for _, call in ipairs(calls) do
+                if call.region and call.region.y == view.layout.number_row.y then
+                    number_call = call
+                end
+            end
+            assert.is_not_nil(number_call, "the number row must refresh when a digit completes")
+            assert.are.equal("ui", number_call.mode)
         end)
 
         it("refreshes each affected cell separately when placing a digit", function()

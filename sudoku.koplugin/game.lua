@@ -364,6 +364,25 @@ function mt:digit_cells(value)
     return set
 end
 
+-- The set of digits placed exactly nine times (fully solved). Used to grey out
+-- the number selector; the digit stays selectable, this is purely visual.
+function mt:completed_digits()
+    local counts = {}
+    for i = 1, 81 do
+        local value = self.board[i]
+        if value ~= 0 then
+            counts[value] = (counts[value] or 0) + 1
+        end
+    end
+    local result = {}
+    for value = 1, 9 do
+        if counts[value] == 9 then
+            result[value] = true
+        end
+    end
+    return result
+end
+
 -- Empty cells whose notes the user cleared (ground truth): the hint engine
 -- cannot use them, so deduction may be blocked until notes are re-added.
 function mt:notes_needed()

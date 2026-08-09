@@ -54,7 +54,13 @@ function numberbar.paint(bb, layout, state)
     paint_row(bb, layout.number_row)
     for _, button in ipairs(layout.number_row.buttons) do
         local face = type(button.id) == "number" and digit_face or label_face
-        numberbar.render_centered(bb, face, label_for(button.id), false, button, theme.digit)
+        -- A digit fully placed (nine times) is greyed out but stays selectable:
+        -- arming it still inverts below.
+        local color = theme.digit
+        if type(button.id) == "number" and state.completed and state.completed[button.id] then
+            color = theme.disabled
+        end
+        numberbar.render_centered(bb, face, label_for(button.id), false, button, color)
         if state.armed and button.id == state.armed then
             bb:invertRect(button.x, button.y, button.w, button.h)
         end
