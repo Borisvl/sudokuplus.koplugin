@@ -22,7 +22,10 @@ local function process_unit(prop, path, unit_cells, unit)
         if prop:is_empty(r, col) then
             local mask = prop:cand(r, col)
             local count = flags.count(mask)
-            if count >= 2 and count <= 4 then
+            -- A valid naked subset can include 1-candidate cells; the union
+            -- check below still requires exactly four digits across the four
+            -- cells.
+            if count >= 1 and count <= 4 then
                 eligible[#eligible + 1] = { cell = cell, mask = mask }
             end
         end

@@ -6,10 +6,27 @@ local candidates = require("core.candidates")
 local solve_path = require("core.solve_path")
 local solver = require("core.solver")
 local flags = require("core.techniques.flags")
+local masks = require("core.masks")
+local propagator = require("core.techniques.propagator")
+local naked_quads = require("core.techniques.naked_quads")
 
 -- HoDoKu naked quad example: https://hodoku.sourceforge.net/en/show_example.php?file=n401&tech=Naked+Quad
 local HODOKU = "000000060000030047032500000600007005207010908081004000000002000000000001005870000"
 local techniques = bit.bor(flags.EASY, flags.NAKED_QUADS)
+
+-- Isolated row-0 propagator for direct detector tests. Cells (0,0)-(0,3) are
+-- filled; (0,4)-(0,8) carry the masks under test.
+local function row0_propagator(cell_masks)
+    local b = board.new()
+    for col = 0, 3 do
+        board.set(b, 0, col, col + 6)
+    end
+    local cand = candidates.new()
+    for col = 4, 8 do
+        cand[1][col + 1] = cell_masks[col]
+    end
+    return propagator.new(b, masks.new(), cand, flags.NAKED_QUADS)
+end
 
 local function in_unit(unit, r, c)
     if unit.type == "row" then
@@ -112,5 +129,37 @@ describe("core.techniques.naked_quads", function()
         assert.is_true(s:propagate(path))
         assert.are.equal(81, board.count_clues(s.board))
         assert.is_not_nil(solver.validate(s.board))
+    end)
+
+    it("finds a naked quad that includes a singleton cell", function()
+        -- (0,6)={3} is a singleton; (0,5)={1,2}, (0,7)={1,4}, (0,8)={2,3,4}
+        -- confine {1,2,3,4} to four cells, so the union is eliminated from
+        -- the rest of the row. The old code skipped 1-candidate cells.
+        local p = row0_propagator({
+            [4] = bit.bor(bit.lshift(1, 0), bit.lshift(1, 4)),
+            [5] = bit.bor(bit.lshift(1, 0), bit.lshift(1, 1)),
+            [6] = bit.lshift(1, 2),
+            [7] = bit.bor(bit.lshift(1, 0), bit.lshift(1, 3)),
+            [8] = bit.bor(bit.lshift(1, 1), bit.bor(bit.lshift(1, 2), bit.lshift(1, 3))),
+        })
+        local path = solve_path.new()
+
+        assert.is_true(naked_quads.apply(p, path))
+        assert.are.equal(bit.lshift(1, 4), p:cand(0, 4), "the quad digits are eliminated from the peer cell")
+    end)
+
+    it("does not treat four cells confined to three digits as a naked quad", function()
+        -- (0,4)-(0,7) all hold only {1,2,3}: the union has three digits, so no
+        -- four-cell combo is a quad (eliminating would be unsound).
+        local p = row0_propagator({
+            [4] = bit.bor(bit.lshift(1, 0), bit.bor(bit.lshift(1, 1), bit.lshift(1, 2))),
+            [5] = bit.bor(bit.lshift(1, 0), bit.bor(bit.lshift(1, 1), bit.lshift(1, 2))),
+            [6] = bit.bor(bit.lshift(1, 0), bit.bor(bit.lshift(1, 1), bit.lshift(1, 2))),
+            [7] = bit.bor(bit.lshift(1, 0), bit.bor(bit.lshift(1, 1), bit.lshift(1, 2))),
+            [8] = bit.bor(bit.lshift(1, 0), bit.bor(bit.lshift(1, 1), bit.lshift(1, 2))),
+        })
+        local path = solve_path.new()
+
+        assert.is_false(naked_quads.apply(p, path))
     end)
 end)

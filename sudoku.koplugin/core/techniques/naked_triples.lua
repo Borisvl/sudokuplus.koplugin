@@ -13,7 +13,10 @@ local function process_unit(prop, path, unit_cells, unit)
         if prop:is_empty(r, col) then
             local mask = prop:cand(r, col)
             local count = flags.count(mask)
-            if count == 2 or count == 3 then
+            -- A valid naked subset can include a 1-candidate cell (e.g. a
+            -- singleton inside the triple); the union check below still
+            -- requires exactly three digits across the three cells.
+            if count >= 1 and count <= 3 then
                 eligible[#eligible + 1] = { cell = cell, mask = mask }
             end
         end

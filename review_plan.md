@@ -176,20 +176,31 @@ this pass), commit `RM1`.
 
 Committed as `RM1` (see git log).
 
-### RM2 — Solver completeness (classification + hints)
+### RM2 — Solver completeness (classification + hints) ✅
 
-- [ ] #1 hidden pairs: standard semantics — union of positions ≤ 2 cells,
-      each selected digit present at least once (drop the identical-cells /
-      both-exactly-twice requirement). Negative test: one-digit-once pair is
-      still found; no false eliminations.
-- [ ] #2 naked triples/quads: accept 1-candidate cells (union still exactly
-      size 3/4). Regression specs: triple with a singleton, quad with a
-      singleton; no-op on boards where the subset is degenerate.
-- [ ] #17 re-verify difficulty classification on the HoDoKu fixtures after the
-      above; update `solve_path`/generator specs if classifications shift.
+- [x] #1 hidden pairs: standard semantics — a pair is any two digits that both
+      occur at least once and whose positions' union is exactly two cells
+      (drop the identical-cells / both-exactly-twice requirement; one digit may
+      occur once, the other twice). Soundness guard: both digits must be
+      present — a union of two cells caused by one digit alone (the other
+      absent) is not a pair and would strip legitimate candidates. Specs cover
+      the once+twice case (step metadata + cascade-to-assignment), scattered
+      digits, a no-confined-union state, and the absent-digit regression.
+- [x] #2 naked triples/quads: 1-candidate cells are now eligible (union still
+      must be exactly 3/4 digits). Regression specs: triple/quad with a
+      singleton is found; degenerate subsets (3 cells/2 digits, 4 cells/3
+      digits) are not eliminated from.
+- [x] #17 re-verify classification: all `sudoku_*` specs unchanged and green
+      (parity, guess-free examples, hints, solve-path). Quantified the impact
+      on the #29 medium match rate: the classification distribution over 12
+      medium generations (554 retry attempts) is **unchanged** — 498 "easy",
+      11 "medium", 12 "hard", 23 "expert", 10 "requires guessing". The old
+      detector's strictness only missed rare edge patterns, so RM2 does not
+      materially raise the medium match rate; #29 remains a generator-strategy
+      problem (see RM4).
 
 **Exit criteria**: technique specs + parity spec green, all six M2c / six M2d
-examples still solve guess-free, `./dev.sh lint` clean, commit.
+examples still solve guess-free, `./dev.sh lint` clean, commit `RM2`.
 
 ### RM3 — Hygiene & deduplication
 
@@ -220,6 +231,19 @@ examples still solve guess-free, `./dev.sh lint` clean, commit.
       measure the hint propagation path p95; record a device-time budget.
 - [ ] #14 if generation still slow, add a dirty-cell/min-heap to
       `find_next_empty_cell` and re-benchmark.
+- [ ] #29 **Medium generation is slow and can hard-fail** (measured 2026-08-09,
+      profiled before/after RM1 — not a regression). Random 28–34 clue boards
+      classify ~90% "easy" under the hardest-technique model, so `generate_game`
+      retries ~50× per medium game (≈1–2 s, sometimes the full 100-attempt cap,
+      after which medium **fails outright** — observed 1/12 seeds and 1/8 bench
+      runs). Per-attempt cost is ~30–80 ms (sample + ~80 uniqueness DFS checks +
+      techniques classify). Fixes:
+      - generator: bias the medium clue range / accept a difficulty window, and
+        make the retry loop resilient instead of hard-failing after the cap
+        (return the closest-match puzzle or a clear error);
+      - RM2 #1/#2 should raise the medium match rate by reclassifying some
+        currently-"easy" boards as medium;
+      - re-measure with `tools/bench_generation.lua` and record p50/p95/max.
 
 **Exit criteria**: generation no longer blocks input (or cached puzzles serve
 instantly), bench numbers recorded in PLAN.md, specs green, lint clean, commit.
