@@ -117,4 +117,40 @@ describe("core.board", function()
         assert.are.same({ 0, 1 }, cells[1])
         assert.are.same({ 8, 8 }, cells[#cells])
     end)
+
+    it("raw accessors mirror the validated ones for in-range coordinates", function()
+        local b = board.from_string(UNIQUE_PUZZLE)
+        board.set(b, 4, 4, 7)
+        for r = 0, 8 do
+            for c = 0, 8 do
+                assert.are.equal(
+                    board.get(b, r, c),
+                    board.raw_get(b, r, c),
+                    string.format("raw_get mismatch at (%d, %d)", r, c)
+                )
+                assert.are.equal(
+                    board.is_empty(b, r, c),
+                    board.raw_is_empty(b, r, c),
+                    string.format("raw_is_empty mismatch at (%d, %d)", r, c)
+                )
+            end
+        end
+    end)
+
+    it("raw_set writes the value at the flat board index", function()
+        local b = board.new()
+        assert.is_true(board.raw_set(b, 0, 0, 5))
+        assert.are.equal(5, b[1])
+        assert.are.equal(5, board.raw_get(b, 0, 0))
+
+        assert.is_true(board.raw_set(b, 8, 8, 0))
+        assert.are.equal(0, b[81])
+        assert.is_true(board.raw_is_empty(b, 8, 8))
+    end)
+
+    it("raw accessors do not validate coordinates (hot-path contract)", function()
+        local b = board.new()
+        assert.is_nil(board.raw_get(b, -1, 0), "raw_get must not error on out-of-range coordinates")
+        assert.is_false(board.raw_is_empty(b, -1, 0), "raw_is_empty must not error on out-of-range coordinates")
+    end)
 end)

@@ -628,3 +628,54 @@ with no errors, PLAN.md updated, commit.
 - [ ] Kobo on-device smoke test
 
 **Exit criteria**: milestone report, final commit.
+
+### M9 — Generation performance (done)
+
+Refined plan: profiled 2026-08-10 on the dev Mac (the Kobo Aura One is ≈5-8×
+slower, matching the reported multi-second waits). The greedy dig — a full MRV
+`solve_until(2)` uniqueness check after *every* clue removal — was 60-85% of
+generation time; classification ran all 17 techniques (incl. AIC) on every
+attempt even for a medium target; medium/hard difficulty hit rates (~5%) paid
+both repeatedly; and no bound on search work let rare pathological boards
+stall for seconds. Fixed with six changes, each spec'd:
+
+- **L1 raw board accessors** — `board.raw_get`/`raw_is_empty`/`raw_set`
+  (no per-cell type/range validation) replace the validated accessors on the
+  internal hot paths (solver recursion, propagator, candidate updates, unit
+  scans). The public validated API is unchanged (`sudoku_board_spec`).
+- **L2 box-index lookups** — `masks.get_box_idx` and new
+  `box_start_row`/`box_start_col` use precomputed tables instead of
+  `math.floor(x / 3)` (LuaJIT is Lua 5.1 and has no `//`); inline box math in
+  the propagator, AIC and `units.sees` switched to them.
+- **P1 count-based uniqueness** — `is_unique` uses `count_solutions(2)`
+  instead of `solve_until(2)`: identical verdict, no per-solution board/path
+  materialization. Note: P1/P2/P3 change the RNG consumption pattern (the
+  dig's count-only search, the classification tier, and the weighted target
+  picker all draw the PRNG differently), so same-seed puzzles differ from
+  earlier versions; determinism and seed-reproduction (recorded seed → exact
+  replay) are preserved and no test pins a specific puzzle. L1/L2 are
+  puzzle-stream-stable.
+- **P2 tiered classification** — a difficulty target classifies with only the
+  technique tiers up to it (medium → `EASY|MEDIUM`, hard →
+  `EASY|MEDIUM|HARD`); harder puzzles classify as `requires_guessing` and are
+  rejected, never mislabeled. Expert still uses all techniques. The propagator
+  runs tiers in fixed order, so in-tier verdicts are identical to an
+  all-techniques solve.
+- **P3 weighted clue-target sampling** — medium/hard target clue counts are
+  sampled by measured per-clue-count difficulty hit rates instead of uniformly
+  (medium peaks at 25 clues, 16.7%, hard at 24, 10%; both measured 2026-08-10).
+  Weights are hardcoded in `generator.lua`; easy/expert stay uniform.
+- **P4 search-work budget** — solver `search_budget` (node cap, default
+  `50000` in the generator; normal calls top out ≈13k nodes, the cap never
+  fires on the fixed-seed corpus). A capped uniqueness check restores the clue
+  (safe side of a rejected removal); a capped classification is a failed
+  attempt. Pathological boards now cost a fixed bounded time instead of
+  seconds. Divergence from rustoku: its solver searches unbounded.
+
+Measured end-to-end (dev Mac, 20 seeds): medium 0.23 → 0.09 s, hard
+0.85 → 0.33 s, expert 0.37 → 0.30 s; `tools/bench_generation.lua` runs well
+under its 3 s gate (medium ~20 ms, hard ~20 ms, expert ~160 ms).
+
+**Exit criteria**: all specs green (`./dev.sh test`), `./dev.sh lint` clean,
+`tools/bench_generation.lua` passes its `--max-seconds` gate, emulator boot
+smoke on `kobo-aura-one` with no errors, PLAN.md + README updated, commit.

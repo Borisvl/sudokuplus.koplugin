@@ -10,8 +10,8 @@ local propagator = {}
 local mt = {}
 mt.__index = mt
 
-local board_set = board.set
-local board_is_empty = board.is_empty
+local board_set = board.raw_set
+local board_is_empty = board.raw_is_empty
 local masks_add = masks.add_number
 local masks_remove = masks.remove_number
 local cand_new_trail = candidates.new_trail
@@ -24,6 +24,9 @@ local cand_update_for = candidates.update_affected_cells_for
 local path_push = solve_path.push
 local path_placement = solve_path.placement_step
 local path_elimination = solve_path.elimination_step
+
+-- L2: box start rows for coordinates 0..8, indexed by (coordinate + 1).
+local BOX_ROW_OFFSET = { 0, 0, 0, 3, 3, 3, 6, 6, 6 }
 
 -- Fixed technique order (rustoku parity). All modules are loaded eagerly so a
 -- deployment or porting error cannot silently change the enabled technique set.
@@ -104,8 +107,8 @@ end
 
 function mt:count_affected_cells(r, c)
     local count = 0
-    local box_r = math.floor(r / 3) * 3
-    local box_c = math.floor(c / 3) * 3
+    local box_r = BOX_ROW_OFFSET[r + 1]
+    local box_c = BOX_ROW_OFFSET[c + 1]
     for col = 0, 8 do
         if col ~= c and board_is_empty(self.board, r, col) then
             count = count + 1
@@ -129,8 +132,8 @@ end
 function mt:count_candidates_eliminated(r, c, num)
     local count = 0
     local num_bit = bit.lshift(1, num - 1)
-    local box_r = math.floor(r / 3) * 3
-    local box_c = math.floor(c / 3) * 3
+    local box_r = BOX_ROW_OFFSET[r + 1]
+    local box_c = BOX_ROW_OFFSET[c + 1]
     for col = 0, 8 do
         if col ~= c and bit.band(cand_get(self.candidates, r, col), num_bit) ~= 0 then
             count = count + 1

@@ -41,6 +41,35 @@ describe("core.masks", function()
         assert.are.equal(6, masks.get_box_idx(8, 0))
     end)
 
+    it("matches the floor-division formula for every cell", function()
+        -- L2: get_box_idx is a table lookup; it must stay identical to
+        -- (r // 3) * 3 + (c // 3) for every valid coordinate.
+        for r = 0, 8 do
+            for c = 0, 8 do
+                assert.are.equal(
+                    math.floor(r / 3) * 3 + math.floor(c / 3),
+                    masks.get_box_idx(r, c),
+                    string.format("box index mismatch at (%d, %d)", r, c)
+                )
+            end
+        end
+    end)
+
+    it("derives box start coordinates from a box index", function()
+        for box_idx = 0, 8 do
+            assert.are.equal(
+                math.floor(box_idx / 3) * 3,
+                masks.box_start_row(box_idx),
+                string.format("box start row mismatch at box %d", box_idx)
+            )
+            assert.are.equal(
+                (box_idx % 3) * 3,
+                masks.box_start_col(box_idx),
+                string.format("box start col mismatch at box %d", box_idx)
+            )
+        end
+    end)
+
     it("adds a number to one cell", function()
         local m = masks.new()
         masks.add_number(m, 0, 0, 1)

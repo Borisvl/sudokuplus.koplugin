@@ -209,6 +209,9 @@ storage):
 - [x] M6.3: one refresh per tap (`"ui"` mode, no promotion flashes, clustered
       regions, tool row only on state change — no more lag/flicker)
 - [x] M7: menus, hint display, stats screen
+- [x] M9: generation performance (raw board accessors, box-index lookups,
+      count-based uniqueness, tiered classification, weighted clue-target
+      sampling, search-work budget — ~2.5x on medium/hard, bounded worst case)
 - [ ] M8: polish, i18n, on-device testing
 
 See PLAN.md for milestone details and the project rules in AGENTS.md.

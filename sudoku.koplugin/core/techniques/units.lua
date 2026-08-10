@@ -2,6 +2,7 @@ local bit = require("bit")
 local board = require("core.board")
 local candidates = require("core.candidates")
 local flags = require("core.techniques.flags")
+local masks = require("core.masks")
 
 local units = {}
 
@@ -89,7 +90,7 @@ function units.find_units_with_candidate_count_range(candidate_bit, min_n, max_n
         local positions = {}
         for _, cell in ipairs(cells) do
             local r, col = cell[1], cell[2]
-            if board.is_empty(b, r, col) and bit.band(candidates.get(c, r, col), candidate_bit) ~= 0 then
+            if board.raw_is_empty(b, r, col) and bit.band(candidates.get(c, r, col), candidate_bit) ~= 0 then
                 if unit_type == "row" then
                     positions[#positions + 1] = col
                 else
@@ -105,9 +106,7 @@ function units.find_units_with_candidate_count_range(candidate_bit, min_n, max_n
 end
 
 function units.sees(r1, c1, r2, c2)
-    return r1 == r2
-        or c1 == c2
-        or (math.floor(r1 / 3) == math.floor(r2 / 3) and math.floor(c1 / 3) == math.floor(c2 / 3))
+    return r1 == r2 or c1 == c2 or masks.get_box_idx(r1, c1) == masks.get_box_idx(r2, c2)
 end
 
 -- Invokes fn(combo) for every combination of `size` indices from 1..count, in
@@ -141,7 +140,7 @@ function units.bivalue_cells(c, b)
     local result = {}
     for r = 0, 8 do
         for col = 0, 8 do
-            if board.is_empty(b, r, col) then
+            if board.raw_is_empty(b, r, col) then
                 local mask = candidates.get(c, r, col)
                 if flags.count(mask) == 2 then
                     result[#result + 1] = { r, col, mask }

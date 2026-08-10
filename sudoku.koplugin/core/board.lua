@@ -75,6 +75,23 @@ function board.set(b, r, c, value)
     return true
 end
 
+-- Unchecked accessors for internal hot paths (solver recursion, technique
+-- scans, candidate propagation). They skip the type/range validation of
+-- get/set/is_empty; callers must pass a flat 81-cell board and in-range
+-- 0..8 coordinates. Mirror the validated API for in-range inputs.
+function board.raw_get(b, r, c)
+    return b[r * 9 + c + 1]
+end
+
+function board.raw_is_empty(b, r, c)
+    return b[r * 9 + c + 1] == 0
+end
+
+function board.raw_set(b, r, c, value)
+    b[r * 9 + c + 1] = value
+    return true
+end
+
 function board.is_empty(b, r, c)
     local value, err = board.get(b, r, c)
     if err then

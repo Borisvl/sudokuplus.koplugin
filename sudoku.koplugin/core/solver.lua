@@ -10,9 +10,9 @@ local solver = {}
 local mt = {}
 mt.__index = mt
 
-local board_get = board.get
-local board_set = board.set
-local board_is_empty = board.is_empty
+local board_get = board.raw_get
+local board_set = board.raw_set
+local board_is_empty = board.raw_is_empty
 local board_clone = board.clone
 local masks_add = masks.add_number
 local masks_remove = masks.remove_number
@@ -70,6 +70,12 @@ local function clone_state(state)
         techniques = state.techniques,
         aic_max_depth = state.aic_max_depth,
         aic_max_expansions = state.aic_max_expansions,
+        -- search_budget persists across calls on an instance, but the node
+        -- counter and cap flag are run-scoped: a clone must not inherit a
+        -- stale pre-charged count or a stale cap from a previous run.
+        search_budget = state.search_budget,
+        search_nodes = 0,
+        search_capped = false,
     }
 end
 
@@ -177,6 +183,9 @@ function solver.new(b, opts)
         techniques = options.techniques or 0,
         aic_max_depth = options.aic_max_depth,
         aic_max_expansions = options.aic_max_expansions,
+        search_budget = options.search_budget,
+        search_nodes = 0,
+        search_capped = false,
     }
     return setmetatable(state, mt)
 end
@@ -212,7 +221,21 @@ local function find_next_empty_cell(state)
     return best_r, best_c
 end
 
+local function search_node_entered(state)
+    if state.search_budget then
+        state.search_nodes = state.search_nodes + 1
+        if state.search_nodes > state.search_budget then
+            state.search_capped = true
+            return true
+        end
+    end
+    return false
+end
+
 local function solve_until_recursive(state, solutions, path, bound)
+    if search_node_entered(state) then
+        return
+    end
     local r, col = find_next_empty_cell(state)
     if not r then
         solutions[#solutions + 1] = {
@@ -241,6 +264,9 @@ end
 
 local function count_solutions_recursive(state, count, limit)
     if limit > 0 and count >= limit then
+        return count
+    end
+    if search_node_entered(state) then
         return count
     end
 
@@ -289,6 +315,8 @@ function mt:solve_until(bound)
         prop:propagate_constraints(path, 0)
     end
     solve_until_recursive(state, solutions, path, bound)
+    self.search_nodes = state.search_nodes
+    self.search_capped = state.search_capped or nil
     return solutions
 end
 
@@ -382,7 +410,10 @@ function mt:count_solutions(limit)
         -- a false zero (see mt:solve_until).
         prop:propagate_constraints(path, 0)
     end
-    return count_solutions_recursive(state, 0, normalized_limit)
+    local count = count_solutions_recursive(state, 0, normalized_limit)
+    self.search_nodes = state.search_nodes
+    self.search_capped = state.search_capped or nil
+    return count
 end
 
 function mt:is_solved()

@@ -15,6 +15,29 @@ local DEFAULT_SYMMETRY = "none"
 local DEFAULT_MAX_ATTEMPTS = 100
 local ALL_TECHNIQUES = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.EXPERT)))
 
+-- P4: per-solve node budget. Uniqueness checks and difficulty classification
+-- can hit pathological search trees (a hard puzzle classified with only
+-- easy+medium techniques must exhaust the tree to prove uniqueness). Normal
+-- generation tops out around ~13k nodes per call; the budget caps the rare
+-- pathological boards at a fixed cost instead of stalling the UI for seconds.
+-- A capped check is treated as non-unique (dig restores the clue) and a
+-- capped classification as a failed attempt, so generation never fails hard
+-- because of one unlucky board.
+local SEARCH_BUDGET = 50000
+
+-- P2: a difficulty-targeted generation classifies with only the techniques up
+-- to the requested tier. A medium request never runs AIC or the fish/wing
+-- detectors: puzzles that need them classify as "requires guessing" and are
+-- rejected just the same, but far more cheaply. Easy/medium/hard verdicts
+-- are identical to an all-techniques solve (the propagator runs the tiers in
+-- fixed order, so a puzzle that solves within the tier follows the same path).
+local TIER_TECHNIQUES = {
+    easy = flags.EASY,
+    medium = bit.bor(flags.EASY, flags.MEDIUM),
+    hard = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, flags.HARD)),
+    expert = ALL_TECHNIQUES,
+}
+
 local DIFFICULTY_RANGES = {
     easy = { min = 34, max = 42 },
     -- 25..31 is where medium classifications actually concentrate: measured
@@ -33,6 +56,17 @@ local DIFFICULTY_ORDER = {
     medium = 2,
     hard = 3,
     expert = 4,
+}
+
+-- P3: clue-target sampling weights, aligned with DIFFICULTY_RANGES (weights[1]
+-- is the low end of the range). Measured 2026-08-10 per-clue-count difficulty
+-- hit rates (x10): medium peaks at 25 clues (16.7%), hard at 24 (10%), so a
+-- uniform target pick wastes attempts on low-yield clue counts. easy and
+-- expert stay uniform (single-attempt easy; expert's 16-25% hit rate is
+-- already fine).
+local DIFFICULTY_WEIGHTS = {
+    medium = { 167, 83, 50, 83, 67, 50, 33 },
+    hard = { 50, 33, 100, 67, 50, 33, 33 },
 }
 
 local SYMMETRIES = {
@@ -179,7 +213,11 @@ end
 
 local function new_solver(puzzle, rng, techniques)
     -- solver instances clone their RNG, so derive each search seed from the generator RNG.
-    return solver.new(puzzle, { rng = prng.new(rng:next()), techniques = techniques })
+    return solver.new(puzzle, {
+        rng = prng.new(rng:next()),
+        techniques = techniques,
+        search_budget = SEARCH_BUDGET,
+    })
 end
 
 local function sample_solution(rng)
@@ -190,17 +228,33 @@ local function sample_solution(rng)
 
     local solution = search_solver:solve_any()
     if not solution then
-        return nil, "failed to sample a solved board"
+        -- An empty board is always solvable, so a missing first solution can
+        -- only mean the search hit the node budget. Treat it as a retryable
+        -- failed attempt instead of a hard error (P4).
+        return nil
     end
     return solution.board
 end
 
+-- Returns true when the puzzle is proven uniquely solvable, false when it is
+-- proven non-unique, or nil when the search hit the node budget and the
+-- verdict is inconclusive. `err` is only set for a hard solver failure.
 local function is_unique(puzzle, rng)
     local uniqueness_solver, err = new_solver(puzzle, rng, 0)
     if not uniqueness_solver then
         return nil, err
     end
-    return #uniqueness_solver:solve_until(2) == 1
+    -- P1: count_solutions(2) only counts, it never materializes solution
+    -- boards or solve paths (solve_until(2) does both). The dig runs this
+    -- oracle after every clue removal, so the savings are direct.
+    local count = uniqueness_solver:count_solutions(2)
+    if uniqueness_solver.search_capped then
+        -- P4: inconclusive within budget. The dig restores the removed clue
+        -- (the safe side of a rejected removal); the final confirmation below
+        -- accepts (the dig invariant already guarantees uniqueness).
+        return nil
+    end
+    return count == 1
 end
 
 local function remove_clues(solution, options, target_clues)
@@ -225,12 +279,14 @@ local function remove_clues(solution, options, target_clues)
             end
 
             if #removed > 0 then
-                local unique, err = is_unique(puzzle, options.rng)
-                if unique == nil then
-                    return nil, err
+                local unique, unique_err = is_unique(puzzle, options.rng)
+                if unique_err then
+                    return nil, unique_err
                 elseif unique then
                     clues = clues - #removed
                 else
+                    -- Not unique, or inconclusive under the budget: both are
+                    -- "do not accept this removal"; restore the group.
                     for _, cell in ipairs(removed) do
                         puzzle[cell.index] = cell.value
                     end
@@ -239,11 +295,14 @@ local function remove_clues(solution, options, target_clues)
         end
     end
 
-    local unique, err = is_unique(puzzle, options.rng)
-    if unique == nil then
-        return nil, err
+    -- Final confirmation. unique == nil means the check capped, which is
+    -- accepted: every accepted removal above preserved uniqueness, so the
+    -- board is unique by construction and the proof is just belt-and-braces.
+    local unique, unique_err = is_unique(puzzle, options.rng)
+    if unique_err then
+        return nil, unique_err
     end
-    if not unique then
+    if unique == false then
         return nil, "generated puzzle is not uniquely solvable"
     end
 
@@ -264,13 +323,25 @@ end
 
 -- Returns the classification when the puzzle is uniquely solvable, nil
 -- without an error when it is not (a failed attempt, not a failure).
-local function classify_puzzle(puzzle, options)
-    local human_solver, err = new_solver(puzzle, options.rng, ALL_TECHNIQUES)
+-- `difficulty` selects the classification technique tier (P2); nil means
+-- the full technique set (used when the actual difficulty is unknown).
+local function classify_puzzle(puzzle, options, difficulty)
+    local techniques = ALL_TECHNIQUES
+    if difficulty ~= nil then
+        techniques = TIER_TECHNIQUES[difficulty]
+    end
+
+    local human_solver, err = new_solver(puzzle, options.rng, techniques)
     if not human_solver then
         return nil, err
     end
 
     local solutions = human_solver:solve_until(2)
+    if human_solver.search_capped then
+        -- P4: the search hit the node budget. Treat as a failed attempt (the
+        -- retry loop skips it), never as a difficulty verdict.
+        return nil
+    end
     if #solutions ~= 1 then
         return nil
     end
@@ -288,18 +359,40 @@ local function game_payload(payload, classification, options)
     }
 end
 
+-- Picks the clue-count target for one attempt: weighted for difficulties with
+-- a measured yield curve (P3), uniform otherwise.
+local function pick_target_clues(options, range)
+    local weights = DIFFICULTY_WEIGHTS[options.difficulty]
+    if not weights then
+        return range.min + options.rng:int(range.max - range.min + 1) - 1
+    end
+
+    local total = 0
+    for _, weight in ipairs(weights) do
+        total = total + weight
+    end
+    local roll = options.rng:int(total)
+    for index, weight in ipairs(weights) do
+        roll = roll - weight
+        if roll <= 0 then
+            return range.min + index - 1
+        end
+    end
+    return range.max
+end
+
 -- Runs one difficulty-targeted attempt: generates to a random clue count in
 -- `range`, then classifies. Returns (payload, nil, classification) for a
 -- usable (uniquely solvable) puzzle, nil for a failed attempt, or
 -- (nil, err) for a hard generation error.
 local function attempt_puzzle(options, range)
-    local target = range.min + options.rng:int(range.max - range.min + 1) - 1
+    local target = pick_target_clues(options, range)
     local payload, generate_err = generate_single(options, target)
     if not payload then
         return nil, generate_err
     end
 
-    local classification, classify_err = classify_puzzle(payload.board, options)
+    local classification, classify_err = classify_puzzle(payload.board, options, options.difficulty)
     if classify_err then
         return nil, classify_err
     end

@@ -171,6 +171,60 @@ describe("core.solver", function()
         assert.are.same(solve(), solve())
     end)
 
+    it("honours a search node budget and reports the cap (P4)", function()
+        -- A tiny budget must abort the search early and surface search_capped
+        -- with a bounded node count; the returned count is a valid lower bound.
+        local full = solver.new(board.from_string(SIX_PUZZLE)):count_solutions()
+        assert.are.equal(6, full)
+
+        local s = solver.new(board.from_string(SIX_PUZZLE), { search_budget = 10 })
+        local count = s:count_solutions()
+        assert.is_true(s.search_capped, "the instance must report the cap")
+        assert.is_not_nil(s.search_nodes)
+        assert.is_true(s.search_nodes > 10, "node count must exceed the budget for the cap to fire")
+        assert.is_true(s.search_nodes <= 100, "node count must stay bounded under the cap")
+        assert.is_true(count <= 6, "a capped count is a lower bound on the real count")
+
+        local unbounded = solver.new(board.from_string(SIX_PUZZLE))
+        local all = unbounded:count_solutions()
+        assert.are.equal(6, all)
+        assert.is_nil(unbounded.search_capped, "no budget means no cap flag")
+
+        local solved = solver.new(board.from_string(SIX_PUZZLE), { search_budget = 1000000 })
+        local solutions = solved:solve_until(2)
+        assert.are.equal(2, #solutions)
+        assert.is_nil(solved.search_capped, "a large budget must not spuriously cap")
+    end)
+
+    it("a capped uniqueness check reports the cap without lying about solutions found", function()
+        -- Generator contract: the dig restores the clue when search_capped is
+        -- set; the count itself stays a valid lower bound either way.
+        local s = solver.new(board.from_string(UNIQUE_PUZZLE), { search_budget = 3 })
+        local count = s:count_solutions(2)
+        assert.is_true(s.search_capped)
+        assert.is_true(count <= 1, "count must be the solutions found before the cap (0 or 1)")
+
+        local generous = solver.new(board.from_string(UNIQUE_PUZZLE), { search_budget = 1000000 })
+        assert.are.equal(1, generous:count_solutions(2))
+        assert.is_nil(generous.search_capped)
+    end)
+
+    it("resets the search node budget state between runs on the same instance", function()
+        -- clone_state must not inherit a stale node count or cap flag: two
+        -- identical runs on one instance report identical, non-accumulating
+        -- node counts (deterministic seeded search).
+        local s = solver.new(board.from_string(UNIQUE_PUZZLE), { search_budget = 1000000 })
+        local first = s:count_solutions(2)
+        local first_nodes = s.search_nodes
+        assert.is_nil(s.search_capped)
+        assert.is_true(first_nodes > 0)
+
+        local second = s:count_solutions(2)
+        assert.is_nil(s.search_capped, "a completed second run must not keep a stale cap flag")
+        assert.are.equal(first_nodes, s.search_nodes, "node count must reset, not accumulate")
+        assert.are.equal(first, second)
+    end)
+
     it("returns only valid solutions that preserve the givens", function()
         local function assert_valid_solutions(puzzle)
             local s = solver.new(board.from_string(puzzle))

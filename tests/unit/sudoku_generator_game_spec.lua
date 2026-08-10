@@ -39,6 +39,38 @@ describe("core.generator game payload", function()
         assert.are.equal(board.to_string(payload.solution), board.to_string(solutions[1].board))
     end)
 
+    it("keeps difficulty-targeted clue counts above the documented range floors", function()
+        -- P3: the weighted clue-target picker (medium/hard) must never dig
+        -- below the difficulty range floor, and must be deterministic per
+        -- seed. The upper bound is NOT asserted: the greedy dig can stall
+        -- above the target (expert targets 17..22 routinely land at 23..28).
+        local ranges = {
+            easy = 34,
+            medium = 25,
+            hard = 22,
+            expert = 17,
+        }
+        for _, entry in ipairs({ { "easy", 1 }, { "medium", 2 }, { "hard", 3 }, { "expert", 4 } }) do
+            local diff, seed = entry[1], entry[2]
+            local payload, err = generator.generate_game {
+                difficulty = diff,
+                seed = seed,
+                rng = prng.new(seed),
+            }
+            assert.is_nil(err)
+            assert.is_not_nil(payload)
+            assert.is_true(
+                payload.clues >= ranges[diff],
+                diff .. " clues " .. payload.clues .. " below range floor " .. ranges[diff]
+            )
+        end
+
+        local a = assert(generator.generate_game({ difficulty = "medium", seed = 9, rng = prng.new(9) }))
+        local b = assert(generator.generate_game({ difficulty = "medium", seed = 9, rng = prng.new(9) }))
+        assert.are.equal(board.to_string(a.board), board.to_string(b.board))
+        assert.are.equal(a.clues, b.clues)
+    end)
+
     it("classifies difficulty when none is requested", function()
         local payload, err = generator.generate_game({ rng = prng.new(77) })
 
@@ -167,6 +199,75 @@ describe("core.generator game payload", function()
         assert.are.equal("hard", payload.difficulty, "the payload reports the actual classification")
         assert.are.equal(board.count_clues(payload.board), payload.clues)
         assert.is_not_nil(payload.solution)
+    end)
+
+    it("generates within the search node budget on fixed seeds", function()
+        -- P4 guard: the generator passes a search_budget to every solver it
+        -- creates. With the fixed seeds below the cap must never fire — if a
+        -- future change lowers the budget, difficulty targeting would degrade
+        -- silently (digs would restore clues, classifications would reject).
+        local mt = getmetatable(solver.new(board.new(), {}))
+        local orig_su = mt.solve_until
+        local orig_cs = mt.count_solutions
+        local caps = 0
+        local max_nodes = 0
+        function mt:solve_until(bound)
+            local result = orig_su(self, bound)
+            max_nodes = math.max(max_nodes, self.search_nodes or 0)
+            if self.search_capped then
+                caps = caps + 1
+            end
+            return result
+        end
+        function mt:count_solutions(limit)
+            local result = orig_cs(self, limit)
+            max_nodes = math.max(max_nodes, self.search_nodes or 0)
+            if self.search_capped then
+                caps = caps + 1
+            end
+            return result
+        end
+
+        for _, entry in ipairs({ { "easy", 101 }, { "medium", 102 }, { "hard", 103 }, { "expert", 104 } }) do
+            local payload, err = generator.generate_game {
+                difficulty = entry[1],
+                seed = entry[2],
+                rng = prng.new(entry[2]),
+            }
+            assert.is_nil(err)
+            assert.is_not_nil(payload)
+        end
+
+        assert.are.equal(0, caps, "no search call may hit the budget on these fixed seeds")
+        assert.is_not_nil(max_nodes)
+        assert.is_true(max_nodes > 0, "the instrumented solvers must actually run")
+    end)
+
+    it("digs safely and never hard-fails when uniqueness checks hit the budget (P4)", function()
+        -- Force every dig uniqueness check (techniques == 0, non-empty board)
+        -- to a tiny node budget so most checks cap. Capped removals must be
+        -- restored, the final confirmation must accept (the dig invariant
+        -- guarantees uniqueness), and generation must not hard-fail.
+        local board_mod = require("core.board")
+        local solver_mod = require("core.solver")
+        local original_new = solver_mod.new
+        solver_mod.new = function(b, opts)
+            opts = opts or {}
+            if opts.techniques == 0 and board_mod.count_clues(b) > 0 then
+                opts = { rng = opts.rng, techniques = 0, search_budget = 100 }
+            end
+            return original_new(b, opts)
+        end
+        finally(function()
+            solver_mod.new = original_new
+        end)
+
+        local payload, err = generator.generate_game { difficulty = "easy", seed = 123, rng = prng.new(123) }
+        assert.is_nil(err)
+        assert.is_not_nil(payload)
+        assert.are.equal("easy", payload.difficulty)
+        local solutions = solver.new(payload.board):solve_until(2)
+        assert.are.equal(1, #solutions, "the dig invariant must hold even with capped checks")
     end)
 
     it("property: every generated game is unique and matches its solution under an independent plain solve", function()

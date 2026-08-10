@@ -4,6 +4,13 @@ local masks = {}
 
 local FULL_MASK = 0x1FF
 
+-- L2: box computations are table lookups instead of math.floor divisions.
+-- get_box_idx(r, c) == (r // 3) * 3 + (c // 3); the start tables hold the
+-- box's top-left cell for box index 0..8. Indexed by (coordinate + 1).
+local BOX_START_ROW = { 0, 0, 0, 3, 3, 3, 6, 6, 6 }
+local BOX_OFFSET_COL = { 0, 0, 0, 1, 1, 1, 2, 2, 2 }
+local BOX_START_COL = { 0, 3, 6, 0, 3, 6, 0, 3, 6 }
+
 local function mask_for(num)
     return bit.lshift(1, num - 1)
 end
@@ -17,7 +24,15 @@ function masks.new()
 end
 
 function masks.get_box_idx(r, c)
-    return math.floor(r / 3) * 3 + math.floor(c / 3)
+    return BOX_START_ROW[r + 1] + BOX_OFFSET_COL[c + 1]
+end
+
+function masks.box_start_row(box_idx)
+    return BOX_START_ROW[box_idx + 1]
+end
+
+function masks.box_start_col(box_idx)
+    return BOX_START_COL[box_idx + 1]
 end
 
 function masks.add_number(m, r, c, num)

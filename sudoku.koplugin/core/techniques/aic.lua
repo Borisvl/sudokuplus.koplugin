@@ -2,6 +2,7 @@ local bit = require("bit")
 local board = require("core.board")
 local candidates = require("core.candidates")
 local flags = require("core.techniques.flags")
+local masks = require("core.masks")
 local units = require("core.techniques.units")
 
 -- Alternating Inference Chain: a chain of alternating strong and weak links
@@ -29,7 +30,7 @@ aic.STATUS_SEARCH_CAPPED = "search_capped"
 -- Divergence from rustoku: rustoku explores without bound. A capped pass
 -- returns false without eliminations, so deep chains on pathological boards
 -- are skipped (the puzzle then classifies as needing a guess).
-local board_is_empty = board.is_empty
+local board_is_empty = board.raw_is_empty
 local cand_get = candidates.get
 
 local function encode(r, c, v)
@@ -82,7 +83,7 @@ local function build_link_counts(prop)
             local mask = cand_get(prop.candidates, r, c)
             cell_counts[r + 1][c + 1] = flags.count(mask)
             if board_is_empty(prop.board, r, c) then
-                local box_idx = math.floor(r / 3) * 3 + math.floor(c / 3)
+                local box_idx = masks.get_box_idx(r, c)
                 for v = 1, 9 do
                     local val_bit = bit.lshift(1, v - 1)
                     if bit.band(mask, val_bit) ~= 0 then
@@ -118,8 +119,8 @@ local function is_strong_link(n1, n2, counts)
     if c1 == c2 and counts.col[c1 + 1][v1] == 2 then
         return true
     end
-    if math.floor(r1 / 3) == math.floor(r2 / 3) and math.floor(c1 / 3) == math.floor(c2 / 3) then
-        local box_idx = math.floor(r1 / 3) * 3 + math.floor(c1 / 3)
+    if masks.get_box_idx(r1, c1) == masks.get_box_idx(r2, c2) then
+        local box_idx = masks.get_box_idx(r1, c1)
         return counts.box[box_idx + 1][v1] == 2
     end
     return false
@@ -161,7 +162,7 @@ local function find_next_nodes(prop, current, need_strong, counts)
             end
         end
     end
-    local box_idx = math.floor(cr / 3) * 3 + math.floor(cc / 3)
+    local box_idx = masks.get_box_idx(cr, cc)
     for _, cell in ipairs(units.box_cells(box_idx)) do
         local r, c = cell[1], cell[2]
         if (r ~= cr or c ~= cc) and bit.band(cand_get(prop.candidates, r, c), val_bit) ~= 0 then
@@ -245,7 +246,7 @@ local function is_strong_linked(node, counts)
     if counts.col[c + 1][v] == 2 then
         return true
     end
-    local box_idx = math.floor(r / 3) * 3 + math.floor(c / 3)
+    local box_idx = masks.get_box_idx(r, c)
     return counts.box[box_idx + 1][v] == 2
 end
 

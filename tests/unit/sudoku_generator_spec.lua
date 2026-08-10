@@ -107,6 +107,98 @@ describe("core.generator", function()
         end
     end)
 
+    it("tiered classification agrees with the full technique set on in-tier puzzles", function()
+        -- P2: generation classifies a difficulty target with only the tiers
+        -- up to it. A puzzle that actually needs that tier must classify the
+        -- same as with all techniques; harder puzzles become "requires
+        -- guessing" and are rejected.
+        local tier = {
+            medium = bit.bor(flags.EASY, flags.MEDIUM),
+            hard = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, flags.HARD)),
+        }
+
+        local function classify(b, techniques)
+            local human = solver.new(b, {
+                techniques = techniques,
+                rng = prng.new(99),
+            })
+            local solutions = human:solve_until(2)
+            if #solutions ~= 1 then
+                return "nonunique"
+            end
+            local result = solve_path.classify(solutions[1].solve_path)
+            if result.requires_guessing then
+                return "guess"
+            end
+            return result.difficulty
+        end
+
+        for _, target in ipairs({ "medium", "hard" }) do
+            local payload, err = generator.generate_game {
+                difficulty = target,
+                seed = 4242,
+                rng = prng.new(4242),
+            }
+            assert.is_nil(err)
+            assert.is_not_nil(payload)
+            assert.are.equal(target, payload.difficulty, target .. " generation must actually hit the tier")
+
+            assert.are.equal(
+                classify(payload.board, ALL_TECHNIQUES),
+                classify(payload.board, tier[target]),
+                target .. " puzzle must classify identically under the tiered technique set"
+            )
+        end
+    end)
+
+    it("tiered classification rejects harder puzzles as guessing", function()
+        -- A hard puzzle classified with only easy+medium techniques must not
+        -- be mistaken for medium: it falls back to backtracking (guessing).
+        local payload, err = generator.generate_game {
+            difficulty = "hard",
+            seed = 5150,
+            rng = prng.new(5150),
+        }
+        assert.is_nil(err)
+        assert.is_not_nil(payload)
+
+        local human = solver.new(payload.board, {
+            techniques = bit.bor(flags.EASY, flags.MEDIUM),
+            rng = prng.new(99),
+        })
+        local solutions = human:solve_until(2)
+        assert.are.equal(1, #solutions)
+        local result = solve_path.classify(solutions[1].solve_path)
+        assert.is_true(result.requires_guessing, "a hard puzzle must require guessing under easy+medium techniques")
+    end)
+
+    it("count_solutions(2) agrees with solve_until(2) on uniqueness", function()
+        -- P1: the generator's uniqueness oracle uses count_solutions(2); it
+        -- must reach the same uniqueness verdict as solve_until(2) on every
+        -- candidate board (unique puzzles and multi-solution digs).
+        local unique = generator.generate({ clues = 81, rng = prng.new(7) })
+        assert.is_not_nil(unique)
+        local multi = board.clone(unique)
+        multi[1] = 0
+        multi[2] = 0
+        multi[10] = 0
+
+        local boards = {
+            unique,
+            multi,
+            board.from_string("530070000600195000098000060800060003400803001700020006060000280000419005000080079"),
+        }
+        for index, b in ipairs(boards) do
+            local count_solver = solver.new(b)
+            local list_solver = solver.new(b)
+            assert.are.equal(
+                #list_solver:solve_until(2) == 1,
+                count_solver:count_solutions(2) == 1,
+                string.format("uniqueness verdict mismatch on board %d", index)
+            )
+        end
+    end)
+
     it("preserves clue symmetry for every supported mode", function()
         for i, symmetry in ipairs(SYMMETRIES) do
             local puzzle, err = generator.generate({
