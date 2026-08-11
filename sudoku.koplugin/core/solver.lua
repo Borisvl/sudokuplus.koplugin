@@ -32,6 +32,7 @@ local path_placement = solve_path.placement_step
 local path_snapshot = solve_path.snapshot
 
 local FULL_CANDIDATE_MASK = 0x1FF
+local DIGIT_BITS = { 1, 2, 4, 8, 16, 32, 64, 128, 256 }
 
 local function validate_board_shape(b)
     if type(b) ~= "table" then
@@ -268,20 +269,21 @@ local function solve_until_recursive(state, solutions, path, bound)
         return
     end
 
+    -- Invariant: candidates ⊆ legal masks for every empty cell (maintained by candidates.update_affected_cells_for).
+    -- Candidate bits in `cand_get` are guaranteed safe according to `state.masks`, so explicit `masks_is_safe` checks
+    -- are omitted in backtracking loops.
     local nums = cand_from_mask(cand_get(state.candidates, r, col))
     state.rng:shuffle(nums)
     for _, num in ipairs(nums) do
-        if masks_is_safe(state.masks, r, col, num) then
-            local candidate_marker = cand_mark(state.candidate_trail)
-            place_number(state, r, col, num)
-            path_push(path, path_placement(r, col, num))
-            solve_until_recursive(state, solutions, path, bound)
-            path.steps[#path.steps] = nil
-            remove_number(state, r, col, num)
-            cand_rollback(state.candidates, state.candidate_trail, candidate_marker)
-            if bound > 0 and #solutions >= bound then
-                return
-            end
+        local candidate_marker = cand_mark(state.candidate_trail)
+        place_number(state, r, col, num)
+        path_push(path, path_placement(r, col, num))
+        solve_until_recursive(state, solutions, path, bound)
+        path.steps[#path.steps] = nil
+        remove_number(state, r, col, num)
+        cand_rollback(state.candidates, state.candidate_trail, candidate_marker)
+        if bound > 0 and #solutions >= bound then
+            return
         end
     end
 end
@@ -299,14 +301,14 @@ local function count_solutions_recursive(state, count, limit)
         return count + 1
     end
 
-    local nums = cand_from_mask(cand_get(state.candidates, r, col))
-    state.rng:shuffle(nums)
-    for _, num in ipairs(nums) do
-        if masks_is_safe(state.masks, r, col, num) then
+    local mask = cand_get(state.candidates, r, col)
+    for v = 1, 9 do
+        local v_bit = DIGIT_BITS[v]
+        if bit.band(mask, v_bit) ~= 0 then
             local candidate_marker = cand_mark(state.candidate_trail)
-            place_number(state, r, col, num)
+            place_number(state, r, col, v)
             count = count_solutions_recursive(state, count, limit)
-            remove_number(state, r, col, num)
+            remove_number(state, r, col, v)
             cand_rollback(state.candidates, state.candidate_trail, candidate_marker)
             if limit > 0 and count >= limit then
                 return count

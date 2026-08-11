@@ -93,46 +93,86 @@ function candidates.count(mask)
     return flags.count(mask)
 end
 
+local DIGIT_BITS = { 1, 2, 4, 8, 16, 32, 64, 128, 256 }
+
+-- Additive recomputation variant: used by specs and fallback board resets to
+-- re-derive candidates from row/col/box masks from scratch.
 function candidates.update_affected_cells(c, r, col, m, b, trail)
     candidates.update_affected_cells_for(c, r, col, m, b, nil, trail)
 end
 
+-- Invariant: candidates ⊆ legal masks for every empty cell. Subtractive placement updates
+-- maintain this monotonically via bit.band(old_cand, elim_bit), avoiding
+-- full mask recomputations across unaffected candidates.
 function candidates.update_affected_cells_for(c, r, col, m, b, placed_num, trail)
-    local preserve_eliminations = placed_num ~= nil
-
-    if board.raw_is_empty(b, r, col) then
-        candidates.set(c, r, col, masks.compute_candidates_mask_for_cell(m, r, col), trail)
-    else
+    if placed_num ~= nil then
         candidates.set(c, r, col, 0, trail)
-    end
+        local val_bit = DIGIT_BITS[placed_num]
+        local elim_bit = bit.bnot(val_bit)
 
-    local function update_cell(cell_r, cell_col)
-        local legal = masks.compute_candidates_mask_for_cell(m, cell_r, cell_col)
-        if preserve_eliminations then
-            legal = bit.band(candidates.get(c, cell_r, cell_col), legal)
+        local row_t = c[r + 1]
+        for i = 0, 8 do
+            if i ~= col and board.raw_is_empty(b, r, i) then
+                local old_cand = row_t[i + 1]
+                if bit.band(old_cand, val_bit) ~= 0 then
+                    candidates.set(c, r, i, bit.band(old_cand, elim_bit), trail)
+                end
+            end
         end
-        candidates.set(c, cell_r, cell_col, legal, trail)
-    end
 
-    for i = 0, 8 do
-        if i ~= col and board.raw_is_empty(b, r, i) then
-            update_cell(r, i)
+        for i = 0, 8 do
+            if i ~= r and board.raw_is_empty(b, i, col) then
+                local old_cand = c[i + 1][col + 1]
+                if bit.band(old_cand, val_bit) ~= 0 then
+                    candidates.set(c, i, col, bit.band(old_cand, elim_bit), trail)
+                end
+            end
         end
-        if i ~= r and board.raw_is_empty(b, i, col) then
-            update_cell(i, col)
-        end
-    end
 
-    local box_idx = masks.get_box_idx(r, col)
-    local start_row = masks.box_start_row(box_idx)
-    local start_col = masks.box_start_col(box_idx)
-    for r_offset = 0, 2 do
-        for c_offset = 0, 2 do
-            local cur_r = start_row + r_offset
-            local cur_c = start_col + c_offset
-            if cur_r ~= r and cur_c ~= col then
-                if board.raw_is_empty(b, cur_r, cur_c) then
-                    update_cell(cur_r, cur_c)
+        local box_idx = masks.get_box_idx(r, col)
+        local start_row = masks.box_start_row(box_idx)
+        local start_col = masks.box_start_col(box_idx)
+        for r_offset = 0, 2 do
+            for c_offset = 0, 2 do
+                local cur_r = start_row + r_offset
+                local cur_c = start_col + c_offset
+                if cur_r ~= r and cur_c ~= col then
+                    if board.raw_is_empty(b, cur_r, cur_c) then
+                        local old_cand = c[cur_r + 1][cur_c + 1]
+                        if bit.band(old_cand, val_bit) ~= 0 then
+                            candidates.set(c, cur_r, cur_c, bit.band(old_cand, elim_bit), trail)
+                        end
+                    end
+                end
+            end
+        end
+    else
+        if board.raw_is_empty(b, r, col) then
+            candidates.set(c, r, col, masks.compute_candidates_mask_for_cell(m, r, col), trail)
+        else
+            candidates.set(c, r, col, 0, trail)
+        end
+
+        for i = 0, 8 do
+            if i ~= col and board.raw_is_empty(b, r, i) then
+                candidates.set(c, r, i, masks.compute_candidates_mask_for_cell(m, r, i), trail)
+            end
+            if i ~= r and board.raw_is_empty(b, i, col) then
+                candidates.set(c, i, col, masks.compute_candidates_mask_for_cell(m, i, col), trail)
+            end
+        end
+
+        local box_idx = masks.get_box_idx(r, col)
+        local start_row = masks.box_start_row(box_idx)
+        local start_col = masks.box_start_col(box_idx)
+        for r_offset = 0, 2 do
+            for c_offset = 0, 2 do
+                local cur_r = start_row + r_offset
+                local cur_c = start_col + c_offset
+                if cur_r ~= r and cur_c ~= col then
+                    if board.raw_is_empty(b, cur_r, cur_c) then
+                        candidates.set(c, cur_r, cur_c, masks.compute_candidates_mask_for_cell(m, cur_r, cur_c), trail)
+                    end
                 end
             end
         end
