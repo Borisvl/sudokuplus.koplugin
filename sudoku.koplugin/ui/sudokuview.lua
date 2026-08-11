@@ -33,6 +33,7 @@ local SudokuView = InputContainer:extend {
     stats_path = nil,
     new_game_cb = nil,
     show_stats_cb = nil,
+    replay_cb = nil,
 }
 
 local function format_time(seconds)
@@ -71,6 +72,7 @@ function SudokuView:init()
     self._match_value = nil
     self._match_cells = {}
     self._completed_digits = self.game:completed_digits()
+    self._log_started = false
 
     self.ges_events.Tap = {
         GestureRange:new {
@@ -545,6 +547,11 @@ end
 function SudokuView:afterMove()
     self:_refreshMatchAfterMove()
     self:_syncCompletedDigits()
+    -- The first move that adds a number or note starts the game-log entry.
+    if self.game:is_started() and not self._log_started then
+        self._log_started = true
+        self:updateStats(false)
+    end
     self:refresh()
     if self.game:is_won() then
         self:onWin()
@@ -653,6 +660,23 @@ function SudokuView:persistStats()
     end
 end
 
+-- Creates or refreshes the game-log entry for the live game (matched by the
+-- game id). Called when the first move is made and at save points; only the
+-- save points persist, so per-move activity never touches the disk.
+function SudokuView:updateStats(persist)
+    if not self.stats or self.game.id == nil or not self.game:is_started() then
+        return
+    end
+    local ok, err = stats.track(self.stats, self.game:started_record())
+    if not ok then
+        logger.warn("sudoku: failed to track game: " .. tostring(err))
+        return
+    end
+    if persist then
+        self:persistStats()
+    end
+end
+
 function SudokuView:deleteSave()
     if not self.save_path then
         return
@@ -730,6 +754,7 @@ function SudokuView:onQuit()
             logger.warn("sudoku: failed to save game: " .. tostring(err))
         end
     end
+    self:updateStats(true)
     UIManager:close(self, "flashui")
 end
 
@@ -823,11 +848,12 @@ end
 -- like the Tools-menu path, the pause dialog stays open underneath, so the
 -- new fullscreen page must refresh the whole screen itself.
 function SudokuView:showStats()
-    local StatsView = require("ui.statsview")
+    self:updateStats(false)
+    local statsview = require("ui.statsview")
     UIManager:show(
-        StatsView:new {
-            summary = stats.summary(self.stats or stats.new()),
-        },
+        statsview.dashboard(self.stats or stats.new(), {
+            replay_cb = self.replay_cb,
+        }),
         "full"
     )
 end
@@ -840,6 +866,7 @@ function SudokuView:onSuspend()
             logger.warn("sudoku: failed to save on suspend: " .. tostring(err))
         end
     end
+    self:updateStats(true)
     return true
 end
 

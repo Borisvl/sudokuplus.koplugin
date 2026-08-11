@@ -241,6 +241,83 @@ describe("game serialization", function()
         assert.is_string(err)
     end)
 
+    it("round-trips the game id through save and restore", function()
+        local clock = { t = 1000 }
+        local with_id = assert(game.new({
+            puzzle = board.from_string(PUZZLE),
+            solution = board.from_string(SOLUTION),
+            difficulty = "easy",
+            id = 77,
+            now = function()
+                return clock.t
+            end,
+        }))
+        local data = with_id:serialize()
+        assert.are.equal(77, data.id, "the save must carry the game id")
+
+        local restored = restore(data, { t = 1000 })
+        assert.are.equal(77, restored.id, "restore must keep the game id")
+    end)
+
+    it("restores saves without a game id as nil", function()
+        local instance = new_game()
+        local data = instance:serialize()
+        assert.is_nil(data.id)
+        local restored = restore(data, { t = 1000 })
+        assert.is_nil(restored.id, "older saves keep a nil game id")
+    end)
+
+    it("rejects a non-integer game id in save data", function()
+        local instance = new_game()
+        local data = instance:serialize()
+        data.id = 1.5
+        local restored, err = game.restore(data, {
+            now = function()
+                return 0
+            end,
+        })
+        assert.is_nil(restored)
+        assert.is_string(err)
+    end)
+
+    it("preserves the started timestamp in save data", function()
+        local clock = { t = 1000 }
+        local instance = assert(game.new({
+            puzzle = board.from_string(PUZZLE),
+            solution = board.from_string(SOLUTION),
+            difficulty = "easy",
+            now = function()
+                return clock.t
+            end,
+        }))
+        assert.is_true(instance:place(0, 2, 2))
+        local data = instance:serialize()
+        assert.are.equal(1000, data.started_at)
+
+        local never = game.new({
+            puzzle = board.from_string(PUZZLE),
+            solution = board.from_string(SOLUTION),
+            difficulty = "easy",
+            now = function()
+                return clock.t
+            end,
+        })
+        assert.is_nil(never:serialize().started_at, "an unstarted game has no started timestamp")
+    end)
+
+    it("rejects a malformed started timestamp", function()
+        local instance = new_game()
+        local data = instance:serialize()
+        data.started_at = math.huge
+        local restored, err = game.restore(data, {
+            now = function()
+                return 0
+            end,
+        })
+        assert.is_nil(restored)
+        assert.is_string(err)
+    end)
+
     it("restores saves written before the seed field existed", function()
         local instance = new_game()
         local data = instance:serialize()

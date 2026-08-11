@@ -100,7 +100,8 @@ describe("sudoku plugin menu", function()
         item_with("Statistics").callback()
         UIManager.show = original_show
         assert.is_not_nil(shown)
-        assert.are.equal("statsview", shown.name)
+        assert.is_not_nil(shown.item_table, "the stats dashboard is a menu")
+        assert.are.equal("Sudoku statistics", shown.title)
         assert.are.equal("full", refreshtype, "the stats page must refresh the whole screen")
     end)
 

@@ -620,10 +620,10 @@ describe("game", function()
         local record = instance:finish()
 
         assert.is_not_nil(record)
-        assert.are.equal("finished", record.kind)
+        assert.are.equal("finished", record.status)
         assert.are.equal("medium", record.difficulty)
         assert.are.equal(337, record.duration)
-        assert.are.equal(1337, record.timestamp)
+        assert.are.equal(1337, record.ended_at)
         assert.are.equal(0, record.mistakes)
         assert.are.equal(0, record.check_errors)
         assert.are.same({}, record.hints)
@@ -656,7 +656,7 @@ describe("game", function()
         local record = instance:give_up()
 
         assert.is_not_nil(record)
-        assert.are.equal("give_up", record.kind)
+        assert.are.equal("give_up", record.status)
         assert.are.equal(1000, record.duration)
         assert.are.equal(1, record.mistakes)
         assert.are.equal(1, record.check_errors)
@@ -789,10 +789,174 @@ describe("game", function()
 
         clock.t = 5000
         local record = instance:finish()
-        assert.are.equal("finished", record.kind)
+        assert.are.equal("finished", record.status)
         assert.are.equal(1, record.mistakes)
         assert.are.equal(0, record.check_errors)
         assert.are.equal(4000, record.duration)
+    end)
+
+    describe("stats metadata", function()
+        it("stores an optional game id and rejects a non-integer one", function()
+            local instance = new_game()
+            assert.is_nil(instance.id, "no id by default")
+
+            local clock = { t = 1000 }
+            local with_id = assert(game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "easy",
+                id = 42,
+                now = function()
+                    return clock.t
+                end,
+            }))
+            assert.are.equal(42, with_id.id)
+
+            local bad, err = game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "easy",
+                id = 1.5,
+                now = function()
+                    return clock.t
+                end,
+            })
+            assert.is_nil(bad)
+            assert.is_string(err)
+        end)
+
+        it("is not started until the first number or note is added", function()
+            local instance = new_game()
+            assert.is_false(instance:is_started())
+            assert.is_nil(instance:started_at())
+
+            assert.is_true(instance:toggle_note(0, 3, 6))
+            assert.is_true(instance:is_started(), "a note starts the game")
+            assert.is_not_nil(instance:started_at())
+
+            local note_only = new_game()
+            assert.is_true(note_only:clear_notes(0, 3))
+            assert.is_false(note_only:is_started(), "clearing an untouched cell is not a start")
+
+            local place_only = new_game()
+            assert.is_true(place_only:place(0, 2, 2))
+            assert.is_true(place_only:is_started(), "a placement starts the game")
+        end)
+
+        it("counts moves and reports progress", function()
+            local instance = new_game()
+            assert.are.equal(0, instance:move_count())
+
+            assert.is_true(instance:place(0, 2, 2))
+            assert.is_true(instance:toggle_note(0, 3, 6))
+            assert.is_true(instance:erase(0, 2))
+            assert.is_true(instance:undo())
+            assert.are.equal(3, instance:move_count(), "undo and redo do not add to the move count")
+        end)
+
+        it("reports progress as filled, correct and clues", function()
+            local instance = new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION)
+
+            local p0 = instance:progress()
+            assert.are.equal(0, p0.filled)
+            assert.are.equal(80, p0.clues)
+            assert.are.equal(81, p0.total)
+
+            assert.is_true(instance:place(8, 8, 6))
+            local p1 = instance:progress()
+            assert.are.equal(1, p1.filled)
+            assert.are.equal(1, p1.correct)
+
+            assert.is_true(instance:erase(8, 8))
+            assert.is_true(instance:place(8, 8, 5))
+            local p2 = instance:progress()
+            assert.are.equal(1, p2.filled)
+            assert.are.equal(0, p2.correct, "a wrong entry counts as filled but not correct")
+        end)
+
+        it("builds an in-progress record for the game log", function()
+            local clock = { t = 1000 }
+            local instance = assert(game.new({
+                puzzle = board.from_string(NAKED_SINGLE_PUZZLE),
+                solution = board.from_string(NAKED_SINGLE_SOLUTION),
+                difficulty = "expert",
+                id = 7,
+                seed = 123,
+                now = function()
+                    return clock.t
+                end,
+            }))
+            assert.is_true(instance:place(8, 8, 6))
+            clock.t = 1500
+
+            local record = instance:started_record()
+            assert.are.equal("in_progress", record.status)
+            assert.are.equal(7, record.id)
+            assert.are.equal(123, record.seed)
+            assert.are.equal("expert", record.difficulty)
+            assert.are.equal(500, record.duration)
+            assert.are.equal(1, record.moves)
+            assert.are.equal(1, record.filled)
+            assert.are.equal(1, record.correct)
+            assert.are.equal(1000, record.started_at)
+            assert.is_nil(record.ended_at)
+            assert.are.equal(NAKED_SINGLE_PUZZLE, record.puzzle)
+            assert.are.equal(NAKED_SINGLE_SOLUTION, record.solution)
+            assert.are.equal(board.to_string(instance.board), record.board)
+            assert.are.same({}, record.hints)
+        end)
+
+        it("carries the id, seed and progress into the finish record", function()
+            local clock = { t = 1000 }
+            local instance = assert(game.new({
+                puzzle = board.from_string(NAKED_SINGLE_PUZZLE),
+                solution = board.from_string(NAKED_SINGLE_SOLUTION),
+                difficulty = "easy",
+                id = 11,
+                seed = 4242,
+                now = function()
+                    return clock.t
+                end,
+            }))
+            assert.is_true(instance:place(8, 8, 6))
+            clock.t = 1337
+
+            local record = instance:finish()
+            assert.are.equal("finished", record.status)
+            assert.are.equal(11, record.id)
+            assert.are.equal(4242, record.seed)
+            assert.are.equal(337, record.duration)
+            assert.are.equal(1337, record.ended_at)
+            assert.are.equal(1000, record.started_at)
+            assert.are.equal(1, record.moves)
+            assert.are.equal(1, record.filled)
+            assert.are.equal(1, record.correct)
+            assert.are.equal(NAKED_SINGLE_PUZZLE, record.puzzle)
+            assert.are.equal(NAKED_SINGLE_SOLUTION, record.solution)
+        end)
+
+        it("keeps the started timestamp across restore", function()
+            local clock = { t = 1000 }
+            local instance = assert(game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "easy",
+                now = function()
+                    return clock.t
+                end,
+            }))
+            assert.is_true(instance:place(0, 2, 2))
+            assert.are.equal(1000, instance:started_at())
+
+            local restored, err = game.restore(instance:serialize(), {
+                now = function()
+                    return clock.t
+                end,
+            })
+            assert.is_not_nil(restored, err)
+            assert.are.equal(1000, restored:started_at(), "the started timestamp survives save/restore")
+            assert.is_true(restored:is_started())
+        end)
     end)
 
     describe("affected_cells", function()

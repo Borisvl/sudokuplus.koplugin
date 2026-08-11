@@ -4,6 +4,11 @@ A Sudoku puzzle game for e-ink readers, implemented as a KOReader plugin
 (target: Kobo). Requirements and milestone plan live in PLAN.md; project
 rules in AGENTS.md.
 
+Statistics: a dashboard (totals, completion/win rates, per-difficulty
+times, streaks, mistakes and most-missed techniques) plus a browsable game
+history — every started game with its final board and per-game stats, and
+"Play again" to re-open an exact puzzle from its reproduction seed.
+
 ## Project structure
 
 ```
@@ -212,6 +217,9 @@ storage):
 - [x] M9: generation performance (raw board accessors, box-index lookups,
       count-based uniqueness, tiered classification, weighted clue-target
       sampling, search-work budget — ~2.5x on medium/hard, bounded worst case)
+- [x] M10: stats dashboard + game history (v2 game log with in-progress
+      tracking, v1 migration, insight dashboard, browsable per-game pages
+      with miniature board, replay from seed)
 - [ ] M8: polish, i18n, on-device testing
 
 See PLAN.md for milestone details and the project rules in AGENTS.md.

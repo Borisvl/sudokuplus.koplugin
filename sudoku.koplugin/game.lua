@@ -210,6 +210,12 @@ local function commit(self, entry)
         self.history[i] = nil
     end
     self._revision = self._revision + 1
+    -- A game is "started" once the user adds at least one number or note
+    -- (the game-log definition); the timestamp feeds per-game stats.
+    if not self._started and (entry.kind == "place" or (entry.kind == "note" and entry.added)) then
+        self._started = true
+        self._started_at = self.now()
+    end
     clear_fixed_revealed(self)
 end
 
@@ -288,6 +294,12 @@ function game.new(options)
     if seed ~= nil and (type(seed) ~= "number" or seed % 1 ~= 0) then
         return nil, "seed must be an integer"
     end
+    -- Optional stable identity for the game log (assigned by the plugin
+    -- layer); threaded through serialize/restore like seed.
+    local id = options.id
+    if id ~= nil and (type(id) ~= "number" or id % 1 ~= 0 or id < 0) then
+        return nil, "id must be a non-negative integer"
+    end
 
     local notes = {}
     for r = 0, 8 do
@@ -318,8 +330,11 @@ function game.new(options)
         _check_errors = 0,
         _revealed = {},
         _hints = {},
+        _started = false,
+        _started_at = nil,
         finished = false,
         seed = seed,
+        id = id,
     }
     return setmetatable(instance, mt)
 end
@@ -521,6 +536,42 @@ end
 
 function mt:is_finished()
     return self.finished
+end
+
+-- True once the player has added at least one number or note (the game-log
+-- definition of "started"); it never reverts, even if every move is undone.
+function mt:is_started()
+    return self._started
+end
+
+-- Wall-clock timestamp of the first started move (nil before any).
+function mt:started_at()
+    return self._started_at
+end
+
+-- Total user moves committed (place/erase/note/notes_clear); undo/redo do
+-- not count.
+function mt:move_count()
+    return #self.history
+end
+
+-- Per-game progress: `filled` user-placed digits (beyond the givens),
+-- `correct` among them matching the solution, `clues` givens and `total`.
+function mt:progress()
+    local clues = 0
+    local filled = 0
+    local correct = 0
+    for i = 1, 81 do
+        if self.puzzle[i] ~= 0 then
+            clues = clues + 1
+        elseif self.board[i] ~= 0 then
+            filled = filled + 1
+            if self.board[i] == self.solution[i] then
+                correct = correct + 1
+            end
+        end
+    end
+    return { filled = filled, correct = correct, clues = clues, total = 81 }
 end
 
 function mt:hints()
@@ -847,20 +898,36 @@ function mt:is_won()
     return true
 end
 
-local function make_record(self, kind, timestamp)
+local function make_record(self, status, ended_at)
     local hint_ids = {}
     for i, entry in ipairs(self._hints) do
         hint_ids[i] = entry.technique
     end
+    local progress = self:progress()
     return {
-        kind = kind,
+        status = status,
+        id = self.id,
+        seed = self.seed,
         difficulty = self._difficulty,
         duration = self:elapsed(),
         hints = hint_ids,
         mistakes = self._mistakes,
         check_errors = self._check_errors,
-        timestamp = timestamp,
+        started_at = self._started_at,
+        ended_at = ended_at,
+        moves = self:move_count(),
+        filled = progress.filled,
+        correct = progress.correct,
+        puzzle = board.to_string(self.puzzle),
+        solution = board.to_string(self.solution),
+        board = board.to_string(self.board),
     }
+end
+
+-- A snapshot of the live game for the game log: same shape as a final
+-- record, but marked in_progress (upserted by stats.track at save points).
+function mt:started_record()
+    return make_record(self, "in_progress", nil)
 end
 
 function mt:finish()
@@ -1016,6 +1083,8 @@ function mt:serialize()
         hints = hints_copy,
         finished = self.finished,
         seed = self.seed,
+        id = self.id,
+        started_at = self._started_at,
     }
 end
 
@@ -1277,6 +1346,16 @@ function game.restore(data, opts)
     if seed ~= nil and (type(seed) ~= "number" or seed % 1 ~= 0) then
         return nil, "invalid seed"
     end
+    -- Optional game-log identity; older saves predate the field and stay nil.
+    local id = data.id
+    if id ~= nil and (type(id) ~= "number" or id % 1 ~= 0 or id < 0) then
+        return nil, "invalid id"
+    end
+    -- Optional started timestamp; nil until the player makes the first move.
+    local started_at = data.started_at
+    if started_at ~= nil and (type(started_at) ~= "number" or not util.is_finite(started_at)) then
+        return nil, "invalid started_at"
+    end
 
     local now = opts.now
     local instance = {
@@ -1295,8 +1374,11 @@ function game.restore(data, opts)
         _check_errors = data.check_errors,
         _revealed = revealed,
         _hints = hints_copy,
+        _started = started_at ~= nil,
+        _started_at = started_at,
         finished = data.finished,
         seed = seed,
+        id = id,
     }
     if data.timer.running then
         if data.timer.started == nil then

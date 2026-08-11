@@ -679,3 +679,67 @@ under its 3 s gate (medium ~20 ms, hard ~20 ms, expert ~160 ms).
 **Exit criteria**: all specs green (`./dev.sh test`), `./dev.sh lint` clean,
 `tools/bench_generation.lua` passes its `--max-seconds` gate, emulator boot
 smoke on `kobo-aura-one` with no errors, PLAN.md + README updated, commit.
+
+### M10 — Stats dashboard & game history
+
+Refined plan (planning decisions, resolved with the user before coding):
+`stats.lua` becomes a **v2 game log** (`VERSION = 2`) replacing the two capped
+arrays (`finished`, `given_up`) with a single `games` list of per-game entries,
+migrating v1 data on load (old records become entries, `status` from `kind`,
+`seed`/`board` left nil). A game is logged when it is *started* — the first
+`place` or `note`-add commit (`game:is_started()`). Entries:
+`{ id, seed, difficulty, status (in_progress|finished|given_up|abandoned),
+started_at, ended_at, duration, hints[], mistakes, check_errors, moves, filled,
+correct, puzzle, solution, board }`. `puzzle`+`solution`+`board` (81-char
+strings each) are stored so the detail page renders the final grid and
+"Play again" replays losslessly, independent of generator RNG-consumption
+changes; `seed` is kept for provenance. `id` is a fresh numeric key (replay
+reuses a seed, so the seed cannot be the identity), assigned by `main.lua`
+and threaded through `game.new` → `serialize` → `restore` like `seed`.
+`summary()` is computed from the log (single source of truth): totals,
+completion rate (`finished/started`) and win rate (`finished/(finished +
+given_up)`), total playtime, per-difficulty count/avg/best time + avg mistakes,
+current and all-time `best_streak`, ranked `most_missed` techniques,
+avg moves/progress. Caps at `MAX_GAMES` (200), oldest dropped but the live
+`in_progress` entry is never evicted. In-progress entries are persisted only at
+existing save points (`onQuit`, `onSuspend`, pause menu, win/give-up, starting
+a new game), never per move; on resume the live entry is matched by `id` and
+refreshed from the restored game. Abandoned = a started game replaced by a new
+one (finalized in `main.lua:startGame` before the old save is deleted).
+
+UI (native KOReader widgets, agreed with the user): the stats screen becomes a
+**dashboard `Menu`** (totals & completion, per-difficulty times, streaks,
+mistakes & accuracy, most-missed ranking, plus a "Game history" entry opening
+the games list), a **games list `Menu`** (all entries newest-first, rows like
+"#41 · Easy · finished · 03:12"), and a **game detail widget** (miniature 9×9
+grid reusing `numberbar.render_centered`, givens bold / placed digits regular,
+no notes; stats lines; `ButtonRow` with "Play again" — regenerates
+`generate_game { seed = record.seed }` and starts it — and Back). Divergence
+from the M7 painted `statsview.lua`: that view is replaced by the dashboard
+Menu (the custom-painted report is superseded; its tap/Back close and
+`sudoku_statsview_spec` coverage move to the dashboard).
+
+- [x] `game.lua`: `game_id` option + serialized field; `mt:is_started()` (set
+      on the first `place`/note-add commit); `mt:move_count()`; `mt:progress()`
+      (`filled`/`correct`/`clues`); `make_record` extended with `id, seed,
+      moves, filled, correct, board/puzzle/solution strings, started_at`;
+      `finish`/`give_up` keep returning the enriched record — specs
+      (`sudoku_game_spec`, `sudoku_game_serialize_spec`)
+- [x] `stats.lua`: v2 log model, lifecycle (`record_started`, `update`,
+      `finish`, `give_up`, `abandon`), v1→v2 migration in `from_table`,
+      extended `summary` (totals, rates, playtime, per-difficulty incl.
+      mistakes, `best_streak`, ranked most-missed), caps with in-progress
+      protection — `sudoku_stats_spec` rewritten
+- [x] `main.lua`: `game_id` assignment on start/resume, abandon-on-replace in
+      `startGame`, `replay_game_cb(seed, difficulty)` wiring — `sudoku_menu_spec`
+- [x] `ui/sudokuview.lua`: call `record_started` on first started move; update
+      the live entry at save points; finalize on win/give-up; pass replay
+      through `main.lua` — `sudoku_view_spec`
+- [x] UI: dashboard `Menu` (reworked `statsview.lua`), games list, game detail
+      (mini grid + stats + Play again/Back) — `sudoku_statsview_spec` rework +
+      new list/detail specs
+- [x] README: mention history + replay
+
+**Exit criteria**: all `sudoku_*` specs green via `./dev.sh test`,
+`./dev.sh lint` clean, emulator boot smoke on `kobo-aura-one` with no errors,
+PLAN.md + README updated, commit.
