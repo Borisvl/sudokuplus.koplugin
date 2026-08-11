@@ -190,6 +190,16 @@ function solver.new(b, opts)
     return setmetatable(state, mt)
 end
 
+local CELL_R = {}
+local CELL_C = {}
+for r = 0, 8 do
+    for c = 0, 8 do
+        local idx = r * 9 + c
+        CELL_R[idx] = r
+        CELL_C[idx] = c
+    end
+end
+
 local function place_number(state, r, col, num)
     board_set(state.board, r, col, num)
     masks_add(state.masks, r, col, num)
@@ -201,19 +211,32 @@ local function remove_number(state, r, col, num)
     masks_remove(state.masks, r, col, num)
 end
 
+local function init_empty_cells(state)
+    local empty_cells = {}
+    for r = 0, 8 do
+        for c = 0, 8 do
+            if board_is_empty(state.board, r, c) then
+                empty_cells[#empty_cells + 1] = r * 9 + c
+            end
+        end
+    end
+    state.empty_cells = empty_cells
+end
+
 local function find_next_empty_cell(state)
     local min_count = 10
     local best_r, best_c
-    for r = 0, 8 do
-        for col = 0, 8 do
-            if board_is_empty(state.board, r, col) then
-                local count = cand_count(cand_get(state.candidates, r, col))
-                if count < min_count then
-                    min_count = count
-                    best_r, best_c = r, col
-                    if count == 1 then
-                        return best_r, best_c
-                    end
+    local empty_cells = state.empty_cells
+    for i = 1, #empty_cells do
+        local cell = empty_cells[i]
+        local r, col = CELL_R[cell], CELL_C[cell]
+        if board_is_empty(state.board, r, col) then
+            local count = cand_count(cand_get(state.candidates, r, col))
+            if count < min_count then
+                min_count = count
+                best_r, best_c = r, col
+                if count == 1 then
+                    return best_r, best_c
                 end
             end
         end
@@ -244,6 +267,7 @@ local function solve_until_recursive(state, solutions, path, bound)
         }
         return
     end
+
     local nums = cand_from_mask(cand_get(state.candidates, r, col))
     state.rng:shuffle(nums)
     for _, num in ipairs(nums) do
@@ -314,6 +338,7 @@ function mt:solve_until(bound)
         -- Genuinely unsolvable boards still report zero solutions.
         prop:propagate_constraints(path, 0)
     end
+    init_empty_cells(state)
     solve_until_recursive(state, solutions, path, bound)
     self.search_nodes = state.search_nodes
     self.search_capped = state.search_capped or nil
@@ -401,15 +426,13 @@ function mt:count_solutions(limit)
     if not normalized_limit then
         return nil, err
     end
-
     local state = clone_state(self)
-    local path = solve_path.new()
     if state.techniques ~= 0 then
+        local path = solve_path.new()
         local prop = new_propagator(state)
-        -- Same fallback as solve_until: a technique dead-end must not report
-        -- a false zero (see mt:solve_until).
         prop:propagate_constraints(path, 0)
     end
+    init_empty_cells(state)
     local count = count_solutions_recursive(state, 0, normalized_limit)
     self.search_nodes = state.search_nodes
     self.search_capped = state.search_capped or nil

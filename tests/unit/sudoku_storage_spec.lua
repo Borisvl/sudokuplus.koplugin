@@ -2,8 +2,10 @@ package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 
 local storage = require("storage")
 
+local counter = 0
 local function temp_path()
-    local name = os.tmpname()
+    counter = counter + 1
+    local name = string.format("sudoku_test_tmp_%d_%d.json", os.time(), counter)
     os.remove(name)
     return name
 end
