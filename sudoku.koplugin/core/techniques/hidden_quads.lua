@@ -4,58 +4,69 @@ local units = require("core.techniques.units")
 
 local hidden_quads = {}
 
-local function is_pattern_cell(cells, r, c)
-    for _, cell in ipairs(cells) do
-        if cell[1] == r and cell[2] == c then
-            return true
-        end
-    end
-    return false
-end
-
 local function process_unit(prop, path, unit_cells, unit)
     local changed = false
-    units.for_each_combination(9, 4, function(combo)
-        local keep_mask = 0
-        local all = {}
-        local valid = true
-        for _, n in ipairs(combo) do
-            local n_bit = bit.lshift(1, n - 1)
-            local cell_list = {}
-            for _, cell in ipairs(unit_cells) do
-                local r, col = cell[1], cell[2]
-                if prop:is_empty(r, col) and bit.band(prop:cand(r, col), n_bit) ~= 0 then
-                    cell_list[#cell_list + 1] = cell
-                end
-            end
-            if #cell_list == 0 or #cell_list > 4 then
-                valid = false
-                break
-            end
-            keep_mask = bit.bor(keep_mask, n_bit)
-            for _, cell in ipairs(cell_list) do
-                if not is_pattern_cell(all, cell[1], cell[2]) then
-                    all[#all + 1] = cell
+    local pos_mask = units.build_pos_mask(prop, unit_cells)
+
+    for n1 = 1, 6 do
+        local m1 = pos_mask[n1]
+        if m1 ~= 0 and flags.count(m1) <= 4 then
+            for n2 = n1 + 1, 7 do
+                local m2 = pos_mask[n2]
+                if m2 ~= 0 and flags.count(m2) <= 4 then
+                    for n3 = n2 + 1, 8 do
+                        local m3 = pos_mask[n3]
+                        if m3 ~= 0 and flags.count(m3) <= 4 then
+                            for n4 = n3 + 1, 9 do
+                                local m4 = pos_mask[n4]
+                                if m4 ~= 0 and flags.count(m4) <= 4 then
+                                    local union_mask = bit.bor(bit.bor(m1, m2), bit.bor(m3, m4))
+                                    if flags.count(union_mask) == 4 then
+                                        local all = {}
+                                        local indices = {}
+                                        for idx, cell in ipairs(unit_cells) do
+                                            if bit.band(union_mask, bit.lshift(1, idx - 1)) ~= 0 then
+                                                all[#all + 1] = cell
+                                                indices[#indices + 1] = idx
+                                            end
+                                        end
+                                        local keep_mask = bit.bor(
+                                            bit.bor(bit.lshift(1, n1 - 1), bit.lshift(1, n2 - 1)),
+                                            bit.bor(bit.lshift(1, n3 - 1), bit.lshift(1, n4 - 1))
+                                        )
+                                        local pattern = {
+                                            kind = "hidden_quad",
+                                            cells = all,
+                                            values = { n1, n2, n3, n4 },
+                                            unit = unit,
+                                        }
+                                        for i = 1, #all do
+                                            local cell = all[i]
+                                            local idx = indices[i]
+                                            local r, col = cell[1], cell[2]
+                                            local elim_mask = bit.band(prop:cand(r, col), bit.bnot(keep_mask))
+                                            if elim_mask ~= 0 then
+                                                prop:eliminate_multiple_candidates(
+                                                    r,
+                                                    col,
+                                                    elim_mask,
+                                                    hidden_quads.flags(),
+                                                    path,
+                                                    pattern
+                                                )
+                                                changed = true
+                                                units.update_pos_mask(pos_mask, idx, elim_mask)
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
                 end
             end
         end
-        if valid and #all == 4 then
-            local pattern = {
-                kind = "hidden_quad",
-                cells = all,
-                values = { combo[1], combo[2], combo[3], combo[4] },
-                unit = unit,
-            }
-            for _, cell in ipairs(all) do
-                local r, col = cell[1], cell[2]
-                local elim_mask = bit.band(prop:cand(r, col), bit.bnot(keep_mask))
-                if elim_mask ~= 0 then
-                    changed = prop:eliminate_multiple_candidates(r, col, elim_mask, hidden_quads.flags(), path, pattern)
-                        or changed
-                end
-            end
-        end
-    end)
+    end
     return changed
 end
 

@@ -32,18 +32,20 @@ local function process_unit(prop, path, unit_cells, unit)
     end
     units.for_each_combination(#eligible, 4, function(combo)
         local union = 0
-        local pattern = {
-            kind = "naked_quad",
-            cells = {},
-            values = {},
-            unit = unit,
-        }
         for _, i in ipairs(combo) do
             union = bit.bor(union, eligible[i].mask)
-            pattern.cells[#pattern.cells + 1] = eligible[i].cell
         end
         if flags.count(union) == 4 then
-            pattern.values = candidates.from_mask(union)
+            local pattern_cells = {}
+            for _, i in ipairs(combo) do
+                pattern_cells[#pattern_cells + 1] = eligible[i].cell
+            end
+            local pattern = {
+                kind = "naked_quad",
+                cells = pattern_cells,
+                values = candidates.from_mask(union),
+                unit = unit,
+            }
             for _, cell in ipairs(unit_cells) do
                 local r, col = cell[1], cell[2]
                 if prop:is_empty(r, col) and not is_pattern_cell(pattern, r, col) then

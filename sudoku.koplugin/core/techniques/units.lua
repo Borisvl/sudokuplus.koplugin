@@ -186,4 +186,35 @@ function units.peers_of(r, c)
     return result
 end
 
+-- Builds an array of 9 bitmasks (bits 0..8) tracking unit_cells indices where candidate digits 1..9 reside.
+-- Invariant: pos_mask[d] must stay in sync with live candidates during in-pass eliminations via update_pos_mask.
+function units.build_pos_mask(prop, unit_cells, out_pos_mask)
+    out_pos_mask = out_pos_mask or { 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    for d = 1, 9 do
+        out_pos_mask[d] = 0
+    end
+    for idx = 1, #unit_cells do
+        local cell = unit_cells[idx]
+        local r, col = cell[1], cell[2]
+        if prop:is_empty(r, col) then
+            local mask = prop:cand(r, col)
+            for d = 1, 9 do
+                if bit.band(mask, bit.lshift(1, d - 1)) ~= 0 then
+                    out_pos_mask[d] = bit.bor(out_pos_mask[d], bit.lshift(1, idx - 1))
+                end
+            end
+        end
+    end
+    return out_pos_mask
+end
+
+-- Syncs pos_mask by clearing bit (idx - 1) for all digits set in elim_mask.
+function units.update_pos_mask(pos_mask, idx, elim_mask)
+    for d = 1, 9 do
+        if bit.band(elim_mask, bit.lshift(1, d - 1)) ~= 0 then
+            pos_mask[d] = bit.band(pos_mask[d], bit.bnot(bit.lshift(1, idx - 1)))
+        end
+    end
+end
+
 return units

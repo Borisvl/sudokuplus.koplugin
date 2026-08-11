@@ -6,69 +6,55 @@ local hidden_triples = {}
 
 local function process_unit(prop, path, unit_cells, unit)
     local changed = false
+    local pos_mask = units.build_pos_mask(prop, unit_cells)
+
     for n1 = 1, 7 do
-        for n2 = n1 + 1, 8 do
-            for n3 = n2 + 1, 9 do
-                local bits = {
-                    bit.lshift(1, n1 - 1),
-                    bit.lshift(1, n2 - 1),
-                    bit.lshift(1, n3 - 1),
-                }
-                local cell_lists = { {}, {}, {} }
-                for _, cell in ipairs(unit_cells) do
-                    local r, col = cell[1], cell[2]
-                    if prop:is_empty(r, col) then
-                        local mask = prop:cand(r, col)
-                        for i = 1, 3 do
-                            if bit.band(mask, bits[i]) ~= 0 then
-                                cell_lists[i][#cell_lists[i] + 1] = cell
-                            end
-                        end
-                    end
-                end
-                if
-                    #cell_lists[1] > 0
-                    and #cell_lists[1] <= 3
-                    and #cell_lists[2] > 0
-                    and #cell_lists[2] <= 3
-                    and #cell_lists[3] > 0
-                    and #cell_lists[3] <= 3
-                then
-                    local all = {}
-                    for i = 1, 3 do
-                        for _, cell in ipairs(cell_lists[i]) do
-                            local dup = false
-                            for _, existing in ipairs(all) do
-                                if existing[1] == cell[1] and existing[2] == cell[2] then
-                                    dup = true
-                                    break
+        local m1 = pos_mask[n1]
+        if m1 ~= 0 and flags.count(m1) <= 3 then
+            for n2 = n1 + 1, 8 do
+                local m2 = pos_mask[n2]
+                if m2 ~= 0 and flags.count(m2) <= 3 then
+                    for n3 = n2 + 1, 9 do
+                        local m3 = pos_mask[n3]
+                        if m3 ~= 0 and flags.count(m3) <= 3 then
+                            local union_mask = bit.bor(m1, bit.bor(m2, m3))
+                            if flags.count(union_mask) == 3 then
+                                local all = {}
+                                local indices = {}
+                                for idx, cell in ipairs(unit_cells) do
+                                    if bit.band(union_mask, bit.lshift(1, idx - 1)) ~= 0 then
+                                        all[#all + 1] = cell
+                                        indices[#indices + 1] = idx
+                                    end
                                 end
-                            end
-                            if not dup then
-                                all[#all + 1] = cell
-                            end
-                        end
-                    end
-                    if #all == 3 then
-                        local keep_mask = bit.bor(bits[1], bit.bor(bits[2], bits[3]))
-                        local pattern = {
-                            kind = "hidden_triple",
-                            cells = all,
-                            values = { n1, n2, n3 },
-                            unit = unit,
-                        }
-                        for _, cell in ipairs(all) do
-                            local r, col = cell[1], cell[2]
-                            local elim_mask = bit.band(prop:cand(r, col), bit.bnot(keep_mask))
-                            if elim_mask ~= 0 then
-                                changed = prop:eliminate_multiple_candidates(
-                                    r,
-                                    col,
-                                    elim_mask,
-                                    hidden_triples.flags(),
-                                    path,
-                                    pattern
-                                ) or changed
+                                local keep_mask = bit.bor(
+                                    bit.lshift(1, n1 - 1),
+                                    bit.bor(bit.lshift(1, n2 - 1), bit.lshift(1, n3 - 1))
+                                )
+                                local pattern = {
+                                    kind = "hidden_triple",
+                                    cells = all,
+                                    values = { n1, n2, n3 },
+                                    unit = unit,
+                                }
+                                for i = 1, #all do
+                                    local cell = all[i]
+                                    local idx = indices[i]
+                                    local r, col = cell[1], cell[2]
+                                    local elim_mask = bit.band(prop:cand(r, col), bit.bnot(keep_mask))
+                                    if elim_mask ~= 0 then
+                                        prop:eliminate_multiple_candidates(
+                                            r,
+                                            col,
+                                            elim_mask,
+                                            hidden_triples.flags(),
+                                            path,
+                                            pattern
+                                        )
+                                        changed = true
+                                        units.update_pos_mask(pos_mask, idx, elim_mask)
+                                    end
+                                end
                             end
                         end
                     end
