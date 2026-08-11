@@ -126,39 +126,50 @@ local function is_strong_link(n1, n2, counts)
     return false
 end
 
-local function find_next_nodes(prop, current, need_strong, counts)
+local visit_counter = 0
+local seen_visit = {}
+
+local function find_next_nodes(prop, current, need_strong, counts, out_next_nodes)
+    visit_counter = visit_counter + 1
+    local v_id = visit_counter
+    local count = 0
+
     local cr, cc, cv = decode(current)
-    local next_nodes = {}
-    local seen = {}
-    local function push(next)
-        if not seen[next] then
-            seen[next] = true
-            next_nodes[#next_nodes + 1] = next
-        end
-    end
     local mask = cand_get(prop.candidates, cr, cc)
     for v = 1, 9 do
         if v ~= cv and bit.band(mask, bit.lshift(1, v - 1)) ~= 0 then
-            local next = encode(cr, cc, v)
-            if not need_strong or is_strong_link(current, next, counts) then
-                push(next)
+            local nxt = encode(cr, cc, v)
+            if not need_strong or is_strong_link(current, nxt, counts) then
+                if seen_visit[nxt] ~= v_id then
+                    seen_visit[nxt] = v_id
+                    count = count + 1
+                    out_next_nodes[count] = nxt
+                end
             end
         end
     end
     local val_bit = bit.lshift(1, cv - 1)
     for c = 0, 8 do
         if c ~= cc and bit.band(cand_get(prop.candidates, cr, c), val_bit) ~= 0 then
-            local next = encode(cr, c, cv)
-            if not need_strong or is_strong_link(current, next, counts) then
-                push(next)
+            local nxt = encode(cr, c, cv)
+            if not need_strong or is_strong_link(current, nxt, counts) then
+                if seen_visit[nxt] ~= v_id then
+                    seen_visit[nxt] = v_id
+                    count = count + 1
+                    out_next_nodes[count] = nxt
+                end
             end
         end
     end
     for r = 0, 8 do
         if r ~= cr and bit.band(cand_get(prop.candidates, r, cc), val_bit) ~= 0 then
-            local next = encode(r, cc, cv)
-            if not need_strong or is_strong_link(current, next, counts) then
-                push(next)
+            local nxt = encode(r, cc, cv)
+            if not need_strong or is_strong_link(current, nxt, counts) then
+                if seen_visit[nxt] ~= v_id then
+                    seen_visit[nxt] = v_id
+                    count = count + 1
+                    out_next_nodes[count] = nxt
+                end
             end
         end
     end
@@ -166,13 +177,20 @@ local function find_next_nodes(prop, current, need_strong, counts)
     for _, cell in ipairs(units.box_cells(box_idx)) do
         local r, c = cell[1], cell[2]
         if (r ~= cr or c ~= cc) and bit.band(cand_get(prop.candidates, r, c), val_bit) ~= 0 then
-            local next = encode(r, c, cv)
-            if not need_strong or is_strong_link(current, next, counts) then
-                push(next)
+            local nxt = encode(r, c, cv)
+            if not need_strong or is_strong_link(current, nxt, counts) then
+                if seen_visit[nxt] ~= v_id then
+                    seen_visit[nxt] = v_id
+                    count = count + 1
+                    out_next_nodes[count] = nxt
+                end
             end
         end
     end
-    return next_nodes
+    for i = count + 1, #out_next_nodes do
+        out_next_nodes[i] = nil
+    end
+    return out_next_nodes
 end
 
 local function decode_chain(chain)
@@ -270,6 +288,7 @@ function aic.apply(prop, path)
     end
     local expansions = 0
     local depth_capped = false
+    local next_buf = {}
     for _, start in ipairs(starts) do
         local queue = {
             {
@@ -293,10 +312,10 @@ function aic.apply(prop, path)
                 end
                 local current = current_path.node
                 local need_strong = current_path.last_link == "weak"
-                for _, next in ipairs(find_next_nodes(prop, current, need_strong, counts)) do
-                    if not chain_contains(current_path, next) then
+                for _, nxt in ipairs(find_next_nodes(prop, current, need_strong, counts, next_buf)) do
+                    if not chain_contains(current_path, nxt) then
                         local new_path = {
-                            node = next,
+                            node = nxt,
                             start = current_path.start,
                             parent = current_path,
                             depth = current_path.depth + 1,

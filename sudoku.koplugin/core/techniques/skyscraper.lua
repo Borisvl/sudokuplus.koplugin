@@ -61,34 +61,43 @@ local function process_orientation(prop, path, candidate_bit, unit_type)
                         roof_b = cell
                     end
                 end
-                local base_a, base_b
-                if unit_type == "row" then
-                    base_a = { a.index, shared }
-                    base_b = { b.index, shared }
-                else
-                    base_a = { shared, a.index }
-                    base_b = { shared, b.index }
-                end
-                local pattern = {
-                    kind = "skyscraper",
-                    cells = { base_a, base_b, roof_a, roof_b },
-                    values = { flags.lowest_bit(candidate_bit) + 1 },
-                    base = { base_a, base_b },
-                    roof = { roof_a, roof_b },
-                }
-                for r = 0, 8 do
-                    for c = 0, 8 do
-                        local is_roof = (r == roof_a[1] and c == roof_a[2]) or (r == roof_b[1] and c == roof_b[2])
-                        if
-                            not is_roof
-                            and units.sees(r, c, roof_a[1], roof_a[2])
-                            and units.sees(r, c, roof_b[1], roof_b[2])
-                            and prop:is_empty(r, c)
-                            and bit.band(prop:cand(r, c), candidate_bit) ~= 0
-                        then
-                            changed = prop:eliminate_candidate(r, c, candidate_bit, skyscraper.flags(), path, pattern)
-                                or changed
-                        end
+                local elim_cells = {}
+                units.each_peer(roof_a[1], roof_a[2], function(r, c)
+                    if
+                        (r ~= roof_b[1] or c ~= roof_b[2])
+                        and units.sees(r, c, roof_b[1], roof_b[2])
+                        and prop:is_empty(r, c)
+                        and bit.band(prop:cand(r, c), candidate_bit) ~= 0
+                    then
+                        elim_cells[#elim_cells + 1] = { r, c }
+                    end
+                end)
+
+                if #elim_cells > 0 then
+                    local base_a, base_b
+                    if unit_type == "row" then
+                        base_a = { a.index, shared }
+                        base_b = { b.index, shared }
+                    else
+                        base_a = { shared, a.index }
+                        base_b = { shared, b.index }
+                    end
+                    local pattern = {
+                        kind = "skyscraper",
+                        cells = { base_a, base_b, roof_a, roof_b },
+                        values = { flags.lowest_bit(candidate_bit) + 1 },
+                        base = { base_a, base_b },
+                        roof = { roof_a, roof_b },
+                    }
+                    for _, target in ipairs(elim_cells) do
+                        changed = prop:eliminate_candidate(
+                            target[1],
+                            target[2],
+                            candidate_bit,
+                            skyscraper.flags(),
+                            path,
+                            pattern
+                        ) or changed
                     end
                 end
             end

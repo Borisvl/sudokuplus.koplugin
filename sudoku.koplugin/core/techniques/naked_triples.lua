@@ -27,12 +27,7 @@ local function process_unit(prop, path, unit_cells, unit)
                 local a, b, c = eligible[i], eligible[j], eligible[k]
                 local union = bit.bor(a.mask, bit.bor(b.mask, c.mask))
                 if flags.count(union) == 3 then
-                    local pattern = {
-                        kind = "naked_triple",
-                        cells = { a.cell, b.cell, c.cell },
-                        values = candidates.from_mask(union),
-                        unit = unit,
-                    }
+                    local targets = {}
                     for _, cell in ipairs(unit_cells) do
                         local r, col = cell[1], cell[2]
                         if
@@ -41,15 +36,26 @@ local function process_unit(prop, path, unit_cells, unit)
                             and (r ~= c.cell[1] or col ~= c.cell[2])
                         then
                             if prop:is_empty(r, col) and bit.band(prop:cand(r, col), union) ~= 0 then
-                                changed = prop:eliminate_multiple_candidates(
-                                    r,
-                                    col,
-                                    union,
-                                    naked_triples.flags(),
-                                    path,
-                                    pattern
-                                ) or changed
+                                targets[#targets + 1] = { r, col }
                             end
+                        end
+                    end
+                    if #targets > 0 then
+                        local pattern = {
+                            kind = "naked_triple",
+                            cells = { a.cell, b.cell, c.cell },
+                            values = candidates.from_mask(union),
+                            unit = unit,
+                        }
+                        for _, target in ipairs(targets) do
+                            changed = prop:eliminate_multiple_candidates(
+                                target[1],
+                                target[2],
+                                union,
+                                naked_triples.flags(),
+                                path,
+                                pattern
+                            ) or changed
                         end
                     end
                 end

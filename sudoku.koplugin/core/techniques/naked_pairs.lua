@@ -21,25 +21,31 @@ local function process_unit(prop, path, unit_cells, unit)
         for j = i + 1, #two_cells do
             local a, b = two_cells[i], two_cells[j]
             if a.mask == b.mask then
-                local pattern = {
-                    kind = "naked_pair",
-                    cells = { a.cell, b.cell },
-                    values = candidates.from_mask(a.mask),
-                    unit = unit,
-                }
+                local targets = {}
                 for _, cell in ipairs(unit_cells) do
                     local r, col = cell[1], cell[2]
                     if (r ~= a.cell[1] or col ~= a.cell[2]) and (r ~= b.cell[1] or col ~= b.cell[2]) then
                         if prop:is_empty(r, col) and bit.band(prop:cand(r, col), a.mask) ~= 0 then
-                            changed = prop:eliminate_multiple_candidates(
-                                r,
-                                col,
-                                a.mask,
-                                naked_pairs.flags(),
-                                path,
-                                pattern
-                            ) or changed
+                            targets[#targets + 1] = { r, col }
                         end
+                    end
+                end
+                if #targets > 0 then
+                    local pattern = {
+                        kind = "naked_pair",
+                        cells = { a.cell, b.cell },
+                        values = candidates.from_mask(a.mask),
+                        unit = unit,
+                    }
+                    for _, target in ipairs(targets) do
+                        changed = prop:eliminate_multiple_candidates(
+                            target[1],
+                            target[2],
+                            a.mask,
+                            naked_pairs.flags(),
+                            path,
+                            pattern
+                        ) or changed
                     end
                 end
             end

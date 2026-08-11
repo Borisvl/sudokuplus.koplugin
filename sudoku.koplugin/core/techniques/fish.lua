@@ -30,65 +30,69 @@ local function process_orientation(prop, path, candidate_bit, unit_type, size, t
     local eligible =
         units.find_units_with_candidate_count_range(candidate_bit, 2, size, prop.candidates, prop.board, unit_type)
     units.for_each_combination(#eligible, size, function(combo)
-        local base_lines, cover_mask = {}, 0
+        local base_mask = 0
+        local cover_mask = 0
         for _, i in ipairs(combo) do
             local entry = eligible[i]
-            base_lines[#base_lines + 1] = entry[1]
+            base_mask = bit.bor(base_mask, bit.lshift(1, entry[1]))
             for _, position in ipairs(entry[2]) do
                 cover_mask = bit.bor(cover_mask, bit.lshift(1, position))
             end
         end
         if flags.count(cover_mask) == size then
-            local base_units = {}
-            local cover_units = {}
-            for _, index in ipairs(base_lines) do
-                base_units[#base_units + 1] = line_unit(unit_type, index)
-            end
-            for position = 0, 8 do
-                if bit.band(cover_mask, bit.lshift(1, position)) ~= 0 then
-                    cover_units[#cover_units + 1] = line_unit(crossing_type(unit_type), position)
-                end
-            end
-            local pattern = {
-                kind = kind,
-                cells = {},
-                values = { flags.lowest_bit(candidate_bit) + 1 },
-                base = base_units,
-                cover = cover_units,
-            }
-            for _, i in ipairs(combo) do
-                local entry = eligible[i]
-                for _, position in ipairs(entry[2]) do
-                    local r, c
-                    if unit_type == "row" then
-                        r, c = entry[1], position
-                    else
-                        r, c = position, entry[1]
-                    end
-                    pattern.cells[#pattern.cells + 1] = { r, c }
-                end
-            end
+            local targets = {}
             for position = 0, 8 do
                 if bit.band(cover_mask, bit.lshift(1, position)) ~= 0 then
                     for i = 0, 8 do
-                        local r, c
-                        if unit_type == "row" then
-                            r, c = i, position
-                        else
-                            r, c = position, i
-                        end
-                        local in_base = false
-                        for _, index in ipairs(base_lines) do
-                            if (unit_type == "row" and r == index) or (unit_type == "col" and c == index) then
-                                in_base = true
-                                break
+                        if bit.band(base_mask, bit.lshift(1, i)) == 0 then
+                            local r, c
+                            if unit_type == "row" then
+                                r, c = i, position
+                            else
+                                r, c = position, i
+                            end
+                            if prop:is_empty(r, c) and bit.band(prop:cand(r, c), candidate_bit) ~= 0 then
+                                targets[#targets + 1] = { r, c }
                             end
                         end
-                        if not in_base and prop:is_empty(r, c) and bit.band(prop:cand(r, c), candidate_bit) ~= 0 then
-                            changed = prop:eliminate_candidate(r, c, candidate_bit, technique_flags, path, pattern)
-                                or changed
-                        end
                     end
+                end
+            end
+            if #targets > 0 then
+                local base_units = {}
+                local cover_units = {}
+                for index = 0, 8 do
+                    if bit.band(base_mask, bit.lshift(1, index)) ~= 0 then
+                        base_units[#base_units + 1] = line_unit(unit_type, index)
+                    end
+                end
+                for position = 0, 8 do
+                    if bit.band(cover_mask, bit.lshift(1, position)) ~= 0 then
+                        cover_units[#cover_units + 1] = line_unit(crossing_type(unit_type), position)
+                    end
+                end
+                local pattern = {
+                    kind = kind,
+                    cells = {},
+                    values = { flags.lowest_bit(candidate_bit) + 1 },
+                    base = base_units,
+                    cover = cover_units,
+                }
+                for _, i in ipairs(combo) do
+                    local entry = eligible[i]
+                    for _, position in ipairs(entry[2]) do
+                        local r, c
+                        if unit_type == "row" then
+                            r, c = entry[1], position
+                        else
+                            r, c = position, entry[1]
+                        end
+                        pattern.cells[#pattern.cells + 1] = { r, c }
+                    end
+                end
+                for _, cell in ipairs(targets) do
+                    changed = prop:eliminate_candidate(cell[1], cell[2], candidate_bit, technique_flags, path, pattern)
+                        or changed
                 end
             end
         end
