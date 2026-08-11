@@ -747,6 +747,12 @@ function SudokuView:onGiveUp()
 end
 
 function SudokuView:onQuit()
+    -- The win dialog also closes the view; a finished game must not be
+    -- re-saved (the save was already cleared) or re-tracked in the log.
+    if self.game:is_finished() then
+        UIManager:close(self, "flashui")
+        return
+    end
     self.game:pause()
     if self.save_path then
         local ok, err = storage.save(self.save_path, self.game:serialize())

@@ -459,6 +459,12 @@ local function migrate_from_v1(t)
             result.games[#result.games + 1] = normalized
         end
     end
+    -- v1 kept finished and given-up as separate chronological lists; merge
+    -- them into one time-ordered log (the v1 timestamp is the end time) so
+    -- the newest-200 trim and the streak recompute see a consistent order.
+    table.sort(result.games, function(a, b)
+        return a.ended_at < b.ended_at
+    end)
     if #result.games > MAX_GAMES then
         local trimmed = {}
         for i = #result.games - MAX_GAMES + 1, #result.games do
@@ -509,6 +515,24 @@ function stats.from_table(t)
             return nil, err
         end
         append_capped(result, normalized)
+    end
+    -- The log keying assumes a single live game and unique ids: an edited
+    -- file with duplicates would make track/abandon ambiguous.
+    local seen_ids = {}
+    local in_progress_count = 0
+    for _, entry in ipairs(result.games) do
+        if entry.id ~= nil then
+            if seen_ids[entry.id] then
+                return nil, "duplicate game id"
+            end
+            seen_ids[entry.id] = true
+        end
+        if entry.status == "in_progress" then
+            in_progress_count = in_progress_count + 1
+        end
+    end
+    if in_progress_count > 1 then
+        return nil, "multiple in-progress games"
     end
     return result
 end

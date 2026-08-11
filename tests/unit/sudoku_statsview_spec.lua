@@ -144,8 +144,12 @@ describe("sudoku stats view", function()
 
     it("opens a game detail page from a history row", function()
         local s = sample_stats()
-        local replay_cb = function() end
-        local menu = statsview.games_list(s, { replay_cb = replay_cb })
+        local replayed
+        local menu = statsview.games_list(s, {
+            replay_cb = function(seed, difficulty)
+                replayed = { seed = seed, difficulty = difficulty }
+            end,
+        })
         local shown
         local original_show = UIManager.show
         UIManager.show = function(_, widget)
@@ -157,7 +161,50 @@ describe("sudoku stats view", function()
         assert.is_not_nil(shown.entry)
         assert.are.equal(1, shown.entry.id)
         assert.are.equal("finished", shown.entry.status)
-        assert.are.equal(replay_cb, shown.replay_cb, "the replay callback is wired through")
+        assert.is_nil(replayed)
+        shown.replay_cb(987654, "hard")
+        assert.is_not_nil(replayed, "the replay callback is wired through")
+        assert.are.equal(987654, replayed.seed)
+        assert.are.equal("hard", replayed.difficulty)
+    end)
+
+    it("closes the whole stats stack before replaying", function()
+        local s = sample_stats()
+        local closed = {}
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        local dashboard = statsview.dashboard(s, {})
+        local list, detail
+        UIManager.show = function(_, widget)
+            if widget and widget.entry then
+                detail = widget
+            elseif widget and widget.item_table then
+                list = widget
+            end
+        end
+        local history_item
+        for _, item in ipairs(dashboard.item_table) do
+            if item.text and item.text:find("Game history", 1, true) then
+                history_item = item
+            end
+        end
+        assert.is_not_nil(history_item)
+        history_item.callback()
+        assert.is_not_nil(list)
+        list.item_table[1].callback()
+        assert.is_not_nil(detail)
+        UIManager.show = original_show
+
+        closed = {}
+        detail.replay_cb(1, "easy")
+        UIManager.close = original_close
+        assert.are.equal(3, #closed, "detail, list and dashboard are all closed")
+        assert.are.same(detail, closed[1])
+        assert.are.same(list, closed[2])
+        assert.are.same(dashboard, closed[3])
     end)
 
     it("paints a game detail page with the mini grid without error", function()
@@ -193,6 +240,42 @@ describe("sudoku stats view", function()
         bb:fill(Blitbuffer.COLOR_WHITE)
         detail:paintTo(bb, 0, 0)
         bb:free()
+    end)
+
+    it("paints the detail page of a v1-migrated game without a board snapshot", function()
+        local GameDetail = require("ui.gamedetail")
+        local v1 = {
+            version = 1,
+            finished = {
+                {
+                    kind = "finished",
+                    difficulty = "easy",
+                    duration = 60,
+                    hints = {},
+                    mistakes = 0,
+                    check_errors = 0,
+                    timestamp = 100,
+                },
+            },
+            given_up = {},
+        }
+        local migrated = assert(stats.from_table(v1))
+        local entry = stats.list(migrated)[1]
+        assert.is_nil(entry.board, "migrated entries carry no board snapshot")
+        local detail = GameDetail:new {
+            entry = entry,
+            width = 758,
+            height = 1024,
+        }
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        local ok = xpcall(function()
+            detail:paintTo(bb, 0, 0)
+        end, function(err)
+            print("PAINT FAILED:\n" .. err)
+        end)
+        bb:free()
+        assert.is_true(ok, "a migrated game must paint an empty grid, not crash")
     end)
 
     it("replays the exact puzzle from the detail page", function()

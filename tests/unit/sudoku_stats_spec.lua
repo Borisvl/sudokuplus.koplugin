@@ -526,4 +526,83 @@ describe("stats", function()
         assert.is_nil(bad_entry)
         assert.is_string(entry_err)
     end)
+
+    it("rejects duplicate ids and multiple in-progress entries on load", function()
+        local dup, dup_err = stats.from_table({
+            version = 2,
+            streak = 0,
+            best_streak = 0,
+            next_id = 3,
+            games = { record({ id = 1 }), record({ id = 1 }) },
+        })
+        assert.is_nil(dup, "duplicate ids must be rejected")
+        assert.is_string(dup_err)
+
+        local multiple, multiple_err = stats.from_table({
+            version = 2,
+            streak = 0,
+            best_streak = 0,
+            next_id = 3,
+            games = { in_progress_record({ id = 1 }), in_progress_record({ id = 2 }) },
+        })
+        assert.is_nil(multiple, "multiple in-progress games must be rejected")
+        assert.is_string(multiple_err)
+
+        -- migrated v1 entries share a nil id: that must stay valid
+        local nil_ids, nil_ids_err = stats.from_table({
+            version = 2,
+            streak = 0,
+            best_streak = 0,
+            next_id = 1,
+            games = { record({ id = nil }), record({ id = nil }) },
+        })
+        assert.is_not_nil(nil_ids, "nil ids are not duplicates")
+        assert.is_nil(nil_ids_err)
+    end)
+
+    it("migrates v1 games in chronological order for the streak", function()
+        -- A give-up (timestamp 150) that happened between two hint-free wins
+        -- must reset the streak mid-sequence, not at the end.
+        local v1 = {
+            version = 1,
+            finished = {
+                {
+                    kind = "finished",
+                    difficulty = "easy",
+                    duration = 60,
+                    hints = {},
+                    mistakes = 0,
+                    check_errors = 0,
+                    timestamp = 100,
+                },
+                {
+                    kind = "finished",
+                    difficulty = "easy",
+                    duration = 60,
+                    hints = {},
+                    mistakes = 0,
+                    check_errors = 0,
+                    timestamp = 200,
+                },
+            },
+            given_up = {
+                {
+                    kind = "give_up",
+                    difficulty = "easy",
+                    duration = 10,
+                    hints = {},
+                    mistakes = 0,
+                    check_errors = 0,
+                    timestamp = 150,
+                },
+            },
+        }
+
+        local restored = assert(stats.from_table(v1))
+        -- chronologically: win(100), give-up(150), win(200)
+        assert.are.equal(100, restored.games[1].ended_at)
+        assert.are.equal("give_up", restored.games[2].status)
+        assert.are.equal(200, restored.games[3].ended_at)
+        assert.are.equal(1, restored.streak, "the streak is computed across the give-up, not at the list boundary")
+    end)
 end)

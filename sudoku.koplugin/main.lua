@@ -53,70 +53,9 @@ function Sudoku:loadStats()
     return s
 end
 
-function Sudoku:startGame(difficulty)
-    -- core/ is deterministic: seed the PRNG from the wall clock (ms) in the
-    -- plugin layer. A fresh game abandons any previous save, but only once a
-    -- new puzzle exists: a failed generation must not destroy the saved game.
-    difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
-    local stats_data = self:loadStats()
-    -- Generation (expert especially) can take a few seconds; the emulator
-    -- and the device are single-threaded, so explain the wait up front.
-    -- forceRePaint() drains the paint/refresh queues immediately: without it
-    -- the notification would only be drawn on the next UI tick, which never
-    -- comes before the synchronous generation finishes.
-    local generating = Notification:new { text = _("Generating…") }
-    UIManager:show(generating)
-    UIManager:forceRePaint()
-    local seed = seed_from_wall_clock()
-    local payload, gen_err = generator.generate_game {
-        difficulty = difficulty,
-        seed = seed,
-        rng = prng.new(seed),
-    }
-    UIManager:close(generating)
-    if not payload then
-        UIManager:show(InfoMessage:new {
-            text = _("Failed to generate a Sudoku puzzle.") .. "\n" .. tostring(gen_err),
-        })
-        return
-    end
-    -- A new puzzle replaces the active save: if the replaced game had been
-    -- started (at least one move), close its log entry as abandoned. This
-    -- happens only after a puzzle exists, so a failed generation keeps the
-    -- old game tracked as in progress.
-    local old_save = storage.load(SAVE_PATH)
-    if old_save and type(old_save.id) == "number" and type(old_save.started_at) == "number" then
-        local ok, abandon_err = stats.abandon(stats_data, old_save.id, os.time())
-        if not ok and abandon_err ~= "no tracked game with that id" then
-            logger.warn("sudoku: failed to abandon the previous game: " .. tostring(abandon_err))
-        end
-        if ok then
-            local saved, save_err = storage.save(STATS_PATH, stats.to_table(stats_data))
-            if not saved then
-                logger.warn("sudoku: failed to save stats: " .. tostring(save_err))
-            end
-        end
-    end
-    local game_id, reserve_err = stats.reserve_id(stats_data)
-    if not game_id then
-        logger.warn("sudoku: failed to reserve a game id: " .. tostring(reserve_err))
-    end
-    storage.delete(SAVE_PATH)
-    local g, game_err = game.new {
-        puzzle = payload.board,
-        solution = payload.solution,
-        difficulty = payload.difficulty,
-        seed = payload.seed,
-        id = game_id,
-        now = os.time,
-        autofill_notes = G_reader_settings:isTrue(AUTOFILL_SETTING),
-    }
-    if not g then
-        UIManager:show(InfoMessage:new {
-            text = _("Failed to start a game.") .. "\n" .. tostring(game_err),
-        })
-        return
-    end
+-- Shows the game view for `g` (used by every entry point so the view wiring
+-- never drifts).
+function Sudoku:_viewForGame(g, stats_data)
     UIManager:show(
         SudokuView:new {
             game = g,
@@ -137,16 +76,16 @@ function Sudoku:startGame(difficulty)
     )
 end
 
--- Restarts an exact puzzle from the game log by its reproduction seed.
-function Sudoku:replayGame(seed, difficulty)
-    difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
-    if type(seed) ~= "number" or seed % 1 ~= 0 then
-        UIManager:show(InfoMessage:new {
-            text = _("This game cannot be replayed (no reproduction seed)."),
-        })
-        return
-    end
+-- Generates a puzzle (wall-clock or reproduction seed), abandons the
+-- currently saved game, and starts a fresh one. Shared by startGame and
+-- replayGame so the replace/abandon/bookkeeping flow stays in one place.
+function Sudoku:_startWithSeed(difficulty, seed)
     local stats_data = self:loadStats()
+    -- Generation (expert especially) can take a few seconds; the emulator
+    -- and the device are single-threaded, so explain the wait up front.
+    -- forceRePaint() drains the paint/refresh queues immediately: without it
+    -- the notification would only be drawn on the next UI tick, which never
+    -- comes before the synchronous generation finishes.
     local generating = Notification:new { text = _("Generating…") }
     UIManager:show(generating)
     UIManager:forceRePaint()
@@ -162,6 +101,10 @@ function Sudoku:replayGame(seed, difficulty)
         })
         return
     end
+    -- A new puzzle replaces the active save: if the replaced game had been
+    -- started (at least one move), close its log entry as abandoned. This
+    -- happens only after a puzzle exists, so a failed generation keeps the
+    -- old game tracked as in progress.
     local old_save = storage.load(SAVE_PATH)
     if old_save and type(old_save.id) == "number" and type(old_save.started_at) == "number" then
         local ok, abandon_err = stats.abandon(stats_data, old_save.id, os.time())
@@ -192,24 +135,27 @@ function Sudoku:replayGame(seed, difficulty)
         })
         return
     end
-    UIManager:show(
-        SudokuView:new {
-            game = g,
-            stats = stats_data,
-            save_path = SAVE_PATH,
-            stats_path = STATS_PATH,
-            new_game_cb = function(new_difficulty)
-                self:startGame(new_difficulty)
-            end,
-            show_stats_cb = function()
-                self:showStatistics()
-            end,
-            replay_cb = function(replay_seed, replay_difficulty)
-                self:replayGame(replay_seed, replay_difficulty)
-            end,
-        },
-        "full"
-    )
+    self:_viewForGame(g, stats_data)
+end
+
+function Sudoku:startGame(difficulty)
+    -- core/ is deterministic: seed the PRNG from the wall clock (ms) in the
+    -- plugin layer. A fresh game abandons any previous save, but only once a
+    -- new puzzle exists: a failed generation must not destroy the saved game.
+    difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
+    self:_startWithSeed(difficulty, seed_from_wall_clock())
+end
+
+-- Restarts an exact puzzle from the game log by its reproduction seed.
+function Sudoku:replayGame(seed, difficulty)
+    difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
+    if type(seed) ~= "number" or seed % 1 ~= 0 then
+        UIManager:show(InfoMessage:new {
+            text = _("This game cannot be replayed (no reproduction seed)."),
+        })
+        return
+    end
+    self:_startWithSeed(difficulty, seed)
 end
 
 function Sudoku:continueGame()
@@ -234,24 +180,7 @@ function Sudoku:continueGame()
     end
     -- The save was written while paused; a resumed game starts its timer.
     g:resume()
-    UIManager:show(
-        SudokuView:new {
-            game = g,
-            stats = stats_data,
-            save_path = SAVE_PATH,
-            stats_path = STATS_PATH,
-            new_game_cb = function(new_difficulty)
-                self:startGame(new_difficulty)
-            end,
-            show_stats_cb = function()
-                self:showStatistics()
-            end,
-            replay_cb = function(replay_seed, replay_difficulty)
-                self:replayGame(replay_seed, replay_difficulty)
-            end,
-        },
-        "full"
-    )
+    self:_viewForGame(g, stats_data)
 end
 
 function Sudoku:showStatistics()

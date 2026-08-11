@@ -57,11 +57,17 @@ function MiniGrid:paintTo(bb, x, y)
             pos = pos + self.cell
         end
     end
+    -- v1-migrated games carry no board snapshot: render the empty frame.
+    if not self.board then
+        return
+    end
+    local puzzle = self.puzzle or ""
     for r = 0, 8 do
         for c = 0, 8 do
-            local ch = self.board:sub(r * 9 + c + 1, r * 9 + c + 1)
+            local index = r * 9 + c + 1
+            local ch = self.board:sub(index, index)
             if ch ~= "0" then
-                local given = self.puzzle:sub(r * 9 + c + 1, r * 9 + c + 1) ~= "0"
+                local given = puzzle:sub(index, index) ~= "0"
                 local cell_x = x
                     + self.thick * (math.floor(c / 3) + 1)
                     + self.thin * (c - math.floor(c / 3))
@@ -144,8 +150,10 @@ function GameDetail:init()
     add(T(_("Time: %1"), util.format_time(entry.duration or 0)))
     add(T(_("Mistakes: %1   Check errors: %2"), entry.mistakes or 0, entry.check_errors or 0))
     add(T(_("Hints: %1   Moves: %2"), #(entry.hints or {}), entry.moves or 0))
-    local empty = 81 - count_clues(entry.puzzle or "")
-    add(T(_("Correct placements: %1 of %2"), entry.correct or 0, empty))
+    if entry.puzzle then
+        local empty = 81 - count_clues(entry.puzzle)
+        add(T(_("Correct placements: %1 of %2"), entry.correct or 0, empty))
+    end
 
     local grid = MiniGrid:new {
         size = grid_size,

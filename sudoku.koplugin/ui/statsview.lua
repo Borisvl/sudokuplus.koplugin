@@ -80,32 +80,49 @@ local function difficulty_rows(summary)
     return rows
 end
 
+-- Closes every stats widget stacked on top of the dashboard (detail, games
+-- list, dashboard) before a replay starts, so the new game view opens on a
+-- clean stack instead of leaving stale stats underneath.
+local function close_session(widgets)
+    for i = #widgets, 1, -1 do
+        UIManager:close(widgets[i], "flashui")
+    end
+end
+
 -- The fullscreen games list: one row per logged game, newest first, tapping
--- a row opens its detail page.
+-- a row opens its detail page. `opts.widgets` (when present) collects every
+-- widget opened on top of the dashboard so a replay can close them all.
 function statsview.games_list(s, opts)
     opts = opts or {}
+    opts.widgets = opts.widgets or {}
     local items = {}
     for _, entry in ipairs(stats.list(s)) do
         items[#items + 1] = {
             text = game_row_text(entry),
             callback = function()
-                UIManager:show(
-                    GameDetail:new {
-                        entry = entry,
-                        replay_cb = opts.replay_cb,
-                    },
-                    "full"
-                )
+                local detail = GameDetail:new {
+                    entry = entry,
+                    replay_cb = function(seed, difficulty)
+                        close_session(opts.widgets)
+                        if opts.replay_cb then
+                            opts.replay_cb(seed, difficulty)
+                        end
+                    end,
+                }
+                opts.widgets[#opts.widgets + 1] = detail
+                UIManager:show(detail, "full")
             end,
         }
     end
-    return Menu:new {
+    local menu = Menu:new {
         title = _("Game history"),
         item_table = items,
         width = Screen:getWidth(),
         height = Screen:getHeight(),
         items_per_page = 12,
     }
+    opts.widgets[#opts.widgets + 1] = menu
+    return menu
 end
 
 -- The fullscreen insight dashboard: totals, completion/win rates, playtime,
@@ -160,12 +177,17 @@ function statsview.dashboard(s, opts)
         end,
     }
 
-    return Menu:new {
+    local menu = Menu:new {
         title = _("Sudoku statistics"),
         item_table = items,
         width = Screen:getWidth(),
         height = Screen:getHeight(),
     }
+    -- The dashboard is the root of the stats session: collect it with the
+    -- widgets opened on top of it so a replay can close the whole stack.
+    opts.widgets = opts.widgets or {}
+    opts.widgets[#opts.widgets + 1] = menu
+    return menu
 end
 
 return statsview
