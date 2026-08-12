@@ -44,9 +44,10 @@ A Sudoku puzzle game for e-ink readers (KOReader plugin, target: Kobo).
    else is accepted silently. A separate "Check board" UI action compares
    against the solution and reveals *all* wrong numbers, including
    rule-legal ones. Revealed cells keep their gray fill **and the digit is
-   struck through** (`theme.strike`, painted in `paint_strike`); the strike
-   uses the inverted ink on the cursor cell and clears as soon as the cell
-   is fixed. Stats: live "mistakes" = rule-violating entries; errors
+   struck through with a bar in the digit's ink** (`paint_strike`; inverted
+   ink on the cursor cell) so the mark reads as a deliberate pen stroke, not
+   a fill change; the strike clears as soon as the cell is fixed. Stats:
+   live "mistakes" = rule-violating entries; errors
    revealed by check are a separate counter.
 6. **Timer**: counts active play time only (pauses in menus / on suspend).
 7. **Streak**: consecutive solved games without using a hint.

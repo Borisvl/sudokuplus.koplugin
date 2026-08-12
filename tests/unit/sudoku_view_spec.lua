@@ -374,6 +374,19 @@ describe("sudoku view", function()
             rect.y + math.floor(rect.h / 2)
     end
 
+    -- The strike shares the digit's ink, so a bar must be proven by its
+    -- extent: a wide continuous run of ink pixels at the bar row.
+    local function bar_row_ink(bb, rect, ink)
+        local _, _, bar_y = bar_geometry(rect)
+        local count = 0
+        for x = rect.x, rect.x + rect.w - 1 do
+            if tonumber(bb:getPixel(x, bar_y).a) == tonumber(ink) then
+                count = count + 1
+            end
+        end
+        return count
+    end
+
     it("strikes through the digit of a check-revealed wrong cell", function()
         local view = new_view(new_game(PUZZLE, SOLUTION))
         tap_button(view, "number_row", 2)
@@ -386,16 +399,20 @@ describe("sudoku view", function()
         bb:fill(Blitbuffer.COLOR_WHITE)
         view:paintTo(bb, 0, 0)
         local rect = layout.cell_rect(view.layout, 0, 3)
-        local bar_left, bar_right, bar_y = bar_geometry(rect)
+        local bar_left, bar_right, _ = bar_geometry(rect)
         assert.are.equal(
-            tonumber(theme.strike.a),
-            tonumber(bb:getPixel(bar_left, bar_y).a),
+            tonumber(theme.digit.a),
+            tonumber(bb:getPixel(bar_left, rect.y + math.floor(rect.h / 2)).a),
             "the strike bar starts near the left edge of the revealed cell"
         )
         assert.are.equal(
-            tonumber(theme.strike.a),
-            tonumber(bb:getPixel(bar_right, bar_y).a),
+            tonumber(theme.digit.a),
+            tonumber(bb:getPixel(bar_right, rect.y + math.floor(rect.h / 2)).a),
             "the strike bar spans most of the revealed cell width"
+        )
+        assert.is_true(
+            bar_row_ink(bb, rect, theme.digit.a) > math.floor(rect.w * 0.75),
+            "the bar is a wide ink line, not glyph pixels"
         )
         assert.are.equal(
             tonumber(theme.wrong_fill.a),
@@ -434,16 +451,20 @@ describe("sudoku view", function()
         bb:fill(Blitbuffer.COLOR_WHITE)
         view:paintTo(bb, 0, 0)
         local rect = layout.cell_rect(view.layout, 0, 3)
-        local bar_left, bar_right, bar_y = bar_geometry(rect)
+        local bar_left, bar_right, _ = bar_geometry(rect)
         assert.are.equal(
             tonumber(theme.invert_fg.a),
-            tonumber(bb:getPixel(bar_left, bar_y).a),
+            tonumber(bb:getPixel(bar_left, rect.y + math.floor(rect.h / 2)).a),
             "the strike uses the inverted ink on the selected cell"
         )
         assert.are.equal(
             tonumber(theme.invert_fg.a),
-            tonumber(bb:getPixel(bar_right, bar_y).a),
+            tonumber(bb:getPixel(bar_right, rect.y + math.floor(rect.h / 2)).a),
             "the strike spans the selected cell"
+        )
+        assert.is_true(
+            bar_row_ink(bb, rect, theme.invert_fg.a) > math.floor(rect.w * 0.75),
+            "the strike stays a wide line on the selected cell"
         )
         bb:free()
     end)

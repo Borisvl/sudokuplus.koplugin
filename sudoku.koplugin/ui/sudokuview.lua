@@ -41,11 +41,11 @@ local function format_time(seconds)
 end
 
 -- Strikes through the digit of a check-revealed (wrong-vs-solution) cell: a
--- bar across the cell width at vertical center, drawn in a light gray that is
--- distinct from both the digit ink and the wrong_fill so it stays visible on
--- the inverted cursor cell and in night mode. Narrow margins let the bar poke
--- out of even the widest glyphs; the thickness scales with the cell height,
--- the same way the grid border scales with the screen DPI.
+-- bar across the cell width at vertical center, drawn in the same ink as the
+-- digit (inverted ink on the cursor cell) so it reads as a deliberate pen
+-- stroke crossing the number. Narrow margins let the bar poke out of even the
+-- widest glyphs; the thickness scales with the cell height, the same way the
+-- grid border scales with the screen DPI.
 local function paint_strike(bb, rect, ink)
     local margin = math.floor(rect.w * 0.08)
     local thickness = math.max(1, math.floor(rect.h * 0.03))
@@ -456,7 +456,7 @@ function SudokuView:paintCells(bb)
                 local ink = is_selected and theme.invert_fg or theme.digit
                 numberbar.render_centered(bb, face, tostring(value), false, rect, ink)
                 if revealed_set[key] then
-                    paint_strike(bb, rect, is_selected and theme.invert_fg or theme.strike)
+                    paint_strike(bb, rect, ink)
                 end
             elseif self.game:get_notes(row, col) ~= 0 then
                 self:paintNotes(bb, rect, self.game:get_notes(row, col), is_selected)
