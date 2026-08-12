@@ -1171,5 +1171,63 @@ describe("sudoku view", function()
             assert.are.equal(1200, view.ges_events.Hold[1].range.h)
             assert.are.equal("full", last_call().mode)
         end)
+
+        it("caches conflicts scan across repaints until board mutation occurs (UI-3)", function()
+            local g = new_game(PUZZLE, SOLUTION)
+            local view = new_view(g)
+
+            local conflicts_count = 0
+            local orig_conflicts = g.conflicts
+            g.conflicts = function(self_g)
+                conflicts_count = conflicts_count + 1
+                return orig_conflicts(self_g)
+            end
+
+            -- 1. Initial paint calculates conflicts (count = 1)
+            paint_view(view)
+            assert.are.equal(1, conflicts_count, "initial paint must scan conflicts once")
+
+            -- 2. Non-mutating UI interactions (repaints, selecting cell, arming digit, notes toggle)
+            -- must NOT re-scan conflicts
+            paint_view(view)
+            tap_cell(view, 0, 2)
+            paint_view(view)
+            tap_button(view, "number_row", 2) -- arm digit 2
+            paint_view(view)
+            tap_button(view, "number_row", 2) -- disarm digit 2
+            paint_view(view)
+            tap_button(view, "tool_row", "notes")
+            paint_view(view)
+            tap_button(view, "tool_row", "notes")
+            paint_view(view)
+            assert.are.equal(1, conflicts_count, "non-mutating UI interactions must reuse cached conflicts")
+
+            -- 3. Placing conflicting digit 5 at empty cell (0,3) mutates board revision
+            -- (conflicting with given '5' at (0,0)).
+            local ok, place_err = g:place(0, 3, 5)
+            assert.is_true(ok, place_err)
+            assert.are.equal(1, g:revision(), "place must mutate board revision")
+            assert.are.equal(1, conflicts_count, "placement must defer conflict scan until paint")
+
+            paint_view(view)
+            assert.are.equal(2, conflicts_count, "paint after board placement must refresh conflicts")
+
+            -- 4. Verify conflict cell background fill was rendered into blitbuffer
+            local rect_0_0 = layout.cell_rect(view.layout, 0, 0)
+            local rect_0_3 = layout.cell_rect(view.layout, 0, 3)
+            local bb = Blitbuffer.new(758, 1024, Blitbuffer.TYPE_BB8)
+            view:paintTo(bb, 0, 0)
+            assert.are.equal(
+                tonumber(theme.wrong_fill.a),
+                tonumber(bb:getPixel(rect_0_0.x + 2, rect_0_0.y + 2).a),
+                "conflict cell (0,0) must render wrong_fill background"
+            )
+            assert.are.equal(
+                tonumber(theme.wrong_fill.a),
+                tonumber(bb:getPixel(rect_0_3.x + 2, rect_0_3.y + 2).a),
+                "conflict cell (0,3) must render wrong_fill background"
+            )
+            bb:free()
+        end)
     end)
 end)

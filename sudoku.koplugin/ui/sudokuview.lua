@@ -393,7 +393,13 @@ function SudokuView:paintNotes(bb, rect, mask, inverted)
     end
 end
 
-function SudokuView:paintCells(bb)
+-- Caches conflict and revealed cell sets indexed by cell key (row * 9 + col).
+-- Invariant: Board edits bump game:revision(); error check reveals bump
+-- game:check_errors(); revealed cell removals always follow a board fix that
+-- bumps revision. Checking the vector (revision, check_errors) guarantees zero
+-- redundant scans during non-mutating UI repaints (cell selection, arming digits,
+-- menu navigation).
+function SudokuView:_updateCachedSets()
     local conflict_set = {}
     for _, cell in ipairs(self.game:conflicts()) do
         conflict_set[cell[1] * 9 + cell[2]] = true
@@ -402,6 +408,20 @@ function SudokuView:paintCells(bb)
     for _, cell in ipairs(self.game:revealed()) do
         revealed_set[cell[1] * 9 + cell[2]] = true
     end
+    self._conflict_set = conflict_set
+    self._revealed_set = revealed_set
+    self._cached_revision = self.game:revision()
+    self._cached_check_errors = self.game:check_errors()
+end
+
+function SudokuView:paintCells(bb)
+    local cur_rev = self.game:revision()
+    local cur_errs = self.game:check_errors()
+    if not self._conflict_set or self._cached_revision ~= cur_rev or self._cached_check_errors ~= cur_errs then
+        self:_updateCachedSets()
+    end
+    local conflict_set = self._conflict_set
+    local revealed_set = self._revealed_set
 
     for row = 0, 8 do
         for col = 0, 8 do
