@@ -52,6 +52,24 @@ local function paint_strike(bb, rect, ink)
     bb:paintRect(rect.x + margin, rect.y + math.floor((rect.h - thickness) / 2), rect.w - 2 * margin, thickness, ink)
 end
 
+-- 1-bit stand-in for the gray highlight fills: a fine black/white dot grid
+-- (one dot every 2 pixels, every other row — ~25% black, inset 1px from the
+-- cell edges) so updated regions contain no gray pixels. On the Aura One the
+-- EPDC upgrades AUTO partial updates that touch gray content to a flashing
+-- waveform; a pure black/white region avoids that path (verified on-device:
+-- no more dark flashes). Match and hint share the look (they never coexist);
+-- wrong cells keep a solid gray fill, since error cells are rare enough that
+-- their flash is acceptable.
+local DITHER_HIGHLIGHT = { period = 2, inset = 1 }
+
+local function paint_dither(bb, rect, ink)
+    for y = rect.y + DITHER_HIGHLIGHT.inset, rect.y + rect.h - 1, DITHER_HIGHLIGHT.period do
+        for x = rect.x + DITHER_HIGHLIGHT.inset, rect.x + rect.w - 1, DITHER_HIGHLIGHT.period do
+            bb:paintRect(x, y, 1, 1, ink)
+        end
+    end
+end
+
 function SudokuView:init()
     self.width = self.width or Screen:getWidth()
     self.height = self.height or Screen:getHeight()
@@ -444,9 +462,9 @@ function SudokuView:paintCells(bb)
             elseif conflict_set[key] or revealed_set[key] then
                 bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.wrong_fill)
             elseif self._hint_stage == 2 and self._hint_cells[key] then
-                bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.hint_fill)
+                paint_dither(bb, rect, theme.digit)
             elseif self._match_cells[key] then
-                bb:paintRect(rect.x, rect.y, rect.w, rect.h, theme.match_fill)
+                paint_dither(bb, rect, theme.digit)
             end
 
             local value = self.game:get(row, col)

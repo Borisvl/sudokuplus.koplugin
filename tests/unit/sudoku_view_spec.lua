@@ -374,6 +374,25 @@ describe("sudoku view", function()
             rect.y + math.floor(rect.h / 2)
     end
 
+    -- A dithered fill is a black/white pattern: the cell shows both colors
+    -- in the region above the digit glyph and clear of the grid borders,
+    -- while a plain cell is all white there.
+    local function assert_dither(bb, rect, message)
+        local black, white = false, false
+        for dy = 3, 12 do
+            for dx = 3, 12 do
+                local a = tonumber(bb:getPixel(rect.x + dx, rect.y + dy).a)
+                if a == 0 then
+                    black = true
+                elseif a == 255 then
+                    white = true
+                end
+            end
+        end
+        assert.is_true(black, message .. " (needs black pixels)")
+        assert.is_true(white, message .. " (needs white pixels)")
+    end
+
     -- The strike shares the digit's ink, so a bar must be proven by its
     -- extent: a wide continuous run of ink pixels at the bar row.
     local function bar_row_ink(bb, rect, ink)
@@ -431,8 +450,10 @@ describe("sudoku view", function()
         view:paintTo(bb, 0, 0)
         local function bar_pixel(r, c)
             local rect = layout.cell_rect(view.layout, r, c)
-            local bar_left, _, bar_y = bar_geometry(rect)
-            return tonumber(bb:getPixel(bar_left, bar_y).a)
+            -- Offset 9 is inside the strike span and clear of the digit, so
+            -- black means a strike bar.
+            local bar_y = rect.y + math.floor(rect.h / 2)
+            return tonumber(bb:getPixel(rect.x + math.floor(rect.w * 0.08) + 3, bar_y).a)
         end
         assert.are.equal(tonumber(theme.background.a), bar_pixel(2, 7), "a correct cell has no strike")
         assert.are.equal(tonumber(theme.wrong_fill.a), bar_pixel(1, 3), "a conflict cell is filled but not struck")
@@ -596,11 +617,7 @@ describe("sudoku view", function()
         assert.are.equal(2, view._hint_stage)
         assert.are.equal(1, #view.game:hints(), "the missed strategy is recorded only once")
         view:paintTo(bb, 0, 0)
-        assert.are.equal(
-            tonumber(theme.hint_fill.a),
-            tonumber(bb:getPixel(cell.x + 2, cell.y + 2).a),
-            "the pattern cell is highlighted"
-        )
+        assert_dither(bb, cell, "the pattern cell is highlighted")
 
         tap_button(view, "tool_row", "hint")
         assert.are.equal(0, view._hint_stage, "the reveal ends after applying")
@@ -680,12 +697,12 @@ describe("sudoku view", function()
             return tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a)
         end
         -- the other 6 givens are highlighted
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(2, 7))
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(3, 4))
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(5, 8))
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(6, 1))
+        assert_dither(bb, layout.cell_rect(view.layout, 2, 7), "a matching 6 is dithered")
+        assert_dither(bb, layout.cell_rect(view.layout, 3, 4), "a matching 6 is dithered")
+        assert_dither(bb, layout.cell_rect(view.layout, 5, 8), "a matching 6 is dithered")
+        assert_dither(bb, layout.cell_rect(view.layout, 6, 1), "a matching 6 is dithered")
         -- the cell whose notes hold 6 is highlighted too
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(0, 3))
+        assert_dither(bb, layout.cell_rect(view.layout, 0, 3), "the note 6 cell is dithered")
         -- a cell without the digit stays plain
         assert.are.equal(tonumber(theme.background.a), match_pixel(0, 0))
         -- the selected cell is inverted, not filled
@@ -707,13 +724,13 @@ describe("sudoku view", function()
             return tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a)
         end
         -- every 6 given is highlighted, including the one in the corner
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(1, 0))
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(2, 7))
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(3, 4))
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(5, 8))
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(6, 1))
+        assert_dither(bb, layout.cell_rect(view.layout, 1, 0), "a matching 6 is dithered")
+        assert_dither(bb, layout.cell_rect(view.layout, 2, 7), "a matching 6 is dithered")
+        assert_dither(bb, layout.cell_rect(view.layout, 3, 4), "a matching 6 is dithered")
+        assert_dither(bb, layout.cell_rect(view.layout, 5, 8), "a matching 6 is dithered")
+        assert_dither(bb, layout.cell_rect(view.layout, 6, 1), "a matching 6 is dithered")
         -- the cell whose notes hold 6 is highlighted too
-        assert.are.equal(tonumber(theme.match_fill.a), match_pixel(0, 3))
+        assert_dither(bb, layout.cell_rect(view.layout, 0, 3), "the note 6 cell is dithered")
         -- a cell without the digit stays plain
         assert.are.equal(tonumber(theme.background.a), match_pixel(0, 0))
         -- the armed digit button inverts
@@ -742,11 +759,7 @@ describe("sudoku view", function()
             "the previous digit's highlight clears"
         )
         local rect3 = layout.cell_rect(view.layout, 0, 1) -- a 3 cell
-        assert.are.equal(
-            tonumber(theme.match_fill.a),
-            tonumber(bb:getPixel(rect3.x + 2, rect3.y + 2).a),
-            "the new digit's cells are highlighted"
-        )
+        assert_dither(bb, rect3, "the new digit's cells are dithered")
         bb:free()
     end)
 
@@ -761,11 +774,7 @@ describe("sudoku view", function()
         tap_cell(view, 1, 0) -- a given 6: the cursor match highlights the 6s
         view:paintTo(bb, 0, 0)
         local rect = layout.cell_rect(view.layout, 0, 5)
-        assert.are.equal(
-            tonumber(theme.match_fill.a),
-            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
-            "the placed 6 is highlighted by the cursor match"
-        )
+        assert_dither(bb, rect, "the placed 6 is dithered by the cursor match")
         bb:free()
     end)
 
@@ -776,7 +785,7 @@ describe("sudoku view", function()
         local rect = layout.cell_rect(view.layout, 2, 7)
         tap_cell(view, 1, 0)
         view:paintTo(bb, 0, 0)
-        assert.are.equal(tonumber(theme.match_fill.a), tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a))
+        assert_dither(bb, rect, "the match highlight is dithered")
         tap_cell(view, 1, 0)
         view:paintTo(bb, 0, 0)
         assert.are.equal(tonumber(theme.background.a), tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a))
