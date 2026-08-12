@@ -40,6 +40,14 @@ local function format_time(seconds)
     return util.format_time(seconds)
 end
 
+-- Strikes through the digit of a check-revealed (wrong-vs-solution) cell: a
+-- thin bar across the cell width at vertical center, in the digit's ink so it
+-- survives selection inversion and night mode.
+local function paint_strike(bb, rect, ink)
+    local margin = math.floor(rect.w * 0.15)
+    bb:paintRect(rect.x + margin, rect.y + math.floor(rect.h / 2), rect.w - 2 * margin, 1, ink)
+end
+
 function SudokuView:init()
     self.width = self.width or Screen:getWidth()
     self.height = self.height or Screen:getHeight()
@@ -443,6 +451,9 @@ function SudokuView:paintCells(bb)
                 local face = self.game:is_given(row, col) and self.faces.given or self.faces.user
                 local ink = is_selected and theme.invert_fg or theme.digit
                 numberbar.render_centered(bb, face, tostring(value), false, rect, ink)
+                if revealed_set[key] then
+                    paint_strike(bb, rect, is_selected and theme.invert_fg or theme.strike)
+                end
             elseif self.game:get_notes(row, col) ~= 0 then
                 self:paintNotes(bb, rect, self.game:get_notes(row, col), is_selected)
             end

@@ -368,6 +368,109 @@ describe("sudoku view", function()
         assert.are.equal(3, revealed[1][2])
     end)
 
+    local function bar_geometry(rect)
+        return rect.x + math.floor(rect.w * 0.15),
+            rect.x + rect.w - math.floor(rect.w * 0.15) - 1,
+            rect.y + math.floor(rect.h / 2)
+    end
+
+    it("strikes through the digit of a check-revealed wrong cell", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 3)
+        tap_button(view, "tool_row", "check")
+        assert.are.equal(1, #view.game:revealed())
+        tap_button(view, "number_row", 2) -- disarm
+        tap_cell(view, 8, 5) -- move the cursor off the revealed cell
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        view:paintTo(bb, 0, 0)
+        local rect = layout.cell_rect(view.layout, 0, 3)
+        local bar_left, bar_right, bar_y = bar_geometry(rect)
+        assert.are.equal(
+            tonumber(theme.strike.a),
+            tonumber(bb:getPixel(bar_left, bar_y).a),
+            "the strike bar starts near the left edge of the revealed cell"
+        )
+        assert.are.equal(
+            tonumber(theme.strike.a),
+            tonumber(bb:getPixel(bar_right, bar_y).a),
+            "the strike bar spans most of the revealed cell width"
+        )
+        assert.are.equal(
+            tonumber(theme.wrong_fill.a),
+            tonumber(bb:getPixel(rect.x + 2, rect.y + 2).a),
+            "the revealed cell keeps its wrong_fill background"
+        )
+        bb:free()
+    end)
+
+    it("does not strike correct or conflict-only cells", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        assert.is_true(view.game:place(0, 3, 1), "a 1 conflicting with the given 1 at (1, 3)")
+        assert.are.equal(0, view.game:check_errors(), "no check was performed")
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        view:paintTo(bb, 0, 0)
+        local function bar_pixel(r, c)
+            local rect = layout.cell_rect(view.layout, r, c)
+            local bar_left, _, bar_y = bar_geometry(rect)
+            return tonumber(bb:getPixel(bar_left, bar_y).a)
+        end
+        assert.are.equal(tonumber(theme.background.a), bar_pixel(2, 7), "a correct cell has no strike")
+        assert.are.equal(tonumber(theme.wrong_fill.a), bar_pixel(1, 3), "a conflict cell is filled but not struck")
+        assert.are.equal(tonumber(theme.wrong_fill.a), bar_pixel(0, 3), "a conflict cell is filled but not struck")
+        bb:free()
+    end)
+
+    it("keeps the strike visible when the revealed cell is selected", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 3)
+        tap_button(view, "tool_row", "check")
+        tap_button(view, "number_row", 2) -- disarm before selecting the cell
+        tap_cell(view, 0, 3) -- move the cursor onto the revealed cell
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        view:paintTo(bb, 0, 0)
+        local rect = layout.cell_rect(view.layout, 0, 3)
+        local bar_left, bar_right, bar_y = bar_geometry(rect)
+        assert.are.equal(
+            tonumber(theme.invert_fg.a),
+            tonumber(bb:getPixel(bar_left, bar_y).a),
+            "the strike uses the inverted ink on the selected cell"
+        )
+        assert.are.equal(
+            tonumber(theme.invert_fg.a),
+            tonumber(bb:getPixel(bar_right, bar_y).a),
+            "the strike spans the selected cell"
+        )
+        bb:free()
+    end)
+
+    it("clears the strike once the revealed cell is fixed", function()
+        local view = new_view(new_game(PUZZLE, SOLUTION))
+        tap_button(view, "number_row", 2)
+        tap_cell(view, 2, 0) -- a wrong digit (the solution has 1)
+        tap_button(view, "tool_row", "check")
+        tap_button(view, "number_row", 1)
+        tap_cell(view, 2, 0) -- replace it with the solution digit
+        tap_button(view, "number_row", 1) -- disarm so no match highlight lingers
+        tap_cell(view, 8, 5) -- move the cursor off the fixed cell
+        assert.are.equal(0, #view.game:revealed(), "fixing the cell clears the reveal")
+        local bb = Blitbuffer.new(758, 1024)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        view:paintTo(bb, 0, 0)
+        local rect = layout.cell_rect(view.layout, 2, 0)
+        local bar_left, _, bar_y = bar_geometry(rect)
+        assert.are.equal(
+            tonumber(theme.background.a),
+            tonumber(bb:getPixel(bar_left, bar_y).a),
+            "the strike is gone after the fix"
+        )
+        bb:free()
+    end)
+
     it("records a finished game in stats and clears the save", function()
         local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
         local s = stats.new()
