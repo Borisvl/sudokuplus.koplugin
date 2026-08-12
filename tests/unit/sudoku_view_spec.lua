@@ -1023,6 +1023,18 @@ describe("sudoku view", function()
             return set
         end
 
+        -- The single cell region of a frame (all dirty cells coalesce into
+        -- one bounding-box update), or nil when no cell is dirty.
+        local function grid_region(view)
+            local grid_bottom = view.layout.grid.y + view.layout.grid.h
+            for _, call in ipairs(calls) do
+                if call.region and call.region.y < grid_bottom then
+                    return call.region
+                end
+            end
+            return nil
+        end
+
         local function count_set(set)
             local n = 0
             for _ in pairs(set) do
@@ -1067,36 +1079,43 @@ describe("sudoku view", function()
             assert_rect(call.region, layout.cell_rect(view.layout, 0, 3))
         end)
 
-        it("refreshes the old and new cell separately when the selection moves", function()
+        it("refreshes the old and new cell in one bounding-box region when the selection moves", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
             tap_cell(view, 0, 3) -- both cells empty: no digit highlight involved
             calls = {}
             tap_cell(view, 0, 5)
-            local set = grid_region_set(view)
-            assert.are.equal(2, #calls, "two separate cell refreshes, no bounding box")
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 3))])
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 5))])
+            assert.are.equal(1, #calls, "one refresh region per interaction, never per cell")
+            local expected = layout.cells_region(view.layout, { [0 * 9 + 3] = true, [0 * 9 + 5] = true })
+            assert_rect(last_call().region, expected)
         end)
 
-        it("refreshes every matching cell when a digit cell is selected", function()
+        it("refreshes all matching cells in one region when a digit cell is selected", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
             tap_cell(view, 1, 0) -- a given 6: the match highlight turns on
-            local set = grid_region_set(view)
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 1, 0))], "the selected cell refreshes")
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 2, 7))], "a matching 6 refreshes")
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 6, 1))], "another matching 6 refreshes")
+            assert.are.equal(1, #calls, "a single region covers the whole match highlight")
+            local expected = layout.cells_region(view.layout, {
+                [1 * 9 + 0] = true,
+                [2 * 9 + 7] = true,
+                [3 * 9 + 4] = true,
+                [5 * 9 + 8] = true,
+                [6 * 9 + 1] = true,
+            })
+            assert_rect(last_call().region, expected)
         end)
 
-        it("refreshes the number row and every matching cell when a digit is armed", function()
+        it("refreshes the number row and the matching cells in one region when a digit is armed", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
             tap_button(view, "number_row", 3)
-            local set = grid_region_set(view)
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 1))], "a matching 3 refreshes")
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 3, 8))], "another matching 3 refreshes")
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 4, 5))], "a third matching 3 refreshes")
+            assert.are.equal(2, #calls, "one region for the cells, one for the number row")
+            local expected = layout.cells_region(view.layout, {
+                [0 * 9 + 1] = true,
+                [3 * 9 + 8] = true,
+                [4 * 9 + 5] = true,
+            })
+            assert_rect(grid_region(view), expected)
             local number_call
             for _, c in ipairs(calls) do
                 if c.region and c.region.y == view.layout.number_row.y then
@@ -1136,19 +1155,20 @@ describe("sudoku view", function()
             assert.are.equal("ui", number_call.mode)
         end)
 
-        it("refreshes each affected cell separately when placing a digit", function()
+        it("refreshes the affected cells in one region when placing a digit", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
             tap_button(view, "number_row", 3) -- arm 3
             calls = {}
             tap_cell(view, 0, 5)
-            local set = grid_region_set(view)
             -- 3 sits at (0,1) in the row and (4,5) in the column: the target
-            -- cell and both peers refresh individually, never as one rectangle.
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 5))])
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 1))])
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 4, 5))])
-            assert.are.equal(3, count_set(set))
+            -- cell and both peers refresh as one bounding-box update.
+            local expected = layout.cells_region(view.layout, {
+                [0 * 9 + 5] = true,
+                [0 * 9 + 1] = true,
+                [4 * 9 + 5] = true,
+            })
+            assert_rect(grid_region(view), expected)
             local tool = last_tool_call(view)
             assert.is_not_nil(tool, "undo/redo state changed, tool row must refresh")
             assert.are.equal("ui", tool.mode)
@@ -1173,35 +1193,31 @@ describe("sudoku view", function()
             tap_button(view, "number_row", 4) -- switch to 4: arming, no undo change
             calls = {}
             tap_cell(view, 0, 5) -- replace 3 with 4: (0,5), (0,1), (4,5) refresh
-            local set = grid_region_set(view)
             -- the second move replaces 3 with 4: (0,5), (0,1) and (4,5) (peers
             -- holding the replaced 3, whose conflicts disappear) refresh
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 5))])
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 1))])
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 4, 5))])
-            assert.are.equal(3, count_set(set), "the replaced cell and its conflict peers refresh")
+            local expected = layout.cells_region(view.layout, {
+                [0 * 9 + 5] = true,
+                [0 * 9 + 1] = true,
+                [4 * 9 + 5] = true,
+            })
+            assert_rect(grid_region(view), expected, "the replaced cell and its conflict peers refresh")
             assert.is_nil(last_tool_call(view), "tool row must not refresh on the second move")
         end)
 
-        it("refreshes only the cells an undo or redo can affect", function()
+        it("refreshes the cells an undo or redo can affect in one region", function()
             local view = new_view(new_game(PUZZLE, SOLUTION))
             paint_view(view)
             tap_button(view, "number_row", 2) -- arm 2
             tap_cell(view, 0, 6) -- (6,6) holds 2
             calls = {}
             tap_button(view, "tool_row", "undo")
-            local set = grid_region_set(view)
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 6))])
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 6, 6))])
+            local expected = layout.cells_region(view.layout, { [0 * 9 + 6] = true, [6 * 9 + 6] = true })
+            assert_rect(grid_region(view), expected)
             assert.is_not_nil(last_tool_call(view), "undo/redo state changed")
-            assert.are.equal(2, count_set(set))
             calls = {}
             tap_button(view, "tool_row", "redo")
-            set = grid_region_set(view)
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 0, 6))])
-            assert.is_not_nil(set[rect_key(layout.cell_rect(view.layout, 6, 6))])
+            assert_rect(grid_region(view), expected)
             assert.is_not_nil(last_tool_call(view))
-            assert.are.equal(2, count_set(set))
         end)
 
         it("refreshes only the newly revealed cells on check", function()

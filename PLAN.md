@@ -747,3 +747,24 @@ Menu (the custom-painted report is superseded; its tap/Back close and
 **Exit criteria**: all `sudoku_*` specs green via `./dev.sh test`,
 `./dev.sh lint` clean, emulator boot smoke on `kobo-aura-one` with no errors,
 PLAN.md + README updated, commit.
+
+### M6.4 — One refresh region per interaction (on-device flicker feedback)
+
+On-device feedback: arming/switching a digit made the previously highlighted
+cells **flash dark, then white, before the new digit's cells settled gray**.
+Root cause: every region update runs a separate EPD waveform (serialized, each
+with a visible dark pre-charge phase — the M6.2/M6.3 per-cluster regions
+serialize into several sequential flashes per tap). Fix: `refresh()` merges
+**all dirty cells into one bounding-box region** (`layout.cells_region`; the
+M6.2 per-cluster clustering via `layout.cells_regions` is removed) so an
+interaction costs a single cell update plus at most one short bar strip. The
+bbox covers only the dirty cells (a cursor move is exactly the two cells), so
+the M6.2 "large rectangle between distant cells" problem does not return.
+
+- [x] `ui/sudokuview.lua`: `refresh()` emits one `"ui"` region per frame over
+      the dirty-cell bbox; `MAX_REGIONS` and the cluster fallback removed
+- [x] `ui/layout.lua`: `cells_regions` (cluster strips) deleted; `cells_region`
+      bbox is the only cell-region helper
+- [x] `sudoku_view_spec` / `sudoku_layout_spec`: region tests assert the
+      single-bbox semantics (selection move, match highlight, armed switch,
+      placement, undo/redo, check)

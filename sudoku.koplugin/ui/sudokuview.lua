@@ -105,24 +105,23 @@ end
 -- cells that actually changed. "ui" is flash-free AND, unlike "partial",
 -- never promoted by UIManager to a flashing refresh (which would block the
 -- UI thread while the waveform runs, and flash the region); ghosting stays
--- bounded because every changed cell is repainted fresh. Nearby cells merge
--- into one update (clusters stay within a 2x2 cell block) so a tap costs a
--- single EPD update whenever possible — on mxcfb, consecutive updates are
--- serialized, each waiting for the previous one. "full" is reserved for the
--- first paint and wake/resize; leaving the game stays a "flashui" close.
-local MAX_REGIONS = 8
+-- bounded because every changed cell is repainted fresh. All dirty cells are
+-- merged into ONE bounding-box region per interaction: on mxcfb, consecutive
+-- updates are serialized, each waiting for the previous one and each running
+-- a waveform with a visible dark phase — per-cluster regions made a digit
+-- match highlight flash region by region (old cells dark, then white, then
+-- the new cells settling gray). "full" is reserved for the first paint and
+-- wake/resize; leaving the game stays a "flashui" close.
 
 function SudokuView:refresh()
     if not self._painted then
         UIManager:setDirty(self, "full")
         return
     end
-    local regions = layout.cells_regions(self.layout, self._dirty_cells)
-    if #regions > MAX_REGIONS then
-        local bbox = layout.cells_region(self.layout, self._dirty_cells)
-        if bbox then
-            regions = { bbox }
-        end
+    local regions = {}
+    local bbox = layout.cells_region(self.layout, self._dirty_cells)
+    if bbox then
+        regions[#regions + 1] = bbox
     end
     self._dirty_cells = {}
     if self._dirty_tool_row then
