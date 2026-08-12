@@ -41,16 +41,16 @@ function Sudoku:init()
 end
 
 function Sudoku:loadStats()
-    local data, load_err = storage.load(STATS_PATH)
-    if not data then
-        return stats.new()
+    local s, err, backed_up, _, is_missing = storage.load_or_backup(STATS_PATH, stats.from_table)
+    if s then
+        return s
     end
-    local s, err = stats.from_table(data)
-    if not s then
-        logger.warn("sudoku: ignoring invalid stats: " .. tostring(err) .. " (" .. tostring(load_err) .. ")")
-        return stats.new()
+    if backed_up then
+        logger.warn("sudoku: backed up corrupted stats file: " .. tostring(err))
+    elseif err and not is_missing then
+        logger.warn("sudoku: failed to load stats: " .. tostring(err))
     end
-    return s
+    return stats.new()
 end
 
 -- Shows the game view for `g` (used by every entry point so the view wiring
