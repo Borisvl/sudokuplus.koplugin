@@ -369,8 +369,8 @@ describe("sudoku view", function()
     end)
 
     local function bar_geometry(rect)
-        return rect.x + math.floor(rect.w * 0.15),
-            rect.x + rect.w - math.floor(rect.w * 0.15) - 1,
+        return rect.x + math.floor(rect.w * 0.08),
+            rect.x + rect.w - math.floor(rect.w * 0.08) - 1,
             rect.y + math.floor(rect.h / 2)
     end
 
