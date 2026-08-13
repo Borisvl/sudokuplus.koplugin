@@ -279,7 +279,7 @@ function game.new(options)
     end
 
     if type(difficulty) ~= "string" or not util.is_difficulty(difficulty) then
-        return nil, "difficulty must be one of easy, medium, hard, expert"
+        return nil, "difficulty must be one of beginner, easy, medium, hard, master, expert"
     end
     if type(now) ~= "function" then
         return nil, "now must be a function returning the current time in seconds"

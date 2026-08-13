@@ -28,25 +28,27 @@ local path_elimination = solve_path.elimination_step
 -- L2: box start rows for coordinates 0..8, indexed by (coordinate + 1).
 local BOX_ROW_OFFSET = { 0, 0, 0, 3, 3, 3, 6, 6, 6 }
 
--- Fixed technique order (rustoku parity). All modules are loaded eagerly so a
--- deployment or porting error cannot silently change the enabled technique set.
+-- Fixed technique order: ordered strictly by ascending difficulty tier so hints
+-- and full solves prioritize simpler techniques (Locked Candidates, Wings, Skyscrapers)
+-- before complex subsets, multi-fish, and chains (divergence from rustoku documented in PLAN.md).
+-- All modules are loaded eagerly so a deployment or porting error cannot silently change the enabled technique set.
 local TECHNIQUE_NAMES = {
     "naked_singles",
     "hidden_singles",
+    "locked_candidates",
     "naked_pairs",
     "hidden_pairs",
-    "locked_candidates",
     "naked_triples",
     "hidden_triples",
     "x_wing",
-    "naked_quads",
-    "hidden_quads",
-    "swordfish",
-    "jellyfish",
     "skyscraper",
-    "w_wing",
     "xy_wing",
     "xyz_wing",
+    "w_wing",
+    "naked_quads",
+    "swordfish",
+    "hidden_quads",
+    "jellyfish",
     "aic",
 }
 

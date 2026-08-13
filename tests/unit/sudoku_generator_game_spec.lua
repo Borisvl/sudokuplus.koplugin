@@ -1,6 +1,5 @@
 package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 
-local bit = require("bit")
 local board = require("core.board")
 local generator = require("core.generator")
 local prng = require("core.prng")
@@ -9,7 +8,7 @@ local solver = require("core.solver")
 local sudoku = require("core.sudoku")
 local flags = require("core.techniques.flags")
 
-local ALL_TECHNIQUES = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.EXPERT)))
+local ALL_TECHNIQUES = flags.ALL
 
 describe("core.generator game payload", function()
     it("returns puzzle, solution, difficulty and clue count", function()
@@ -45,12 +44,21 @@ describe("core.generator game payload", function()
         -- seed. The upper bound is NOT asserted: the greedy dig can stall
         -- above the target (expert targets 17..22 routinely land at 23..28).
         local ranges = {
-            easy = 34,
-            medium = 25,
-            hard = 22,
+            beginner = 38,
+            easy = 30,
+            medium = 26,
+            hard = 24,
+            master = 22,
             expert = 17,
         }
-        for _, entry in ipairs({ { "easy", 1 }, { "medium", 2 }, { "hard", 3 }, { "expert", 4 } }) do
+        for _, entry in ipairs({
+            { "beginner", 1 },
+            { "easy", 2 },
+            { "medium", 3 },
+            { "hard", 4 },
+            { "master", 5 },
+            { "expert", 6 },
+        }) do
             local diff, seed = entry[1], entry[2]
             local payload, err = generator.generate_game {
                 difficulty = diff,
@@ -182,6 +190,7 @@ describe("core.generator game payload", function()
                 requires_guessing = false,
                 hardest_flags = flags.X_WING,
                 hardest_step_number = 1,
+                non_single_count = 2,
             }
         end
         finally(function()
@@ -199,6 +208,48 @@ describe("core.generator game payload", function()
         assert.are.equal("hard", payload.difficulty, "the payload reports the actual classification")
         assert.are.equal(board.count_clues(payload.board), payload.clues)
         assert.is_not_nil(payload.solution)
+    end)
+
+    it("fallback prefers density-passing adjacent tier over non-dense exact match", function()
+        local solve_path_mod = require("core.solve_path")
+        local original_classify = solve_path_mod.classify
+        local attempt = 0
+        solve_path_mod.classify = function()
+            attempt = attempt + 1
+            if attempt == 1 then
+                -- Attempt 1: exact difficulty match ("medium") but fails density (1 non-single)
+                return {
+                    difficulty = "medium",
+                    requires_guessing = false,
+                    hardest_flags = flags.NAKED_PAIRS,
+                    hardest_step_number = 1,
+                    non_single_count = 1,
+                }
+            else
+                -- Subsequent attempts: adjacent tier ("hard") passing density (2 non-singles)
+                return {
+                    difficulty = "hard",
+                    requires_guessing = false,
+                    hardest_flags = flags.HIDDEN_PAIRS,
+                    hardest_step_number = 1,
+                    non_single_count = 2,
+                }
+            end
+        end
+        finally(function()
+            solve_path_mod.classify = original_classify
+        end)
+
+        local payload, err = generator.generate_game({
+            difficulty = "medium",
+            max_attempts = 3,
+            rng = prng.new(1234),
+        })
+
+        assert.is_nil(err)
+        assert.is_not_nil(payload)
+        -- Dense "hard" neighbor (score 1) must beat non-dense "medium" exact match (score 10)
+        assert.are.equal("hard", payload.difficulty)
     end)
 
     it("generates within the search node budget on fixed seeds", function()
@@ -228,7 +279,14 @@ describe("core.generator game payload", function()
             return result
         end
 
-        for _, entry in ipairs({ { "easy", 101 }, { "medium", 102 }, { "hard", 103 }, { "expert", 104 } }) do
+        for _, entry in ipairs({
+            { "beginner", 101 },
+            { "easy", 102 },
+            { "medium", 103 },
+            { "hard", 104 },
+            { "master", 105 },
+            { "expert", 106 },
+        }) do
             local payload, err = generator.generate_game {
                 difficulty = entry[1],
                 seed = entry[2],
@@ -270,12 +328,40 @@ describe("core.generator game payload", function()
         assert.are.equal(1, #solutions, "the dig invariant must hold even with capped checks")
     end)
 
+    it("ensures medium, hard, and master games have at least 2 non-single steps", function()
+        for _, diff in ipairs({ "medium", "hard", "master" }) do
+            local payload, err = generator.generate_game {
+                difficulty = diff,
+                seed = 777,
+                rng = prng.new(777),
+            }
+            assert.is_nil(err)
+            assert.is_not_nil(payload)
+            assert.are.equal(diff, payload.difficulty, diff .. " generation should hit the target tier on seed 777")
+            local solutions = solver
+                .new(payload.board, {
+                    techniques = ALL_TECHNIQUES,
+                    rng = prng.new(777),
+                })
+                :solve_until(2)
+            assert.are.equal(1, #solutions)
+            local clues = board.count_clues(payload.board)
+            local classification = solve_path.classify(solutions[1].solve_path, { clues = clues })
+            assert.is_true(
+                classification.non_single_count >= 2,
+                diff .. " must have >= 2 non-single steps to avoid single-step bottlenecks"
+            )
+        end
+    end)
+
     it("property: every generated game is unique and matches its solution under an independent plain solve", function()
         for _, entry in ipairs({
-            { "easy", 101 },
-            { "medium", 102 },
-            { "hard", 103 },
-            { "expert", 104 },
+            { "beginner", 101 },
+            { "easy", 102 },
+            { "medium", 103 },
+            { "hard", 104 },
+            { "master", 105 },
+            { "expert", 106 },
         }) do
             local payload, err = generator.generate_game {
                 difficulty = entry[1],

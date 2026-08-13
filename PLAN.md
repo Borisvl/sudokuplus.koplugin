@@ -31,11 +31,16 @@ A Sudoku puzzle game for e-ink readers (KOReader plugin, target: Kobo).
    README) to pure Lua. All 17 human techniques in scope (incl. Expert/AIC).
    Rust `bitflags` → LuaJIT `bit`; `rand` → injected pure-Lua PRNG; `rayon`
    dropped (single-threaded; `solve_until(2)` is enough for generation).
-2. **Divergence from rustoku**: solve steps additionally record *pattern
-   metadata* (the cells forming a naked pair, skyscraper base/roof, etc.) so
-   hints can name and highlight patterns. Keep this documented here.
-3. **Difficulty model**: difficulty of a puzzle = hardest technique required
-   in its human solve path (rustoku's model): Easy / Medium / Hard / Expert.
+2. **Divergences from rustoku**:
+   - Solve steps additionally record *pattern metadata* (the cells forming a naked pair, skyscraper base/roof, etc.) so hints can name and highlight patterns.
+   - Propagator technique execution order is structured strictly by ascending difficulty tier (Locked Candidates before Naked Pairs, and Wings/Skyscrapers before Swordfish/Hidden Quads/Jellyfish) so human hints and full solves prioritize simpler techniques over complex subsets/fish.
+   Keep these documented here.
+3. **Difficulty model**: 6-tier progression (Beginner, Easy, Medium, Hard, Master,
+   Expert) determined by peak human technique tier, clue-count thresholding
+   (>= 38 clues for Beginner vs < 38 for Easy), and anti-bottleneck step density
+   constraints (requiring >= 2 non-trivial steps for Medium through Master).
+   Cumulative HoDoKu workload point scoring is tracked on the solve path
+   (`classification.score`) as diagnostic metadata.
 4. **Hint behavior**: progressive reveal — ① technique name → ② pattern cells
    highlighted → ③ apply the elimination/placement. A hint requested means
    the user missed that strategy; count it in stats.
@@ -51,11 +56,9 @@ A Sudoku puzzle game for e-ink readers (KOReader plugin, target: Kobo).
    revealed by check are a separate counter.
 6. **Timer**: counts active play time only (pauses in menus / on suspend).
 7. **Streak**: consecutive solved games without using a hint.
-8. **v1 UI difficulties**: Easy, Medium, Hard, Expert. M7 divergence: the
-   original "Expert puzzles behind a setting" gate was dropped — Expert is
-   always offered in the picker (AIC hints have been solid since M4); the
-   synchronous generation wait is mitigated by a "Generating…"
-   notification.
+8. **UI difficulties**: Beginner, Easy, Medium, Hard, Master, Expert offered
+   in the picker with localized labels. The synchronous generation wait is
+   mitigated by a "Generating…" notification.
 9. **Stats storage**: JSON files in KOReader's data dir (`sudoku_stats`,
    `sudoku_save`). M5 divergence from the original "via persist.lua" wording:
    persist.lua has no JSON codec (serpent/dump/bitser only), so the JSON
@@ -840,3 +843,29 @@ the M6.2 "large rectangle between distant cells" problem does not return.
 - [x] `sudoku_view_spec` / `sudoku_layout_spec`: region tests assert the
       single-bbox semantics (selection move, match highlight, armed switch,
       placement, undo/redo, check)
+
+### M6.5 — Fine-grained 6-tier difficulty model and anti-bottleneck puzzle generation
+
+Feedback: difficulty granularity was too coarse (Easy was often trivially solved
+in ~1 minute with 1 technique at 38+ clues; Hard often had a single bottleneck
+step before collapsing into trivial singles). Fix: expanded to 6 fine-grained
+tiers (Beginner, Easy, Medium, Hard, Master, Expert) with HoDoKu-inspired
+workload scoring and anti-bottleneck density constraints requiring at least 2
+non-trivial steps for Medium through Master.
+
+- [x] `core/techniques/flags.lua`: defined 6-tier composite bitmasks (`BEGINNER`,
+      `EASY`, `MEDIUM`, `HARD`, `MASTER`, `EXPERT`), HoDoKu technique point scores
+      (`flags.TECHNIQUE_SCORES`), and updated `flags.difficulty` mapping
+- [x] `core/util.lua`: `DIFFICULTIES` includes all 6 tiers
+- [x] `core/solve_path.lua`: 6-tier ranking (`DIFFICULTY_RANK`), `solve_path.classify`
+      computes `non_single_count`, cumulative HoDoKu `score`, and distinguishes
+      `beginner` (high clue count >= 38) vs `easy` (< 38) for pure singles paths
+- [x] `core/generator.lua`: calibrated clue ranges (`DIFFICULTY_RANGES`), tiered
+      techniques, sampling weights, and anti-bottleneck density filtering
+      (`meets_density_criteria` requiring >= 2 non-single deductions for Medium through Master)
+- [x] `ui/difficulties.lua`: ordered 6-tier list with localized labels
+- [x] `stats.lua`, `game.lua`, `main.lua`: validation and menu wiring for all 6 difficulties
+- [x] `tests/unit/*_spec.lua`: updated and expanded specs across flags, solve path, generator,
+      game payloads, menu, and difficulties; all tests green
+- [x] `tools/bench_generation.lua`, `tools/bench_hints.lua`: benchmarked all 6 tiers (<450ms max generation)
+

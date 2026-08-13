@@ -2,9 +2,11 @@ local _ = require("gettext")
 
 -- Ordered difficulty list for the picker and the stats screen.
 local difficulties = {
+    { id = "beginner", label = _("Beginner") },
     { id = "easy", label = _("Easy") },
     { id = "medium", label = _("Medium") },
     { id = "hard", label = _("Hard") },
+    { id = "master", label = _("Master") },
     { id = "expert", label = _("Expert") },
 }
 

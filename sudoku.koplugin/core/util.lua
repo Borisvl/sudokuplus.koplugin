@@ -1,9 +1,11 @@
 local util = {}
 
 local DIFFICULTIES = {
+    beginner = true,
     easy = true,
     medium = true,
     hard = true,
+    master = true,
     expert = true,
 }
 

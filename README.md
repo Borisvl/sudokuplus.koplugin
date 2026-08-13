@@ -139,7 +139,7 @@ propagation benchmark does not include the M3 puzzle-generation retry loop.
 ### Generation benchmark
 
 `tools/bench_generation.lua` measures seeded puzzle generation across the six
-symmetry modes and the Easy through Expert difficulty retry loops. It reports
+symmetry modes and the Beginner through Expert difficulty retry loops. It reports
 p50/p95/maximum generation time and clue-count ranges, and fails if any sample
 exceeds the three-second local sanity limit.
 

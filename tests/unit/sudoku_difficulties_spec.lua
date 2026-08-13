@@ -7,13 +7,15 @@ describe("sudoku difficulties", function()
         difficulties = require("ui.difficulties")
     end)
 
-    it("lists all four difficulties in order", function()
+    it("lists all six difficulties in order", function()
         local list = difficulties.list()
-        assert.are.same({ "easy", "medium", "hard", "expert" }, {
+        assert.are.same({ "beginner", "easy", "medium", "hard", "master", "expert" }, {
             list[1].id,
             list[2].id,
             list[3].id,
             list[4].id,
+            list[5].id,
+            list[6].id,
         })
         for _, entry in ipairs(list) do
             assert.is_string(entry.label)
@@ -22,9 +24,11 @@ describe("sudoku difficulties", function()
     end)
 
     it("returns localized labels for known difficulties", function()
+        assert.are.equal("Beginner", difficulties.label("beginner"))
         assert.are.equal("Easy", difficulties.label("easy"))
         assert.are.equal("Medium", difficulties.label("medium"))
         assert.are.equal("Hard", difficulties.label("hard"))
+        assert.are.equal("Master", difficulties.label("master"))
         assert.are.equal("Expert", difficulties.label("expert"))
     end)
 

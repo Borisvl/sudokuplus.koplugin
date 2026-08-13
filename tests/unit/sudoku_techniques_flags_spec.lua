@@ -25,20 +25,61 @@ describe("core.techniques.flags", function()
     end)
 
     it("provides composite tier masks", function()
+        assert.are.equal(0xFF, flags.BEGINNER)
         assert.are.equal(0xFF, flags.EASY)
-        assert.are.equal(0xFF00, flags.MEDIUM)
-        assert.are.equal(0xFF0000, flags.HARD)
-        assert.are.equal(bit.tobit(0xFF000000), flags.EXPERT)
+        assert.are.equal(bit.bor(flags.NAKED_PAIRS, flags.LOCKED_CANDIDATES), flags.MEDIUM)
+        assert.are.equal(bit.bor(flags.HIDDEN_PAIRS, bit.bor(flags.NAKED_TRIPLES, flags.HIDDEN_TRIPLES)), flags.HARD)
+        assert.are.equal(
+            bit.bor(
+                flags.X_WING,
+                bit.bor(
+                    flags.NAKED_QUADS,
+                    bit.bor(flags.SKYSCRAPER, bit.bor(flags.W_WING, bit.bor(flags.XY_WING, flags.XYZ_WING)))
+                )
+            ),
+            flags.MASTER
+        )
+        assert.are.equal(
+            bit.bor(
+                flags.HIDDEN_QUADS,
+                bit.bor(flags.SWORDFISH, bit.bor(flags.JELLYFISH, flags.ALTERNATING_INFERENCE_CHAIN))
+            ),
+            flags.EXPERT
+        )
+        assert.are.equal(
+            bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, bit.bor(flags.MASTER, flags.EXPERT)))),
+            flags.ALL
+        )
+    end)
+
+    it("ensures non-overlapping disjoint partition of difficulty tiers across ALL", function()
+        local non_overlapping_tiers = {
+            flags.EASY,
+            flags.MEDIUM,
+            flags.HARD,
+            flags.MASTER,
+            flags.EXPERT,
+        }
+        for i = 1, #non_overlapping_tiers do
+            for j = i + 1, #non_overlapping_tiers do
+                assert.are.equal(
+                    0,
+                    bit.band(non_overlapping_tiers[i], non_overlapping_tiers[j]),
+                    string.format("tiers %d and %d must be strictly disjoint", i, j)
+                )
+            end
+        end
+        local combined = 0
+        for _, mask in ipairs(non_overlapping_tiers) do
+            combined = bit.bor(combined, mask)
+        end
+        assert.are.equal(flags.ALL, combined)
     end)
 
     it("counts set bits", function()
         assert.are.equal(0, flags.count(0))
         assert.are.equal(1, flags.count(flags.NAKED_SINGLES))
         assert.are.equal(3, flags.count(bit.bor(flags.NAKED_SINGLES, flags.HIDDEN_SINGLES, flags.NAKED_PAIRS)))
-        assert.are.equal(8, flags.count(flags.EASY))
-        assert.are.equal(8, flags.count(flags.MEDIUM))
-        assert.are.equal(8, flags.count(flags.HARD))
-        assert.are.equal(8, flags.count(flags.EXPERT))
     end)
 
     it("finds the lowest set bit index", function()
@@ -54,11 +95,30 @@ describe("core.techniques.flags", function()
         assert.are.equal("easy", flags.difficulty(flags.HIDDEN_SINGLES))
         assert.are.equal("medium", flags.difficulty(flags.NAKED_PAIRS))
         assert.are.equal("medium", flags.difficulty(flags.LOCKED_CANDIDATES))
-        assert.are.equal("hard", flags.difficulty(flags.X_WING))
-        assert.are.equal("hard", flags.difficulty(flags.SKYSCRAPER))
-        assert.are.equal("expert", flags.difficulty(flags.W_WING))
+        assert.are.equal("hard", flags.difficulty(flags.HIDDEN_PAIRS))
+        assert.are.equal("hard", flags.difficulty(flags.NAKED_TRIPLES))
+        assert.are.equal("hard", flags.difficulty(flags.HIDDEN_TRIPLES))
+        assert.are.equal("master", flags.difficulty(flags.X_WING))
+        assert.are.equal("master", flags.difficulty(flags.SKYSCRAPER))
+        assert.are.equal("master", flags.difficulty(flags.W_WING))
+        assert.are.equal("master", flags.difficulty(flags.XY_WING))
+        assert.are.equal("master", flags.difficulty(flags.XYZ_WING))
+        assert.are.equal("master", flags.difficulty(flags.NAKED_QUADS))
+        assert.are.equal("expert", flags.difficulty(flags.HIDDEN_QUADS))
+        assert.are.equal("expert", flags.difficulty(flags.SWORDFISH))
+        assert.are.equal("expert", flags.difficulty(flags.JELLYFISH))
         assert.are.equal("expert", flags.difficulty(flags.ALTERNATING_INFERENCE_CHAIN))
         assert.are.equal("easy", flags.difficulty(0))
+    end)
+
+    it("computes technique scores", function()
+        assert.are.equal(0, flags.score(0))
+        assert.are.equal(10, flags.score(flags.NAKED_SINGLES))
+        assert.are.equal(12, flags.score(flags.HIDDEN_SINGLES))
+        assert.are.equal(40, flags.score(flags.LOCKED_CANDIDATES))
+        assert.are.equal(50, flags.score(flags.NAKED_PAIRS))
+        assert.are.equal(120, flags.score(flags.X_WING))
+        assert.are.equal(300, flags.score(flags.ALTERNATING_INFERENCE_CHAIN))
     end)
 
     it("computes difficulty points (lowest bit + 1)", function()

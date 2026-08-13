@@ -3,8 +3,8 @@ package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 local util = require("core.util")
 
 describe("core.util", function()
-    it("accepts the four supported difficulties", function()
-        for _, name in ipairs({ "easy", "medium", "hard", "expert" }) do
+    it("accepts the six supported difficulties", function()
+        for _, name in ipairs({ "beginner", "easy", "medium", "hard", "master", "expert" }) do
             assert.is_true(util.is_difficulty(name), name .. " must be a difficulty")
         end
     end)

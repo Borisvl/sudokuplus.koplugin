@@ -9,7 +9,7 @@ local solver = require("core.solver")
 local sudoku = require("core.sudoku")
 local flags = require("core.techniques.flags")
 
-local ALL_TECHNIQUES = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.EXPERT)))
+local ALL_TECHNIQUES = flags.ALL
 
 local SYMMETRIES = {
     "none",
@@ -55,11 +55,16 @@ local function partners(symmetry, row, col)
 end
 
 local function assert_symmetric(puzzle, symmetry)
-    for row = 0, 8 do
-        for col = 0, 8 do
-            local empty = board.is_empty(puzzle, row, col)
-            for _, partner in ipairs(partners(symmetry, row, col)) do
-                assert.are.equal(empty, board.is_empty(puzzle, partner[1], partner[2]))
+    for r = 0, 8 do
+        for c = 0, 8 do
+            local given = puzzle[cell_index(r, c)] ~= 0
+            for _, partner in ipairs(partners(symmetry, r, c)) do
+                local partner_given = puzzle[cell_index(partner[1], partner[2])] ~= 0
+                assert.are.equal(
+                    given,
+                    partner_given,
+                    string.format("cell (%d, %d) broke symmetry '%s'", r, c, symmetry)
+                )
             end
         end
     end
@@ -84,27 +89,39 @@ describe("core.generator", function()
         assert.is_string(attempts_err)
     end)
 
-    it("generates a deterministic uniquely solvable puzzle", function()
-        local options = { clues = 30, rng = prng.new(12345) }
-        local first = generator.generate(options)
-        local second = generator.generate({ clues = 30, rng = prng.new(12345) })
+    it("generates a unique solution board that contains the puzzle clues", function()
+        local puzzle, err = generator.generate({ clues = 30, rng = prng.new(42) })
 
-        assert.is_not_nil(first)
-        assert.is_not_nil(second)
-        assert.are.equal(board.to_string(first), board.to_string(second))
-        assert.is_true(board.count_clues(first) >= 30)
+        assert.is_nil(err)
+        assert.is_not_nil(puzzle)
+        assert.are.equal(81, #puzzle)
+        assert.is_true(board.count_clues(puzzle) >= 30)
 
-        local solver_instance = solver.new(first)
+        local solver_instance = solver.new(puzzle)
         local solutions = solver_instance:solve_until(2)
         assert.are.equal(1, #solutions)
         assert.is_false(solver_instance:is_solved())
         assert.is_not_nil(solver.validate(solutions[1].board))
 
         for i = 1, 81 do
-            if first[i] ~= 0 then
-                assert.are.equal(first[i], solutions[1].board[i])
+            if puzzle[i] ~= 0 then
+                assert.are.equal(puzzle[i], solutions[1].board[i])
             end
         end
+    end)
+
+    it("is deterministic for a given seed", function()
+        local first = generator.generate({ clues = 30, rng = prng.new(7) })
+        local second = generator.generate({ clues = 30, rng = prng.new(7) })
+
+        assert.is_not_nil(first)
+        assert.is_not_nil(second)
+        assert.are.equal(board.to_string(first), board.to_string(second))
+
+        local solver_instance = solver.new(first)
+        local solutions = solver_instance:solve_until(2)
+        assert.are.equal(1, #solutions)
+        assert.is_false(solver_instance:is_solved())
     end)
 
     it("tiered classification agrees with the full technique set on in-tier puzzles", function()
@@ -113,8 +130,11 @@ describe("core.generator", function()
         -- same as with all techniques; harder puzzles become "requires
         -- guessing" and are rejected.
         local tier = {
+            beginner = flags.BEGINNER,
+            easy = flags.EASY,
             medium = bit.bor(flags.EASY, flags.MEDIUM),
             hard = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, flags.HARD)),
+            master = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.MASTER))),
         }
 
         local function classify(b, techniques)
@@ -126,14 +146,15 @@ describe("core.generator", function()
             if #solutions ~= 1 then
                 return "nonunique"
             end
-            local result = solve_path.classify(solutions[1].solve_path)
+            local clues = board.count_clues(b)
+            local result = solve_path.classify(solutions[1].solve_path, { clues = clues })
             if result.requires_guessing then
                 return "guess"
             end
             return result.difficulty
         end
 
-        for _, target in ipairs({ "medium", "hard" }) do
+        for _, target in ipairs({ "beginner", "easy", "medium", "hard", "master" }) do
             local payload, err = generator.generate_game {
                 difficulty = target,
                 seed = 4242,
@@ -216,10 +237,12 @@ describe("core.generator", function()
 
     it("targets exact human-solve difficulty without guessing", function()
         local targets = {
-            { name = "easy", seed = 101 },
-            { name = "medium", seed = 102 },
-            { name = "hard", seed = 103 },
-            { name = "expert", seed = 104 },
+            { name = "beginner", seed = 101 },
+            { name = "easy", seed = 102 },
+            { name = "medium", seed = 103 },
+            { name = "hard", seed = 104 },
+            { name = "master", seed = 105 },
+            { name = "expert", seed = 106 },
         }
 
         for _, target in ipairs(targets) do
@@ -238,7 +261,8 @@ describe("core.generator", function()
             local solutions = human_solver:solve_until(2)
             assert.are.equal(1, #solutions)
 
-            local classification = solve_path.classify(solutions[1].solve_path)
+            local clues = board.count_clues(puzzle)
+            local classification = solve_path.classify(solutions[1].solve_path, { clues = clues })
             assert.are.equal(target.name, classification.difficulty)
             assert.is_false(classification.requires_guessing)
         end

@@ -21,13 +21,15 @@ local DEFAULT_SEED = 20260807
 local DEFAULT_ITERATIONS = 3
 local DEFAULT_GENERATED = 5
 local GENERATED_CLUE_COUNTS = { 17, 25, 35, 45 }
-local FULL_MASK = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.EXPERT)))
+local FULL_MASK = flags.ALL
 local SOLVED_BOARD = "841729635769153482532648719423985176687214953195376824214567398376892541958431267"
 
 local TIERS = {
+    { name = "beginner", techniques = flags.BEGINNER },
     { name = "easy", techniques = flags.EASY },
     { name = "medium", techniques = bit.bor(flags.EASY, flags.MEDIUM) },
     { name = "hard", techniques = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, flags.HARD)) },
+    { name = "master", techniques = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.MASTER))) },
     { name = "expert", techniques = FULL_MASK },
 }
 

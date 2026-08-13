@@ -54,7 +54,7 @@ local function validate_record(record)
         return nil, "record seed must be a non-negative integer"
     end
     if type(record.difficulty) ~= "string" or not util.is_difficulty(record.difficulty) then
-        return nil, "record difficulty must be one of easy, medium, hard, expert"
+        return nil, "record difficulty must be one of beginner, easy, medium, hard, master, expert"
     end
     if type(record.duration) ~= "number" or not util.is_finite(record.duration) or record.duration < 0 then
         return nil, "record duration must be a non-negative number"

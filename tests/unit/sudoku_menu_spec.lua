@@ -48,14 +48,14 @@ describe("sudoku plugin menu", function()
         assert.are.same({ "Continue", "New game", "Statistics", "Auto-fill notes" }, texts)
     end)
 
-    it("offers all four difficulties under New game", function()
+    it("offers all six difficulties under New game", function()
         local new_game = item_with("New game")
         assert.is_table(new_game.sub_item_table)
         local labels = {}
         for _, entry in ipairs(new_game.sub_item_table) do
             labels[#labels + 1] = entry.text
         end
-        assert.are.same({ "Easy", "Medium", "Hard", "Expert" }, labels)
+        assert.are.same({ "Beginner", "Easy", "Medium", "Hard", "Master", "Expert" }, labels)
     end)
 
     it("starts a game of the chosen difficulty", function()

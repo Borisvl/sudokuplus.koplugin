@@ -13,7 +13,7 @@ local CELL_COUNT = BOARD_SIZE * BOARD_SIZE
 local DEFAULT_CLUES = 30
 local DEFAULT_SYMMETRY = "none"
 local DEFAULT_MAX_ATTEMPTS = 100
-local ALL_TECHNIQUES = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.EXPERT)))
+local ALL_TECHNIQUES = flags.ALL
 
 -- P4: per-solve node budget. Uniqueness checks and difficulty classification
 -- can hit pathological search trees (a hard puzzle classified with only
@@ -32,41 +32,41 @@ local SEARCH_BUDGET = 50000
 -- are identical to an all-techniques solve (the propagator runs the tiers in
 -- fixed order, so a puzzle that solves within the tier follows the same path).
 local TIER_TECHNIQUES = {
+    beginner = flags.BEGINNER,
     easy = flags.EASY,
     medium = bit.bor(flags.EASY, flags.MEDIUM),
     hard = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, flags.HARD)),
+    master = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.MASTER))),
     expert = ALL_TECHNIQUES,
 }
 
 local DIFFICULTY_RANGES = {
-    easy = { min = 34, max = 42 },
-    -- 25..31 is where medium classifications actually concentrate: measured
-    -- 2026-08-09, 28..34 (the old rustoku range) classified ~90% "easy" and
-    -- only ~2-6% "medium", forcing dozens of retries (and occasional
-    -- exhaustion); 25..31 yields roughly 3-13% medium per attempt.
-    medium = { min = 25, max = 31 },
-    hard = { min = 22, max = 28 },
+    beginner = { min = 38, max = 44 },
+    easy = { min = 30, max = 36 },
+    medium = { min = 26, max = 31 },
+    hard = { min = 24, max = 28 },
+    master = { min = 22, max = 26 },
     expert = { min = 17, max = 22 },
 }
 
 -- Rank used to pick the closest usable fallback when an exact difficulty
 -- match cannot be found within max_attempts.
 local DIFFICULTY_ORDER = {
-    easy = 1,
-    medium = 2,
-    hard = 3,
-    expert = 4,
+    beginner = 1,
+    easy = 2,
+    medium = 3,
+    hard = 4,
+    master = 5,
+    expert = 6,
 }
 
 -- P3: clue-target sampling weights, aligned with DIFFICULTY_RANGES (weights[1]
--- is the low end of the range). Measured 2026-08-10 per-clue-count difficulty
--- hit rates (x10): medium peaks at 25 clues (16.7%), hard at 24 (10%), so a
--- uniform target pick wastes attempts on low-yield clue counts. easy and
--- expert stay uniform (single-attempt easy; expert's 16-25% hit rate is
--- already fine).
+-- is the low end of the range). Empirical calibration balances generation speed
+-- with hitting the target technique tier.
 local DIFFICULTY_WEIGHTS = {
-    medium = { 167, 83, 50, 83, 67, 50, 33 },
-    hard = { 50, 33, 100, 67, 50, 33, 33 },
+    medium = { 100, 80, 60, 50, 40, 30 },
+    hard = { 100, 80, 60, 50, 30 },
+    master = { 100, 80, 60, 40, 30 },
 }
 
 local SYMMETRIES = {
@@ -346,7 +346,15 @@ local function classify_puzzle(puzzle, options, difficulty)
         return nil
     end
 
-    return solve_path.classify(solutions[1].solve_path)
+    local clues = board.count_clues(puzzle)
+    return solve_path.classify(solutions[1].solve_path, { clues = clues })
+end
+
+local function meets_density_criteria(classification, target_difficulty)
+    if target_difficulty == "medium" or target_difficulty == "hard" or target_difficulty == "master" then
+        return (classification.non_single_count or 0) >= 2
+    end
+    return true
 end
 
 local function game_payload(payload, classification, options)
@@ -426,7 +434,12 @@ function generator.generate(options)
         if attempt_err then
             return nil, attempt_err
         end
-        if payload and not classification.requires_guessing and classification.difficulty == normalized.difficulty then
+        if
+            payload
+            and not classification.requires_guessing
+            and classification.difficulty == normalized.difficulty
+            and meets_density_criteria(classification, normalized.difficulty)
+        then
             return payload.board
         end
     end
@@ -470,10 +483,19 @@ function generator.generate_game(options)
             return nil, attempt_err
         end
         if payload and not classification.requires_guessing then
-            if classification.difficulty == normalized.difficulty then
+            if
+                classification.difficulty == normalized.difficulty
+                and meets_density_criteria(classification, normalized.difficulty)
+            then
                 return game_payload(payload, classification, normalized)
             end
-            local distance = math.abs(requested_rank - DIFFICULTY_ORDER[classification.difficulty])
+            local rank_diff = math.abs(requested_rank - DIFFICULTY_ORDER[classification.difficulty])
+            local is_dense = meets_density_criteria(classification, classification.difficulty)
+            -- Prioritize density-passing candidates over non-dense candidates:
+            -- A density-passing adjacent tier candidate (score 1) beats an exact-tier candidate
+            -- that failed density (score 10). If all attempts fail density, the exact match wins (10 vs 11).
+            local penalty = is_dense and 0 or 10
+            local distance = rank_diff + penalty
             if not best or distance < best.distance then
                 best = {
                     payload = payload,

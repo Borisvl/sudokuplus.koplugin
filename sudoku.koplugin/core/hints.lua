@@ -8,7 +8,7 @@ local flags = require("core.techniques.flags")
 
 local hints = {}
 
-local ALL_TECHNIQUES = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.EXPERT)))
+local ALL_TECHNIQUES = flags.ALL
 local MIN_INT32 = -2147483648
 local UINT32_LIMIT = 4294967296
 local FULL_CANDIDATE_MASK = 0x1FF

@@ -16,7 +16,7 @@ local prng = require("core.prng")
 
 local DEFAULT_SEED = 20260809
 local DEFAULT_ITERATIONS = 10
-local DIFFICULTIES = { "easy", "medium", "hard", "expert" }
+local DIFFICULTIES = { "beginner", "easy", "medium", "hard", "master", "expert" }
 
 local function usage()
     print([[Usage: luajit tools/bench_hints.lua [options]

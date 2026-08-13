@@ -23,7 +23,7 @@ local TWO_PUZZLE = "295743861431865900876192543387459216612387495549216738763504
 local SIX_PUZZLE = "295743001431865900876192543387459216612387495549216738763500000000000000000000000"
 
 -- All techniques implemented so far (easy through expert tiers).
-local all_implemented = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.EXPERT)))
+local all_implemented = flags.ALL
 
 -- HoDoKu hard-tier examples: x-wing (bf201), swordfish (bf301), jellyfish
 -- (bf401), skyscraper (sk01), naked quads (n401), hidden quads (h401).

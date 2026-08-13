@@ -2,10 +2,12 @@ local solve_path = {}
 local technique_flags = require("core.techniques.flags")
 
 local DIFFICULTY_RANK = {
-    easy = 0,
-    medium = 1,
-    hard = 2,
-    expert = 3,
+    beginner = 0,
+    easy = 1,
+    medium = 2,
+    hard = 3,
+    master = 4,
+    expert = 5,
 }
 
 -- Step metrics describe direct effects of a step, not all cells in its pattern.
@@ -75,16 +77,26 @@ function solve_path.snapshot(path)
     return { steps = steps }
 end
 
-function solve_path.classify(path)
+function solve_path.classify(path, options)
+    local clue_count = nil
+    if type(options) == "number" then
+        clue_count = options
+    elseif type(options) == "table" and type(options.clues) == "number" then
+        clue_count = options.clues
+    end
+
     local result = {
         difficulty = "easy",
         requires_guessing = false,
         hardest_flags = 0,
         hardest_step_number = nil,
+        non_single_count = 0,
+        score = 0,
     }
-    local hardest_rank = DIFFICULTY_RANK.easy
-
+    local hardest_rank = -1
     local has_hardest_step = false
+    local peak_difficulty = nil
+
     for index, step in ipairs((path or {}).steps or {}) do
         local step_flags = step.flags or 0
         if step.type == "place" and step_flags == 0 then
@@ -92,16 +104,33 @@ function solve_path.classify(path)
         end
 
         if step_flags ~= 0 then
+            local step_score = technique_flags.score(step_flags)
+            result.score = result.score + step_score
+
+            if step_flags ~= technique_flags.NAKED_SINGLES and step_flags ~= technique_flags.HIDDEN_SINGLES then
+                result.non_single_count = result.non_single_count + 1
+            end
+
             local difficulty = technique_flags.difficulty(step_flags)
-            local rank = DIFFICULTY_RANK[difficulty]
+            local rank = DIFFICULTY_RANK[difficulty] or 0
             if rank > hardest_rank or (rank == hardest_rank and not has_hardest_step) then
                 hardest_rank = rank
-                result.difficulty = difficulty
+                peak_difficulty = difficulty
                 result.hardest_flags = step_flags
                 result.hardest_step_number = step.step_number or index - 1
                 has_hardest_step = true
             end
         end
+    end
+
+    if peak_difficulty == nil or peak_difficulty == "easy" then
+        if clue_count and clue_count >= 38 then
+            result.difficulty = "beginner"
+        else
+            result.difficulty = "easy"
+        end
+    else
+        result.difficulty = peak_difficulty
     end
 
     return result

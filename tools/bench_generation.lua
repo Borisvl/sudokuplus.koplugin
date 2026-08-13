@@ -23,11 +23,13 @@ local CASES = {
     { name = "clues30_mirrorvertical", options = { clues = 30, symmetry = "mirrorvertical" } },
     { name = "clues30_mirrorhorizontal", options = { clues = 30, symmetry = "mirrorhorizontal" } },
     { name = "clues30_mirrordiagonal", options = { clues = 30, symmetry = "mirrordiagonal" } },
+    { name = "difficulty_beginner", options = { difficulty = "beginner" } },
     { name = "difficulty_easy", options = { difficulty = "easy" } },
     { name = "difficulty_medium", options = { difficulty = "medium" } },
     -- Keep the hard samples representative without making the default gate
     -- hinge on an unusually unlucky 100-attempt retry sequence.
     { name = "difficulty_hard", seed_offset = 0, options = { difficulty = "hard" } },
+    { name = "difficulty_master", options = { difficulty = "master" } },
     { name = "difficulty_expert", options = { difficulty = "expert" } },
 }
 
