@@ -22,6 +22,32 @@ local util = require("core.util")
 
 local Screen = Device.screen
 
+-- How long a cycling hardware key must be held (without release) before the
+-- notes mode toggles. Kobo hardware has no long-press event (only KeyPress /
+-- KeyRelease / auto-repeat), so the hold is detected with this timer.
+local HOLD_TOGGLE_NOTES_DELAY = 0.5
+
+-- Hardware keys that cycle the armed digit: the page-turn keys (the physical
+-- keys on most Kobo devices) are directional — PgFwd advances, PgBack backs
+-- up — and the directional pad mirrors them (Down/Right advance, Up/Left back
+-- up). Each group becomes one key sequence ("any of its keys"); the union
+-- names cycling keys for the KeyRepeat consumer.
+local DIGIT_FWD_SEQUENCES = {}
+local DIGIT_BACK_SEQUENCES = {}
+local DIGIT_KEYS = {}
+for _, group in ipairs({ Device.input.group.PgFwd, { "Down", "Right" } }) do
+    table.insert(DIGIT_FWD_SEQUENCES, { group })
+    for _, name in ipairs(group) do
+        DIGIT_KEYS[name] = true
+    end
+end
+for _, group in ipairs({ Device.input.group.PgBack, { "Up", "Left" } }) do
+    table.insert(DIGIT_BACK_SEQUENCES, { group })
+    for _, name in ipairs(group) do
+        DIGIT_KEYS[name] = true
+    end
+end
+
 local SudokuView = InputContainer:extend {
     name = "sudokuview",
     covers_fullscreen = true,
@@ -103,6 +129,8 @@ function SudokuView:init()
     self._match_cells = {}
     self._completed_digits = self.game:completed_digits()
     self._log_started = false
+    self._hold_token = 0
+    self._holding_key = nil
 
     self.ges_events.Tap = {
         GestureRange:new {
@@ -117,6 +145,8 @@ function SudokuView:init()
         },
     }
     self.key_events.Close = { { Device.input.group.Back } }
+    self.key_events.DigitNext = DIGIT_FWD_SEQUENCES
+    self.key_events.DigitPrev = DIGIT_BACK_SEQUENCES
 end
 
 -- E-ink refresh strategy: in-game updates use "ui" refreshes limited to the
@@ -547,9 +577,7 @@ function SudokuView:onTap(ev_args, ges)
             self:markToolRowIfChanged()
         end
     elseif hit.id == "notes" then
-        self:_clearHintState()
-        self.notes_mode = not self.notes_mode
-        self:markToolRow()
+        self:_toggleNotes()
     elseif hit.id == "check" then
         self:_clearHintState()
         self:onCheck()
@@ -576,6 +604,105 @@ function SudokuView:onHold(ev_args, ges)
     self:_clearHintState()
     self:_applyArmed(hit.row, hit.col, not self.notes_mode)
     return true
+end
+
+-- Next digit to arm when cycling, skipping digits already placed nine times
+-- (the greyed-out number-bar buttons, `_completed_digits`). Returns nil when
+-- every digit is complete (a full-but-wrong board): there is nothing to arm.
+local function next_cycle_digit(completed, forward, from)
+    local digit = from
+    for _ = 1, 9 do
+        if not completed[digit] then
+            return digit
+        end
+        digit = forward and (digit % 9 + 1) or (digit == 1 and 9 or digit - 1)
+    end
+    return nil
+end
+
+-- Toggles notes mode; shared by the Notes button and the hardware-key hold so
+-- the two paths cannot drift. The caller runs afterMove() to repaint.
+function SudokuView:_toggleNotes()
+    self:_clearHintState()
+    self.notes_mode = not self.notes_mode
+    self:markToolRow()
+end
+
+-- Hardware-key digit cycling: page-turn and directional keys move the armed
+-- digit in their direction (forward = 1 -> 9, backward = 9 -> 1), arming 1
+-- or 9 respectively when nothing is armed and wrapping at the ends. Digits
+-- already placed nine times (the greyed-out bar buttons) are skipped. Every
+-- press also (re)arms the hold timer: holding any cycling key for
+-- HOLD_TOGGLE_NOTES_DELAY toggles notes mode, while a release or another
+-- press invalidates it. Modal dialogs (pause menu, win dialog, stats page)
+-- only bind Back, so an unhandled key press falls through the widget stack
+-- into this view; the guard keeps cycling inert while a dialog is on top.
+function SudokuView:onDigitNext(ev_args, key)
+    return self:_cycleDigit(true, key)
+end
+
+function SudokuView:onDigitPrev(ev_args, key)
+    return self:_cycleDigit(false, key)
+end
+
+function SudokuView:_cycleDigit(forward, key)
+    if self.menu_open or self.game:is_finished() then
+        return true
+    end
+    self:_clearHintState()
+    if self.armed then
+        local from = forward and (self.armed % 9 + 1) or (self.armed == 1 and 9 or self.armed - 1)
+        local digit = next_cycle_digit(self._completed_digits, forward, from)
+        if digit then
+            self:_arm(digit)
+        end
+    else
+        local digit = next_cycle_digit(self._completed_digits, forward, forward and 1 or 9)
+        if digit then
+            self:_arm(digit)
+        end
+    end
+    if key then
+        self._holding_key = key.key
+        self._hold_token = self._hold_token + 1
+        local token = self._hold_token
+        UIManager:scheduleIn(HOLD_TOGGLE_NOTES_DELAY, function()
+            if self._hold_token ~= token or self.menu_open or self.game:is_finished() then
+                return
+            end
+            self:_invalidateNotesHold()
+            self:_toggleNotes()
+            self:afterMove()
+        end)
+    end
+    self:afterMove()
+    return true
+end
+
+-- Drops a pending notes hold: called on the release of the held key and on
+-- any state transition that ends a press cycle (pause menu, suspend, quit,
+-- win, give-up), so the scheduled callback can never fire afterwards. A
+-- release of a key that is not currently held is a no-op, so pressing and
+-- releasing one cycling key cannot cancel the hold of another.
+function SudokuView:_invalidateNotesHold()
+    self._holding_key = nil
+    self._hold_token = self._hold_token + 1
+end
+
+function SudokuView:onKeyRelease(key)
+    if key and self._holding_key and self._holding_key == key.key then
+        self:_invalidateNotesHold()
+        return true
+    end
+end
+
+-- Consumed so auto-repeat never cascades: InputContainer's default onKeyRepeat
+-- is a verbatim copy of onKeyPress, which would cycle the digit repeatedly
+-- while the key is held.
+function SudokuView:onKeyRepeat(key)
+    if key and DIGIT_KEYS[key.key] then
+        return true
+    end
 end
 
 -- Marks the number row only when the set of fully placed digits changes, so a
@@ -740,6 +867,11 @@ function SudokuView:deleteSave()
 end
 
 function SudokuView:onWin()
+    -- A hold armed by a key press just before the winning move must not
+    -- fire behind the win dialog (the callback guard also catches this,
+    -- since the game is finished by then; invalidating here keeps the
+    -- state self-consistent).
+    self:_invalidateNotesHold()
     local record, err = self.game:finish()
     if not record then
         logger.warn("sudoku: failed to finish game: " .. tostring(err))
@@ -785,6 +917,7 @@ function SudokuView:onWin()
 end
 
 function SudokuView:onGiveUp()
+    self:_invalidateNotesHold()
     local record, err = self.game:give_up()
     if not record then
         logger.warn("sudoku: failed to give up: " .. tostring(err))
@@ -805,6 +938,7 @@ function SudokuView:onQuit()
         UIManager:close(self, "flashui")
         return
     end
+    self:_invalidateNotesHold()
     self.game:pause()
     if self.save_path then
         local ok, err = storage.save(self.save_path, self.game:serialize())
@@ -828,6 +962,9 @@ end
 function SudokuView:openMenu()
     self.game:pause()
     self.menu_open = true
+    -- A key press right before the menu opened may have armed the notes
+    -- hold; invalidate it so the toggle cannot fire behind the dialog.
+    self:_invalidateNotesHold()
     local function resumeFromPause()
         if self.menu_open then
             self.menu_open = false
@@ -918,6 +1055,9 @@ end
 
 function SudokuView:onSuspend()
     self.game:pause()
+    -- Key releases are dropped while the device sleeps, so a pending notes
+    -- hold could never be invalidated by its release; drop it here instead.
+    self:_invalidateNotesHold()
     if self.save_path then
         local ok, err = storage.save(self.save_path, self.game:serialize())
         if not ok then

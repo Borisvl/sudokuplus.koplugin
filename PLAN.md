@@ -625,6 +625,78 @@ set, agreed with the user before coding:
 unrelated), `./dev.sh lint` clean, emulator boot smoke on `kobo-aura-one`
 with no errors, PLAN.md updated, commit.
 
+### M7.2 — Hardware key support (digit cycling + notes toggle)
+
+Planned (resolved with the user before coding): the game view gains hardware
+key handling so the digit can be selected without the touchscreen. **Digit
+cycling**: short presses of any page-turn or directional key
+(`PgFwd`/`PgBack`/`Cursor` groups) iterate the armed digit; with nothing
+armed the first press arms 1, and cycling always wraps 1→9→1 (no key-based
+disarm — tapping the armed digit in the bar stays the disarm path). Arming
+reuses the existing `_arm` state machine, so the number-row inversion and
+digit-match highlight come for free. **Notes toggle**: a *hold* of a cycling
+key (≥ 0.5 s) toggles notes mode, exactly like the Notes button (same
+`_toggleNotes` path, so tap and hold cannot drift). Kobo hardware has no
+long-press event — only `KeyPress`/`KeyRelease`/`KeyRepeat` — so the hold is
+timer-based in the view (`UIManager:scheduleIn`, token-invalidated on the
+next press or release). `KeyRepeat` is overridden to a no-op for cycling
+keys (the `InputContainer:onKeyRepeat` default is a verbatim copy of
+`onKeyPress` and would otherwise auto-cycle while holding); `KeyRelease`
+cancels the pending hold. **No settings entry** (user decision): the
+bindings exist only while `SudokuView` is the active widget and those keys
+are otherwise unused in the game view, so there is no conflict to opt out
+of; a toggle can be added later if a real conflict shows up.
+
+- [x] `ui/sudokuview.lua`: `key_events.DigitNext`/`DigitPrev` (PgFwd +
+      Down/Right cycle forward, PgBack + Up/Left cycle backward, arming 1
+      or 9 respectively and wrapping at the ends; both directions share
+      `_cycleDigit`), `onKeyRelease`/`onKeyRepeat` (cycling keys only),
+      hold timer with token invalidation, `_toggleNotes` extracted and
+      shared with the Notes button
+- [x] `sudoku_view_spec.lua` (test-first): press cycles unarmed→1, 1→2,
+      9→1 wrap; backward presses arm 9, go 9→8, wrap 1→9; direction
+      switching continues from the current digit; cycling marks the number
+      row and keeps the digit armed for cell placement (value and note
+      paths); KeyRepeat does not advance; KeyRelease before the hold
+      elapses cancels it; hold ≥ 0.5 s toggles notes (spied
+      `UIManager.scheduleIn` invoked in place of the real clock); a later
+      press while held re-arms the timer; both directions schedule the
+      notes hold
+- [x] Review addendum (2026-08-13): `onDigitNext` is guarded by
+      `menu_open`/`is_finished` — modal dialogs (pause menu, win dialog,
+      stats page) bind only Back, so unhandled key presses fall through
+      the widget stack into the view and would otherwise cycle/toggle
+      behind the dialog; the pending hold is also invalidated when the
+      pause menu opens and on suspend (key releases are dropped while the
+      device sleeps, so the release could never cancel it). Spec: guard
+      and invalidation tests, and the `scheduleIn` spy now restores in
+      `after_each` instead of only on the success path.
+- [x] Review round 2 (2026-08-13): the hold callback itself re-checks
+      `menu_open`/`is_finished` (a hold armed just before the winning
+      move would otherwise fire behind the win dialog, flip notes and
+      re-trigger `onWin` on the finished game — `finish()` then fails
+      with "already finished"); `onWin`/`onGiveUp`/`onQuit` invalidate
+      the hold too. Hold tracking is now per key (`_holding_key`), so
+      pressing/releasing one cycling key cannot cancel the hold of
+      another key still held; `onKeyRelease`/`onKeyRepeat` tolerate
+      keyless payloads. Spec: multi-key hold, finished-game, win,
+      give-up, quit and nil-payload tests. Follow-up: `onKeyRelease`
+      guards with `self._holding_key and` — with no key held, a keyless
+      release payload would otherwise match `nil == nil` and be consumed
+      (and spuriously invalidate the hold).
+- [x] Quality-of-life round (2026-08-13): cycling skips digits already
+      placed nine times (the greyed-out number-bar buttons,
+      `next_cycle_digit` over the view's `_completed_digits`); a press
+      from an armed completed digit moves to the next non-completed one,
+      and with every digit complete (a full-but-wrong board) cycling
+      no-ops. Tap-arming is unchanged (completed digits can still be
+      armed by touch). Spec: skip-on-cycle, skip-after-completion and
+      all-complete no-op tests.
+
+**Exit criteria**: all sudoku specs green via `./dev.sh test`,
+`./dev.sh lint` clean, emulator boot smoke on `kobo-aura-one` with no
+errors, PLAN.md updated, commit.
+
 ### M8 — Polish, i18n, deployment
 
 - [ ] gettext-marked strings, settings (e.g., notes on/off)
