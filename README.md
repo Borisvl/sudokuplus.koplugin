@@ -96,19 +96,32 @@ Tests run headless via KOReader's busted harness. Specs live in
 inside the built emulator output).
 
 ```sh
-# link specs into the checkout and run one (or all) tests
-./dev.sh test koreader-testrunner:sudoku_smoke
+# link specs into the checkout and run all sudoku plugin tests (default)
 ./dev.sh test
+
+# run a specific test (by test name, spec filename, or path)
+./dev.sh test sudoku_smoke
+./dev.sh test tests/unit/sudoku_board_spec.lua
+
+# run with runner flags (e.g. exit on first failure)
+./dev.sh test -x
+
+# filter describe/it test blocks across all plugin specs
+./dev.sh test -f serialize
+
+# run all frontend specs, including KOReader core
+./dev.sh test --all
 
 # manually, from third_party/koreader (after `source ../../env.sh`):
 # default (meson) runner — note the test-name format
 ./kodev test front koreader-testrunner:util
 ```
 
-The meson runner needs its setup the first time and can appear to hang
-then; subsequent runs are fast (< 1 s per test file). Pattern matching
-uses meson's `suite:test` names, so plain filenames (`util_spec.lua`) do
-not work with the default runner.
+Tests rely on KOReader's default Meson runner. The runner needs its setup the
+first time and can appear to hang then; subsequent runs are fast (< 1 s per test
+file). `./dev.sh test` automatically normalizes spec file names/paths (e.g.
+`sudoku_board_spec.lua`) to Meson test names. Runner-specific options with
+arguments must use the `=` syntax (e.g. `--busted=...` / `--meson=...`).
 
 ### Propagation benchmark
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Dev helper for the Sudoku plugin.
 #   ./dev.sh                build (incremental) and run the KOReader emulator
-#   ./dev.sh test [args...] run the busted specs (args passed to `kodev test front`)
+#   ./dev.sh test [args...] run the busted specs (defaults to sudoku specs; pass --all for full frontend suite)
 #   ./dev.sh lint           luacheck + stylua --check
 #   ./dev.sh fmt            stylua (apply formatting)
 #   ./dev.sh pot            extract gettext strings into sudoku.koplugin/l10n/sudoku.pot
@@ -11,9 +11,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 source env.sh
 
+PROJECT_ROOT="$(pwd)"
 KOREADER=third_party/koreader
-PLUGIN_SOURCE="$(pwd)/sudoku.koplugin"
-KOREADER_PLUGINS="$(pwd)/$KOREADER/plugins"
+PLUGIN_SOURCE="$PROJECT_ROOT/sudoku.koplugin"
+KOREADER_PLUGINS="$PROJECT_ROOT/$KOREADER/plugins"
 
 link_plugin() {
     local plugin_root="$1"
@@ -135,10 +136,13 @@ case "${1:-}" in
         ;;
 esac
 
-# Symlink our specs into the koreader test tree.
+# Prune broken spec symlinks in KOReader tree and re-link current specs.
+for link in "$KOREADER"/spec/unit/sudoku_*_spec.lua; do
+    [[ -L "$link" && ! -e "$link" ]] && rm -f "$link"
+done
 for spec in tests/unit/*_spec.lua; do
     [[ -e "$spec" ]] || continue
-    ln -sfn "$(pwd)/$spec" "$KOREADER/spec/unit/$(basename "$spec")"
+    ln -sfn "$PROJECT_ROOT/$spec" "$KOREADER/spec/unit/$(basename "$spec")"
 done
 
 # Keep the checkout plugin link and every existing build directory pointed at
@@ -158,9 +162,62 @@ done
 
 cd "$KOREADER"
 
+run_tests() {
+    local test_args=()
+    local has_explicit_test=0
+    local run_all=0
+
+    # Note: Value-flag list mirrors RUNTESTS_GETOPT_SHORT/LONG in
+    # third_party/koreader/base/test-runner/runtests. Flags with optional
+    # arguments (--busted::, --meson::) must use '=' syntax (e.g. --busted=...).
+    # Positional test names assume the default Meson runner.
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --all)
+                run_all=1
+                shift
+                ;;
+            -f|--filter|-t|--tags|-j|--jobs|-o|--output|-w|--wrapper)
+                if [[ $# -lt 2 ]]; then
+                    printf 'dev.sh test: option %s requires an argument\n' "$1" >&2
+                    return 1
+                fi
+                test_args+=("$1" "$2")
+                shift 2
+                ;;
+            -*)
+                test_args+=("$1")
+                shift
+                ;;
+            *)
+                has_explicit_test=1
+                # Normalize file paths or spec suffixes (e.g. tests/unit/foo_spec.lua -> foo)
+                local arg="$1"
+                arg="${arg##*/}"
+                arg="${arg%_spec.lua}"
+                test_args+=("$arg")
+                shift
+                ;;
+        esac
+    done
+
+    # If no explicit test targets are given and --all is not set, default to all
+    # plugin specs. Note: passing -f/-t without explicit test names will run
+    # each of the 46 plugin spec targets filtered by busted.
+    if (( !run_all && !has_explicit_test )); then
+        local spec
+        for spec in "$PROJECT_ROOT"/tests/unit/*_spec.lua; do
+            [[ -e "$spec" ]] || continue
+            test_args+=("$(basename "$spec" _spec.lua)")
+        done
+    fi
+
+    exec ./kodev test front "${test_args[@]}"
+}
+
 if [[ "${1:-}" == "test" ]]; then
     shift
-    exec ./kodev test front "$@"
+    run_tests "$@"
 fi
 
 ./kodev build
