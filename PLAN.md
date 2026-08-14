@@ -710,10 +710,11 @@ Comprehensive internationalization across all user-facing components of the Sudo
 - [x] `ui/sudokuview.lua`: wired localized technique labels in progressive hint banner, error notifications, and `N_` pluralization for wrong-cell checking.
 - [x] `ui/statsview.lua` & `ui/gamedetail.lua`: dynamic status labels and translated technique rankings in most-missed strategies.
 - [x] `ui/numberbar.lua`: dynamic button labels for tool row.
-- [x] `tools/extract_pot.sh` & `./dev.sh pot`: automated extraction tooling generating `sudoku.koplugin/l10n/sudoku.pot` with full catalog coverage (98 messages).
-- [x] `tests/unit/sudoku_l10n_spec.lua`: test-first specs covering technique translations, message mappings, difficulty dynamic evaluation, and POT catalog validation.
+- [x] `tools/extract_pot.sh` & `./dev.sh pot`: automated extraction tooling generating `sudoku.koplugin/l10n/sudoku.pot` with full catalog coverage (96 messages) and automatic `msgfmt` compilation.
+- [x] `l10n/de/sudoku.po` & `sudoku.mo`: complete, idiomatic German translation catalog with automatic runtime loading in `main.lua:init()`.
+- [x] `tests/unit/sudoku_l10n_spec.lua`: test-first specs covering technique translations, message mappings, difficulty dynamic evaluation, POT catalog validation, and German MO catalog execution.
 
-**Exit criteria**: all 46 specs green via `./dev.sh test`, `./dev.sh lint` clean (0 warnings / 0 errors), `sudoku.koplugin/l10n/sudoku.pot` extracted and verified.
+**Exit criteria**: all 46 specs green via `./dev.sh test`, `./dev.sh lint` clean (0 warnings / 0 errors), `sudoku.koplugin/l10n/sudoku.pot` and German catalog extracted, compiled, and verified.
 
 ### M8b — Deployment, polish, on-device smoke test
 

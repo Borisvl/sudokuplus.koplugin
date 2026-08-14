@@ -12,3 +12,5 @@ third_party/
 
 # Logs / scratch
 *.log
+*~
+*.po~

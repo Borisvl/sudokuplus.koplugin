@@ -1,19 +1,27 @@
 package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 
 describe("sudoku localization", function()
+    local _
+    local N_
+    local T
     local hints
     local techniques
     local messages
     local difficulties
     local status
+    local Sudoku
 
     setup(function()
         require("commonrequire")
+        _ = require("gettext")
+        N_ = _.ngettext
+        T = require("ffi/util").template
         hints = require("core.hints")
         techniques = require("ui.techniques")
         messages = require("ui.messages")
         difficulties = require("ui.difficulties")
         status = require("ui.status")
+        Sudoku = require("main")
     end)
 
     describe("techniques localization", function()
@@ -133,6 +141,106 @@ describe("sudoku localization", function()
             for _, msgid in ipairs(required_msgids) do
                 assert.is_truthy(content:find('msgid "' .. msgid .. '"', 1, true), "POT file missing msgid: " .. msgid)
             end
+        end)
+    end)
+
+    describe("German PO/MO translation catalog", function()
+        local saved_translation
+        local saved_context
+        local saved_getPlural
+        local saved_current_lang
+        local saved_G_reader_settings
+
+        before_each(function()
+            saved_translation = _.translation
+            saved_context = _.context
+            saved_getPlural = _.getPlural
+            saved_current_lang = _.current_lang
+            saved_G_reader_settings = _G.G_reader_settings
+
+            _.translation = {}
+            _.context = {}
+            -- Explicit dummy plural function to verify that loadMO parses the header
+            _.getPlural = function()
+                return -1
+            end
+        end)
+
+        after_each(function()
+            _.translation = saved_translation
+            _.context = saved_context
+            _.getPlural = saved_getPlural
+            _.current_lang = saved_current_lang
+            _G.G_reader_settings = saved_G_reader_settings
+        end)
+
+        it("loads and applies German translations from sudoku.mo and parses plural headers", function()
+            local mo_path = "plugins/sudoku.koplugin/l10n/de/sudoku.mo"
+            local loaded = _.loadMO(mo_path)
+            assert.is_true(loaded, "German MO file should load cleanly")
+
+            -- Verify header was parsed and plural function was compiled
+            assert.are.equal(0, _.getPlural(1))
+            assert.are.equal(1, _.getPlural(0))
+            assert.are.equal(1, _.getPlural(2))
+
+            -- Techniques
+            assert.are.equal("Nackte Einer", techniques.label("naked_singles"))
+            assert.are.equal("Versteckte Einer", techniques.label("hidden_singles"))
+            assert.are.equal("Gesperrte Kandidaten", techniques.label("locked_candidates"))
+            assert.are.equal("Alternierende Inferenzkette", techniques.label("aic"))
+
+            -- Difficulties
+            assert.are.equal("Anfänger", difficulties.label("beginner"))
+            assert.are.equal("Leicht", difficulties.label("easy"))
+            assert.are.equal("Mittel", difficulties.label("medium"))
+            assert.are.equal("Schwer", difficulties.label("hard"))
+            assert.are.equal("Meister", difficulties.label("master"))
+            assert.are.equal("Experte", difficulties.label("expert"))
+
+            -- Status
+            assert.are.equal("Laufend", status.label("in_progress"))
+            assert.are.equal("Beendet", status.label("finished"))
+            assert.are.equal("Aufgegeben", status.label("give_up"))
+            assert.are.equal("Abgebrochen", status.label("abandoned"))
+
+            -- Messages
+            assert.are.equal(
+                "Vorgegebene Zelle kann nicht geändert werden.",
+                messages.translate("cannot modify a given cell")
+            )
+            assert.are.equal(
+                "Das Spielfeld wurde seit Erstellung des Tipps verändert.",
+                messages.translate("action is stale")
+            )
+
+            -- Plural forms
+            assert.are.equal("1 falsche Zelle gefunden.", T(N_("1 wrong cell found.", "%1 wrong cells found.", 1), 1))
+            assert.are.equal("3 falsche Zellen gefunden.", T(N_("1 wrong cell found.", "%1 wrong cells found.", 3), 3))
+        end)
+
+        it("loads German MO via main.lua when KOReader language setting is de_DE and current_lang is C", function()
+            _.current_lang = "C"
+            _G.G_reader_settings = {
+                readSetting = function(self, key)
+                    if key == "language" then
+                        return "de_DE"
+                    end
+                end,
+            }
+
+            Sudoku:new {
+                path = "plugins/sudoku.koplugin",
+                ui = {
+                    menu = {
+                        registerToMainMenu = function() end,
+                    },
+                },
+            }
+
+            assert.are.equal("Nackte Einer", techniques.label("naked_singles"))
+            assert.are.equal("Anfänger", difficulties.label("beginner"))
+            assert.are.equal("Erneut spielen", _("Play again"))
         end)
     end)
 end)

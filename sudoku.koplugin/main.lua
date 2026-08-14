@@ -36,7 +36,28 @@ local function seed_from_wall_clock()
     return math.floor(time.to_ms(time.realtime()))
 end
 
+local function load_plugin_translations(plugin_path)
+    local lang = _.current_lang
+    if not lang or lang == "C" then
+        lang = G_reader_settings and G_reader_settings:readSetting("language")
+    end
+    if lang and lang ~= "C" and not lang:match("^en") then
+        local base_path = plugin_path or "plugins/sudoku.koplugin"
+        local candidates = { lang, lang:match("^([a-z]+)") }
+        for idx = 1, #candidates do
+            local l = candidates[idx]
+            if l then
+                local mo = base_path .. "/l10n/" .. l .. "/sudoku.mo"
+                if _.loadMO and _.loadMO(mo) then
+                    break
+                end
+            end
+        end
+    end
+end
+
 function Sudoku:init()
+    load_plugin_translations(self.path)
     self.ui.menu:registerToMainMenu(self)
 end
 
