@@ -925,7 +925,7 @@ describe("sudoku view", function()
         assert.is_true(dialog.title:find("Easy", 1, true) ~= nil, "the pause menu title names the difficulty")
     end)
 
-    it("starts a new game at the same difficulty from the pause menu", function()
+    it("opens a difficulty picker from New game and starts a game with the chosen difficulty", function()
         local started
         local view = new_view(new_game(PUZZLE, SOLUTION), {
             new_game_cb = function(difficulty)
@@ -933,13 +933,18 @@ describe("sudoku view", function()
             end,
         })
         local dialog
+        local picker_dialog
         local UIManager = require("ui/uimanager")
         local original_show = UIManager.show
         local original_close = UIManager.close
         local closed = {}
         UIManager.show = function(_, widget)
             if widget and widget.buttons then
-                dialog = widget
+                if not dialog then
+                    dialog = widget
+                else
+                    picker_dialog = widget
+                end
             end
         end
         UIManager.close = function(_, widget)
@@ -957,10 +962,205 @@ describe("sudoku view", function()
         end
         assert.is_not_nil(new_game_button, "the pause menu offers a new game")
         new_game_button.callback()
+        assert.is_not_nil(picker_dialog, "tapping New game opens difficulty picker")
+        assert.are.equal(dialog, closed[1], "the pause dialog is closed before showing picker")
+
+        -- Test cancelling the picker resumes the game
+        local cancel_button = picker_dialog.buttons[#picker_dialog.buttons][1]
+        assert.are.equal("Cancel", cancel_button.text)
+        cancel_button.callback()
+        assert.is_false(view.menu_open, "cancelling difficulty picker unpauses")
+        assert.is_true(view.game.timer.running)
+
+        -- Test tap_close_callback on picker
+        view:openMenu()
+        new_game_button.callback()
+        picker_dialog.tap_close_callback()
+        assert.is_false(view.menu_open)
+        assert.is_true(view.game.timer.running)
+
+        -- Select "Hard"
+        view:openMenu()
+        new_game_button.callback()
+        local hard_button
+        for _, row in ipairs(picker_dialog.buttons) do
+            for _, button in ipairs(row) do
+                if button.text == "Hard" then
+                    hard_button = button
+                end
+            end
+        end
+        assert.is_not_nil(hard_button, "picker offers Hard difficulty")
+        hard_button.callback()
+
         UIManager.show = original_show
         UIManager.close = original_close
-        assert.are.equal("easy", started, "new game restarts at the same difficulty")
-        assert.are.equal(dialog, closed[1], "the pause dialog is closed before starting a new game")
+        assert.are.equal("hard", started, "new game starts at chosen difficulty")
+    end)
+
+    it("resets puzzle after confirmation, clears in-progress stats, and deletes save", function()
+        local s = stats.new()
+        local id = assert(stats.reserve_id(s))
+        local deleted_save = false
+        local g = new_game(PUZZLE, SOLUTION, function()
+            return 1000
+        end)
+        g.id = id
+        local view = new_view(g, {
+            stats = s,
+            delete_save_fn = function()
+                deleted_save = true
+            end,
+        })
+        view.deleteSave = function(self)
+            deleted_save = true
+        end
+
+        assert.is_true(g:place(0, 2, 4))
+        assert.is_true(g:toggle_note(0, 3, 2))
+        view:afterMove()
+        assert.are.equal(1, #s.games, "initial moves tracked in stats")
+        assert.are.equal("in_progress", s.games[1].status)
+
+        local dialog
+        local confirm_box
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons then
+                dialog = widget
+            elseif widget and widget.ok_callback then
+                confirm_box = widget
+            end
+        end
+        view:openMenu()
+        assert.is_not_nil(dialog)
+
+        local reset_button
+        for _, row in ipairs(dialog.buttons) do
+            for _, button in ipairs(row) do
+                if button.text == "Reset puzzle" then
+                    reset_button = button
+                end
+            end
+        end
+        assert.is_not_nil(reset_button, "the pause menu offers reset puzzle")
+        reset_button.callback()
+        assert.is_not_nil(confirm_box, "tapping Reset puzzle opens confirmation dialog")
+
+        -- Confirm reset
+        confirm_box.ok_callback()
+        UIManager.show = original_show
+        UIManager.close = original_close
+
+        assert.are.equal(0, g:get(0, 2), "board is reverted")
+        assert.are.equal(0, g:get_notes(0, 3), "notes are cleared")
+        assert.are.equal(0, g:elapsed(), "timer is reset")
+        assert.is_false(view.menu_open, "menu is closed")
+        assert.is_true(g.timer.running, "timer resumes after reset")
+        assert.is_true(deleted_save, "save file deleted on reset")
+        assert.are.equal(0, #s.games, "in-progress stats record was dropped")
+
+        -- Subsequent move creates a fresh in-progress entry with new id and started_at
+        assert.is_true(g:place(0, 2, 4))
+        view:afterMove()
+        assert.are.equal(1, #s.games)
+        assert.are.equal(g.id, s.games[1].id)
+        assert.are.equal(clock.value, s.games[1].started_at)
+    end)
+
+    it("fills all notes from the pause menu and handles errors", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        local view = new_view(g)
+        assert.are.equal(0, g:get_notes(0, 2))
+
+        local dialog
+        local notified
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons then
+                dialog = widget
+            elseif widget and widget.text then
+                notified = widget.text
+            end
+        end
+        view:openMenu()
+        assert.is_not_nil(dialog)
+
+        local fill_notes_button
+        for _, row in ipairs(dialog.buttons) do
+            for _, button in ipairs(row) do
+                if button.text == "Fill all notes" then
+                    fill_notes_button = button
+                end
+            end
+        end
+        assert.is_not_nil(fill_notes_button, "the pause menu offers fill all notes")
+        fill_notes_button.callback()
+
+        assert.is_true(g:get_notes(0, 2) > 0, "notes are populated")
+        assert.is_false(view.menu_open, "menu is closed")
+        assert.is_true(g:can_undo(), "fill all notes is undoable")
+        assert.is_true(g:undo())
+        assert.are.equal(0, g:get_notes(0, 2), "undo reverts notes")
+
+        -- Test error notification when board has conflicts
+        assert.is_true(g:place(0, 2, 5)) -- conflict with given 5 at (0,0)
+        view:openMenu()
+        fill_notes_button.callback()
+        assert.is_not_nil(notified, "shows notification on conflict")
+        assert.is_false(view.menu_open, "menu closes gracefully on error")
+
+        UIManager.show = original_show
+        UIManager.close = original_close
+    end)
+
+    it("prompts confirmation before giving up", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        local view = new_view(g)
+        local dialog
+        local confirm_box
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons then
+                dialog = widget
+            elseif widget and widget.ok_callback then
+                confirm_box = widget
+            end
+        end
+        view:openMenu()
+        assert.is_not_nil(dialog)
+
+        local give_up_button
+        for _, row in ipairs(dialog.buttons) do
+            for _, button in ipairs(row) do
+                if button.text == "Give up" then
+                    give_up_button = button
+                end
+            end
+        end
+        assert.is_not_nil(give_up_button, "the pause menu offers give up")
+        give_up_button.callback()
+        assert.is_not_nil(confirm_box, "tapping Give up opens confirmation dialog")
+
+        -- Test cancel
+        confirm_box.cancel_callback()
+        assert.is_false(g:is_finished(), "cancelling does not give up")
+        assert.is_false(view.menu_open, "menu is closed")
+        assert.is_true(g.timer.running, "timer resumes after cancel")
+
+        -- Test confirm give up
+        view:openMenu()
+        give_up_button.callback()
+        confirm_box.ok_callback()
+        UIManager.show = original_show
+        UIManager.close = original_close
+        assert.is_true(g:is_finished(), "confirming finishes the game as give up")
     end)
 
     it("opens the statistics screen from the pause menu", function()

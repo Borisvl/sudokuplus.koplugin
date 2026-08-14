@@ -884,3 +884,19 @@ non-trivial steps for Medium through Master.
       game payloads, menu, and difficulties; all tests green
 - [x] `tools/bench_generation.lua`, `tools/bench_hints.lua`: benchmarked all 6 tiers (<450ms max generation)
 
+### M10.1 — In-game menu enhancements (done)
+
+Added requested features to the in-game pause menu:
+- **Difficulty selection on New game**: Tapping "New game" opens a difficulty selection dialog listing all 6 tiers (Beginner, Easy, Medium, Hard, Master, Expert) plus Cancel, starting the generated game at the selected difficulty.
+- **Reset puzzle (restart)**: Tapping "Reset puzzle" prompts confirmation ("Reset this puzzle from the beginning? All progress will be lost.") and resets the board to the initial puzzle givens, resets notes (respecting autofill setting), drops pending in-progress stats records for the game ID, assigns a fresh reserved ID, clears errors/mistakes/hints, resets elapsed timer to 0, and clears saves.
+- **Fill all notes**: Tapping "Fill all notes" populates all empty cells with their board-legal candidate pencil marks according to current board constraints. Refuses when the board has conflicts or wrong numbers (mirroring hint rules). If notes are already fully populated, it acts as a no-op (no history commit or started flag flip). Otherwise, commits an undoable history step.
+- **Confirm on Give up**: Tapping "Give up" prompts confirmation ("Are you sure you want to give up?") before finalizing the forfeit and updating statistics.
+
+- [x] `game.lua`: `VERSION = 2` with v1/v2 restore compatibility; unified `build_notes_grid` builder; `mt:reset()` (reverts board/notes, resets timer to 0, clears mistakes/hints/history); `mt:fill_all_notes()` (bulk legal candidate population with conflict/solution guards and no-op check)
+- [x] `stats.lua`: `stats.drop_in_progress(s, id)` to drop abandoned in-progress records upon reset
+- [x] `ui/sudokuview.lua`: 2-2-2-1 button dialog layout (Resume/Stats, New game/Reset puzzle, Fill all notes/Give up, Quit), unified `_closeMenuAndResume` execution, `_openDifficultyPicker`, `_confirmReset`, `_confirmGiveUp`, and error notification handling
+- [x] `l10n/sudoku.pot`, `l10n/de/sudoku.po`, `sudoku.mo`: extracted and compiled gettext translations for new menu and dialog strings
+- [x] `tests/unit/*_spec.lua`: comprehensive specs covering reset, bulk note filling & undo, no-op handling, conflict guards, stats lifecycle, difficulty picker, and confirmation flows
+
+
+

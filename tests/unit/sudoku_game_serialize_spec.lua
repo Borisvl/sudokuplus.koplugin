@@ -441,4 +441,21 @@ describe("game serialization", function()
         assert.is_nil(restored)
         assert.is_string(err)
     end)
+
+    it("round-trips history containing fill_all_notes", function()
+        local instance = new_game()
+        assert.is_true(instance:place(0, 2, 4))
+        assert.is_true(instance:fill_all_notes())
+        assert.is_true(instance:place(0, 3, 6))
+
+        local data = instance:serialize()
+        local restored = restore(data, { t = 1000 })
+
+        assert.is_true(restored:can_undo())
+        assert.is_true(restored:undo()) -- undo place(0,3,6)
+        assert.is_true(restored:undo()) -- undo fill_all_notes
+        assert.are.equal(0, restored:get_notes(0, 5))
+        assert.is_true(restored:redo()) -- redo fill_all_notes
+        assert.is_true(restored:get_notes(0, 5) > 0)
+    end)
 end)

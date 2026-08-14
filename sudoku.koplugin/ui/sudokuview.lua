@@ -1,5 +1,6 @@
 local Device = require("device")
 local ButtonDialog = require("ui/widget/buttondialog")
+local ConfirmBox = require("ui/widget/confirmbox")
 local Font = require("ui/font")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
@@ -838,6 +839,9 @@ function SudokuView:onHint()
 end
 
 function SudokuView:persistStats()
+    if not self.stats or not self.stats_path then
+        return
+    end
     local ok, err = storage.save(self.stats_path, stats.to_table(self.stats))
     if not ok then
         logger.warn("sudoku: failed to save stats: " .. tostring(err))
@@ -959,6 +963,135 @@ function SudokuView:onClose()
     self:onQuit()
 end
 
+function SudokuView:_closeMenuAndResume(dialog, fn)
+    if dialog then
+        UIManager:close(dialog)
+    end
+    if fn then
+        local ok, err = pcall(fn)
+        if not ok then
+            logger.warn("sudoku: menu action failed: " .. tostring(err))
+        end
+    end
+    if self.menu_open then
+        self.menu_open = false
+        if not self.game:is_finished() then
+            self.game:resume()
+        end
+        self:refreshCoarse()
+    end
+end
+
+function SudokuView:_openDifficultyPicker(cancel_cb)
+    local diff_dialog
+    local buttons = {}
+    local current_row = {}
+    for _, entry in ipairs(difficulties.list()) do
+        current_row[#current_row + 1] = {
+            text = entry.label,
+            callback = function()
+                self.menu_open = false
+                UIManager:close(diff_dialog)
+                UIManager:close(self, "flashui")
+                if self.new_game_cb then
+                    self.new_game_cb(entry.id)
+                end
+            end,
+        }
+        if #current_row == 2 then
+            buttons[#buttons + 1] = current_row
+            current_row = {}
+        end
+    end
+    if #current_row > 0 then
+        buttons[#buttons + 1] = current_row
+    end
+    buttons[#buttons + 1] = {
+        {
+            text = _("Cancel"),
+            callback = function()
+                UIManager:close(diff_dialog)
+                if cancel_cb then
+                    cancel_cb()
+                end
+            end,
+        },
+    }
+    diff_dialog = ButtonDialog:new {
+        title = _("New game — Choose difficulty"),
+        buttons = buttons,
+        tap_close_callback = function()
+            if cancel_cb then
+                cancel_cb()
+            end
+        end,
+    }
+    UIManager:show(diff_dialog)
+end
+
+function SudokuView:_confirmReset(cancel_cb)
+    local confirm_dialog
+    confirm_dialog = ConfirmBox:new {
+        text = _("Reset this puzzle from the beginning? All progress will be lost."),
+        ok_text = _("Reset"),
+        ok_callback = function()
+            if self.stats and self.game.id then
+                stats.drop_in_progress(self.stats, self.game.id)
+                self:persistStats()
+            end
+            local ok, err = self.game:reset()
+            if not ok then
+                logger.warn("sudoku: reset failed: " .. tostring(err))
+            end
+            if self.stats then
+                self.game.id = stats.reserve_id(self.stats)
+            end
+            self.selected = nil
+            self.armed = nil
+            self.notes_mode = false
+            self._log_started = false
+            self._hint_result = nil
+            self._hint_stage = 0
+            self._hint_cells = {}
+            self._match_value = nil
+            self._match_cells = {}
+            self._completed_digits = self.game:completed_digits()
+            self:deleteSave()
+            self:markToolRowIfChanged()
+            self:markNumberRow()
+            if cancel_cb then
+                cancel_cb()
+            end
+        end,
+        cancel_text = _("Cancel"),
+        cancel_callback = function()
+            if cancel_cb then
+                cancel_cb()
+            end
+        end,
+    }
+    UIManager:show(confirm_dialog)
+end
+
+function SudokuView:_confirmGiveUp(cancel_cb)
+    local confirm_dialog
+    confirm_dialog = ConfirmBox:new {
+        text = _("Are you sure you want to give up?"),
+        ok_text = _("Give up"),
+        ok_callback = function()
+            self.menu_open = false
+            self:onGiveUp()
+        end,
+        cancel_text = _("Cancel"),
+        cancel_callback = function()
+            if cancel_cb then
+                cancel_cb()
+            end
+        end,
+    }
+    UIManager:show(confirm_dialog)
+end
+
 -- Pauses the game and shows the in-game menu. Every dismissal path resumes
 -- the timer: the Resume button, the Back key and tapping outside the dialog
 -- all end in resumeFromPause() (ButtonDialog runs its tap_close_callback on
@@ -970,15 +1103,6 @@ function SudokuView:openMenu()
     -- A key press right before the menu opened may have armed the notes
     -- hold; invalidate it so the toggle cannot fire behind the dialog.
     self:_invalidateNotesHold()
-    local function resumeFromPause()
-        if self.menu_open then
-            self.menu_open = false
-            if not self.game:is_finished() then
-                self.game:resume()
-            end
-            self:refreshCoarse()
-        end
-    end
     local dialog
     dialog = ButtonDialog:new {
         title = T(
@@ -993,8 +1117,7 @@ function SudokuView:openMenu()
                 {
                     text = _("Resume"),
                     callback = function()
-                        UIManager:close(dialog)
-                        resumeFromPause()
+                        self:_closeMenuAndResume(dialog)
                     end,
                 },
                 {
@@ -1008,20 +1131,44 @@ function SudokuView:openMenu()
                 {
                     text = _("New game"),
                     callback = function()
-                        self.menu_open = false
                         UIManager:close(dialog)
-                        UIManager:close(self, "flashui")
-                        if self.new_game_cb then
-                            self.new_game_cb(self.game:difficulty())
-                        end
+                        self:_openDifficultyPicker(function()
+                            self:_closeMenuAndResume()
+                        end)
+                    end,
+                },
+                {
+                    text = _("Reset puzzle"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        self:_confirmReset(function()
+                            self:_closeMenuAndResume()
+                        end)
+                    end,
+                },
+            },
+            {
+                {
+                    text = _("Fill all notes"),
+                    callback = function()
+                        self:_closeMenuAndResume(dialog, function()
+                            local ok, err = self.game:fill_all_notes()
+                            if not ok then
+                                UIManager:show(Notification:new { text = messages.translate(err) })
+                            else
+                                self:_refreshMatchAfterMove()
+                                self:markToolRowIfChanged()
+                            end
+                        end)
                     end,
                 },
                 {
                     text = _("Give up"),
                     callback = function()
-                        self.menu_open = false
                         UIManager:close(dialog)
-                        self:onGiveUp()
+                        self:_confirmGiveUp(function()
+                            self:_closeMenuAndResume()
+                        end)
                     end,
                 },
             },
@@ -1037,7 +1184,7 @@ function SudokuView:openMenu()
             },
         },
         tap_close_callback = function()
-            resumeFromPause()
+            self:_closeMenuAndResume()
         end,
     }
     UIManager:show(dialog)

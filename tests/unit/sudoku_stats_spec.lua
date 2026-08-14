@@ -168,6 +168,20 @@ describe("stats", function()
         assert.is_string(again_err)
     end)
 
+    it("drops an in-progress game from the log", function()
+        local s = stats.new()
+        local id = assert(stats.reserve_id(s))
+        assert.is_not_nil(stats.track(s, in_progress_record({ id = id, duration = 45 })))
+        assert.are.equal(1, #s.games)
+
+        assert.is_not_nil(stats.drop_in_progress(s, id))
+        assert.are.equal(0, #s.games)
+
+        -- Dropping non-existent or finished id is a safe no-op
+        assert.is_not_nil(stats.drop_in_progress(s, 999))
+        assert.are.equal(0, #s.games)
+    end)
+
     it("accepts records returned by a real game", function()
         local instance = assert(game.new({
             puzzle = board.from_string(NAKED_SINGLE_PUZZLE),

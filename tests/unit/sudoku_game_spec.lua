@@ -41,16 +41,24 @@ local function digit_bit(v)
     return bit.lshift(1, v - 1)
 end
 
+local function cell_key(r, c)
+    return r * 9 + c
+end
+
 local function has_note(instance, r, c, v)
     return bit.band(instance:get_notes(r, c), digit_bit(v)) ~= 0
 end
 
-local function count_set(set)
+local function count(set)
     local n = 0
-    for _ in pairs(set) do
+    for _ in pairs(set or {}) do
         n = n + 1
     end
     return n
+end
+
+local function count_set(set)
+    return count(set)
 end
 
 describe("game", function()
@@ -960,18 +968,6 @@ describe("game", function()
     end)
 
     describe("affected_cells", function()
-        local function cell_key(r, c)
-            return r * 9 + c
-        end
-
-        local function count(set)
-            local n = 0
-            for _ in pairs(set) do
-                n = n + 1
-            end
-            return n
-        end
-
         it("rejects invalid arguments", function()
             local instance = new_game()
             assert.is_nil(instance:affected_cells(-1, 0, 5))
@@ -1036,18 +1032,6 @@ describe("game", function()
     end)
 
     describe("undo and redo affected cells", function()
-        local function cell_key(r, c)
-            return r * 9 + c
-        end
-
-        local function count(set)
-            local n = 0
-            for _ in pairs(set) do
-                n = n + 1
-            end
-            return n
-        end
-
         it("returns an empty set without history", function()
             local instance = new_game()
             assert.are.equal(0, count(instance:undo_affected_cells()))
@@ -1102,6 +1086,173 @@ describe("game", function()
             assert.is_not_nil(affected[cell_key(6, 6)], "peer holding the replaced value 2")
             assert.is_not_nil(affected[cell_key(0, 1)], "peer holding the restored value 3")
             assert.are.equal(3, count(affected))
+        end)
+    end)
+
+    describe("reset", function()
+        it("reverts the board, notes, timer, mistakes, and history to fresh state", function()
+            local instance, clock = new_game()
+            clock.t = 1010
+            assert.is_true(instance:place(0, 2, 4))
+            assert.is_true(instance:toggle_note(0, 3, 6))
+            assert.is_true(instance:place(0, 6, 2)) -- mistake (peer with 6,6)
+            assert.are.equal(1, instance:mistakes())
+            assert.are.equal(10, instance:elapsed())
+            assert.is_true(instance:is_started())
+            assert.is_not_nil(instance:started_at())
+            assert.is_true(instance:can_undo())
+
+            clock.t = 1050
+            assert.is_true(instance:reset())
+
+            -- Board reverted
+            assert.are.equal(0, instance:get(0, 2))
+            assert.are.equal(0, instance:get(0, 6))
+            assert.are.equal(5, instance:get(0, 0)) -- given intact
+            -- Notes cleared
+            assert.are.equal(0, instance:get_notes(0, 3))
+            -- Timer reset
+            assert.are.equal(0, instance:elapsed())
+            clock.t = 1060
+            assert.are.equal(10, instance:elapsed())
+            -- Mistakes & history reset
+            assert.are.equal(0, instance:mistakes())
+            assert.are.equal(0, instance:check_errors())
+            assert.are.equal(0, #instance:revealed())
+            assert.are.equal(0, #instance:hints())
+            assert.is_false(instance:can_undo())
+            assert.is_false(instance:can_redo())
+            assert.is_false(instance:is_started())
+            assert.is_nil(instance:started_at())
+            assert.is_false(instance:is_finished())
+        end)
+
+        it("reverts notes to legal candidates when autofill_notes was enabled", function()
+            local clock = { t = 1000 }
+            local instance = assert(game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "medium",
+                autofill_notes = true,
+                now = function()
+                    return clock.t
+                end,
+            }))
+            local initial_notes = instance:get_notes(0, 2)
+            assert.is_true(initial_notes > 0)
+
+            assert.is_true(instance:place(0, 2, 4))
+            assert.are.equal(0, instance:get_notes(0, 2))
+
+            assert.is_true(instance:reset())
+            assert.are.equal(0, instance:get(0, 2))
+            assert.are.equal(initial_notes, instance:get_notes(0, 2))
+        end)
+
+        it("resets a finished game back to playable state", function()
+            local instance = new_game(PUZZLE_WIN)
+            assert.is_true(instance:place(0, 6, 9))
+            assert.is_true(instance:place(0, 7, 1))
+            assert.is_not_nil(instance:finish())
+            assert.is_true(instance:is_finished())
+
+            assert.is_true(instance:reset())
+            assert.is_false(instance:is_finished())
+            assert.are.equal(0, instance:get(0, 6))
+            assert.are.equal(0, instance:get(0, 7))
+            assert.are.equal(0, instance:elapsed())
+        end)
+
+        it("resets timer to 0 and keeps timer running when timer was running", function()
+            local instance, clock = new_game()
+            clock.t = 1030
+            assert.are.equal(30, instance:elapsed())
+
+            assert.is_true(instance:reset())
+            assert.are.equal(0, instance:elapsed())
+            assert.is_true(instance.timer.running)
+            clock.t = 1035
+            assert.are.equal(5, instance:elapsed())
+        end)
+    end)
+
+    describe("fill_all_notes", function()
+        it("populates legal candidates across all empty cells and is undoable", function()
+            local instance = new_game()
+            assert.are.equal(0, instance:get_notes(0, 2))
+            assert.is_true(instance:place(0, 2, 4))
+            assert.is_true(instance:toggle_note(0, 3, 2))
+
+            assert.is_true(instance:fill_all_notes())
+
+            -- Placed cell has 0 notes
+            assert.are.equal(0, instance:get_notes(0, 2))
+            -- Givens have 0 notes
+            assert.are.equal(0, instance:get_notes(0, 0))
+            -- Empty cell (0, 3) now has all board-legal candidates
+            local filled_mask = instance:get_notes(0, 3)
+            assert.is_true(filled_mask > 0)
+            -- 4 is placed at (0,2), so 4 cannot be candidate in (0,3)
+            assert.is_false(has_note(instance, 0, 3, 4))
+            -- 5 is given at (0,0), so 5 cannot be candidate in (0,3)
+            assert.is_false(has_note(instance, 0, 3, 5))
+
+            -- Undo restores previous notes state
+            assert.is_true(instance:can_undo())
+            assert.is_true(instance:undo())
+            local affected = instance:undo_affected_cells()
+            assert.is_not_nil(affected[cell_key(0, 3)])
+            assert.are.equal(digit_bit(2), instance:get_notes(0, 3))
+
+            -- Redo re-applies full candidate fill
+            assert.is_true(instance:can_redo())
+            assert.is_true(instance:redo())
+            assert.are.equal(filled_mask, instance:get_notes(0, 3))
+        end)
+
+        it("is a no-op when all empty cells already have full legal candidate masks", function()
+            local instance = new_game()
+            assert.is_true(instance:fill_all_notes())
+            assert.is_true(instance:is_started())
+            assert.is_true(instance:can_undo())
+            local rev = instance:revision()
+
+            -- Subsequent fill is a no-op: does not commit or increment revision
+            assert.is_true(instance:fill_all_notes())
+            assert.are.equal(rev, instance:revision())
+        end)
+
+        it("fails when the board has conflicts", function()
+            local instance = new_game()
+            -- 5 is given at (0, 0), placing 5 at (0, 2) creates a row conflict
+            assert.is_true(instance:place(0, 2, 5))
+            assert.is_true(#instance:conflicts() > 0)
+
+            local ok, err = instance:fill_all_notes()
+            assert.is_nil(ok)
+            assert.are.equal("board has conflicts", err)
+        end)
+
+        it("fails when the board has wrong digits placed", function()
+            local instance = new_game()
+            -- (0, 2) solution is 4; placing 1 is not a conflict yet, but wrong
+            assert.is_true(instance:place(0, 2, 1))
+            assert.are.equal(0, #instance:conflicts())
+
+            local ok, err = instance:fill_all_notes()
+            assert.is_nil(ok)
+            assert.are.equal("board does not match the solution", err)
+        end)
+
+        it("fails when game is already finished", function()
+            local instance = new_game(PUZZLE_WIN)
+            assert.is_true(instance:place(0, 6, 9))
+            assert.is_true(instance:place(0, 7, 1))
+            assert.is_not_nil(instance:finish())
+
+            local ok, err = instance:fill_all_notes()
+            assert.is_nil(ok)
+            assert.are.equal("game is finished", err)
         end)
     end)
 end)

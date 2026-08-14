@@ -275,6 +275,23 @@ function stats.abandon(s, id, ended_at)
     return s
 end
 
+-- Removes a live in-progress entry for a game (e.g. when reset before completion).
+function stats.drop_in_progress(s, id)
+    if type(s) ~= "table" or s.version ~= VERSION then
+        return nil, "stats must be a stats table"
+    end
+    if id == nil then
+        return s
+    end
+    for i, entry in ipairs(s.games) do
+        if entry.id == id and entry.status == "in_progress" then
+            table.remove(s.games, i)
+            return s
+        end
+    end
+    return s
+end
+
 function stats.list(s)
     if type(s) ~= "table" or s.version ~= VERSION then
         return nil, "stats must be a stats table"

@@ -10,7 +10,7 @@ local game = {}
 local mt = {}
 mt.__index = mt
 
-local VERSION = 1
+local VERSION = 2
 local FULL_CANDIDATE_MASK = 0x1FF
 -- Saves are only ever written while paused, so a save claiming a *running*
 -- timer must have a wall-clock start timestamp close to now; anything further
@@ -26,6 +26,22 @@ local function new_mask_grid(value)
         end
     end
     return grid
+end
+
+local function build_notes_grid(b, constraint_masks, autofill)
+    local notes = {}
+    for r = 0, 8 do
+        local row = {}
+        for c = 0, 8 do
+            local mask = 0
+            if autofill and board.is_empty(b, r, c) then
+                mask = masks.compute_candidates_mask_for_cell(constraint_masks, r, c)
+            end
+            row[c + 1] = mask
+        end
+        notes[r + 1] = row
+    end
+    return notes
 end
 
 local function deep_copy(value)
@@ -212,7 +228,10 @@ local function commit(self, entry)
     self._revision = self._revision + 1
     -- A game is "started" once the user adds at least one number or note
     -- (the game-log definition); the timestamp feeds per-game stats.
-    if not self._started and (entry.kind == "place" or (entry.kind == "note" and entry.added)) then
+    if
+        not self._started
+        and (entry.kind == "place" or (entry.kind == "note" and entry.added) or entry.kind == "fill_all_notes")
+    then
         self._started = true
         self._started_at = self.now()
     end
@@ -301,18 +320,7 @@ function game.new(options)
         return nil, "id must be a non-negative integer"
     end
 
-    local notes = {}
-    for r = 0, 8 do
-        local row = {}
-        for c = 0, 8 do
-            local mask = 0
-            if autofill_notes and board.is_empty(puzzle, r, c) then
-                mask = masks.compute_candidates_mask_for_cell(constraint_masks, r, c)
-            end
-            row[c + 1] = mask
-        end
-        notes[r + 1] = row
-    end
+    local notes = build_notes_grid(puzzle, constraint_masks, autofill_notes)
 
     local instance = {
         puzzle = board.clone(puzzle),
@@ -322,6 +330,7 @@ function game.new(options)
         manual_removed = new_mask_grid(),
         _difficulty = difficulty,
         now = now,
+        autofill_notes = not not autofill_notes,
         timer = { running = true, started = now(), elapsed = 0 },
         _revision = 0,
         history = {},
@@ -432,6 +441,17 @@ end
 -- or redone: its cell, the peers whose conflict state the entry's value
 -- changes can affect, and the peers whose notes the entry cleaned/restored.
 local function entry_affected(self, entry)
+    if entry.kind == "fill_all_notes" then
+        local affected = {}
+        for r = 0, 8 do
+            for c = 0, 8 do
+                if self.board[cell_index(r, c)] == 0 then
+                    affected[r * 9 + c] = true
+                end
+            end
+        end
+        return affected
+    end
     local affected = { [entry.r * 9 + entry.c] = true }
     local function peers_with(value)
         if value ~= 0 then
@@ -759,6 +779,9 @@ local function undo_entry(self, entry)
         if entry.old_manual_removed ~= nil then
             self.manual_removed[entry.r + 1][entry.c + 1] = entry.old_manual_removed
         end
+    elseif entry.kind == "fill_all_notes" then
+        self.notes = deep_copy(entry.old_notes)
+        self.manual_removed = deep_copy(entry.old_manual_removed)
     end
 end
 
@@ -783,6 +806,9 @@ local function redo_entry(self, entry)
     elseif entry.kind == "notes_clear" then
         self.notes[entry.r + 1][entry.c + 1] = 0
         self.manual_removed[entry.r + 1][entry.c + 1] = FULL_CANDIDATE_MASK
+    elseif entry.kind == "fill_all_notes" then
+        self.notes = deep_copy(entry.new_notes)
+        self.manual_removed = new_mask_grid()
     end
 end
 
@@ -1047,6 +1073,67 @@ function mt:apply_action(action)
     return true
 end
 
+function mt:reset()
+    self.board = board.clone(self.puzzle)
+    local constraint_masks = constraint_masks_for(self.puzzle)
+    self.notes = build_notes_grid(self.puzzle, constraint_masks, self.autofill_notes)
+    self.manual_removed = new_mask_grid()
+    self.history = {}
+    self.undo_ptr = 0
+    self._revision = self._revision + 1
+    self._mistakes = 0
+    self._check_errors = 0
+    self._revealed = {}
+    self._hints = {}
+    self._started = false
+    self._started_at = nil
+    self.timer = { running = self.timer.running, started = self.now(), elapsed = 0 }
+    self.finished = false
+    return true
+end
+
+function mt:fill_all_notes()
+    if self.finished then
+        return nil, "game is finished"
+    end
+    if #self:conflicts() > 0 then
+        return nil, "board has conflicts"
+    end
+    for i = 1, 81 do
+        if self.board[i] ~= 0 and self.board[i] ~= self.solution[i] then
+            return nil, "board does not match the solution"
+        end
+    end
+    local constraint_masks = constraint_masks_for(self.board)
+    local new_notes = build_notes_grid(self.board, constraint_masks, true)
+    local changed = false
+    for r = 1, 9 do
+        for c = 1, 9 do
+            if self.notes[r][c] ~= new_notes[r][c] or self.manual_removed[r][c] ~= 0 then
+                changed = true
+                break
+            end
+        end
+        if changed then
+            break
+        end
+    end
+    if not changed then
+        return true
+    end
+    local old_notes = deep_copy(self.notes)
+    local old_manual_removed = deep_copy(self.manual_removed)
+    self.notes = new_notes
+    self.manual_removed = new_mask_grid()
+    commit(self, {
+        kind = "fill_all_notes",
+        old_notes = old_notes,
+        old_manual_removed = old_manual_removed,
+        new_notes = deep_copy(new_notes),
+    })
+    return true
+end
+
 function mt:serialize()
     local notes = {}
     for r = 1, 9 do
@@ -1085,6 +1172,7 @@ function mt:serialize()
         seed = self.seed,
         id = self.id,
         started_at = self._started_at,
+        autofill_notes = self.autofill_notes,
     }
 end
 
@@ -1094,6 +1182,27 @@ local function validate_history_mask(mask)
         and mask % 1 == 0
         and mask >= 0
         and mask <= FULL_CANDIDATE_MASK
+end
+
+local function validate_mask_grid(grid, name)
+    if type(grid) ~= "table" then
+        return nil, name .. " must be a 9x9 table"
+    end
+    local result = {}
+    for r = 1, 9 do
+        if type(grid[r]) ~= "table" then
+            return nil, name .. " must be a 9x9 table"
+        end
+        result[r] = {}
+        for c = 1, 9 do
+            local mask = grid[r][c]
+            if type(mask) ~= "number" or mask % 1 ~= 0 or mask < 0 or mask > FULL_CANDIDATE_MASK then
+                return nil, name .. " masks must be integers in the range 0..511"
+            end
+            result[r][c] = mask
+        end
+    end
+    return result
 end
 
 local function validate_history_cells(cells, name)
@@ -1123,60 +1232,82 @@ local function validate_history(data)
         if type(entry) ~= "table" then
             return nil, "history entries must be tables"
         end
-        local cell_ok, cell_err = validate_cell(entry.r, entry.c)
-        if not cell_ok then
-            return nil, "invalid history entry: " .. cell_err
-        end
         local kind = entry.kind
-        if kind == "place" then
-            if not validate_value(entry.value) then
-                return nil, "invalid history entry value"
+        if kind == "fill_all_notes" then
+            local old_notes, old_err = validate_mask_grid(entry.old_notes, "history old_notes")
+            if not old_notes then
+                return nil, old_err
             end
-            if
-                type(entry.old) ~= "number"
-                or not util.is_finite(entry.old)
-                or entry.old % 1 ~= 0
-                or entry.old < 0
-                or entry.old > 9
-            then
-                return nil, "invalid history entry old value"
+            local old_manual_removed, mr_err =
+                validate_mask_grid(entry.old_manual_removed, "history old_manual_removed")
+            if not old_manual_removed then
+                return nil, mr_err
             end
-            if not validate_history_mask(entry.old_notes) then
-                return nil, "invalid history entry note mask"
+            local new_notes, new_err = validate_mask_grid(entry.new_notes, "history new_notes")
+            if not new_notes then
+                return nil, new_err
             end
-        elseif kind == "erase" then
-            if not validate_value(entry.old) then
-                return nil, "invalid history entry old value"
-            end
-        elseif kind == "note" then
-            if not validate_value(entry.value) then
-                return nil, "invalid history entry value"
-            end
-            if type(entry.added) ~= "boolean" then
-                return nil, "invalid history entry flag"
-            end
-        elseif kind == "notes_clear" then
-            if not validate_history_mask(entry.old_mask) then
-                return nil, "invalid history entry note mask"
-            end
+            history[i] = {
+                kind = "fill_all_notes",
+                old_notes = old_notes,
+                old_manual_removed = old_manual_removed,
+                new_notes = new_notes,
+            }
         else
-            return nil, "unknown history entry kind"
+            local cell_ok, cell_err = validate_cell(entry.r, entry.c)
+            if not cell_ok then
+                return nil, "invalid history entry: " .. cell_err
+            end
+            if kind == "place" then
+                if not validate_value(entry.value) then
+                    return nil, "invalid history entry value"
+                end
+                if
+                    type(entry.old) ~= "number"
+                    or not util.is_finite(entry.old)
+                    or entry.old % 1 ~= 0
+                    or entry.old < 0
+                    or entry.old > 9
+                then
+                    return nil, "invalid history entry old value"
+                end
+                if not validate_history_mask(entry.old_notes) then
+                    return nil, "invalid history entry note mask"
+                end
+            elseif kind == "erase" then
+                if not validate_value(entry.old) then
+                    return nil, "invalid history entry old value"
+                end
+            elseif kind == "note" then
+                if not validate_value(entry.value) then
+                    return nil, "invalid history entry value"
+                end
+                if type(entry.added) ~= "boolean" then
+                    return nil, "invalid history entry flag"
+                end
+            elseif kind == "notes_clear" then
+                if not validate_history_mask(entry.old_mask) then
+                    return nil, "invalid history entry note mask"
+                end
+            else
+                return nil, "unknown history entry kind"
+            end
+            if entry.old_manual_removed ~= nil and not validate_history_mask(entry.old_manual_removed) then
+                return nil, "invalid history entry manual note mask"
+            end
+            local cleaned, cleaned_err = validate_history_cells(entry.cleaned, "cleaned")
+            if not cleaned then
+                return nil, cleaned_err
+            end
+            local restored, restored_err = validate_history_cells(entry.restored, "restored")
+            if not restored then
+                return nil, restored_err
+            end
+            local copy = deep_copy(entry)
+            copy.cleaned = deep_copy(cleaned)
+            copy.restored = deep_copy(restored)
+            history[i] = copy
         end
-        if entry.old_manual_removed ~= nil and not validate_history_mask(entry.old_manual_removed) then
-            return nil, "invalid history entry manual note mask"
-        end
-        local cleaned, cleaned_err = validate_history_cells(entry.cleaned, "cleaned")
-        if not cleaned then
-            return nil, cleaned_err
-        end
-        local restored, restored_err = validate_history_cells(entry.restored, "restored")
-        if not restored then
-            return nil, restored_err
-        end
-        local copy = deep_copy(entry)
-        copy.cleaned = deep_copy(cleaned)
-        copy.restored = deep_copy(restored)
-        history[i] = copy
     end
     return history
 end
@@ -1185,7 +1316,7 @@ function game.restore(data, opts)
     if type(data) ~= "table" then
         return nil, "save data must be a table"
     end
-    if data.version ~= VERSION then
+    if data.version ~= 1 and data.version ~= VERSION then
         return nil, "unsupported save version: " .. tostring(data.version)
     end
     if type(opts) ~= "table" or type(opts.now) ~= "function" then
@@ -1379,6 +1510,7 @@ function game.restore(data, opts)
         finished = data.finished,
         seed = seed,
         id = id,
+        autofill_notes = not not data.autofill_notes,
     }
     if data.timer.running then
         if data.timer.started == nil then
