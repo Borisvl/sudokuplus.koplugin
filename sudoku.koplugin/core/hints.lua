@@ -16,20 +16,20 @@ local FULL_CANDIDATE_MASK = 0x1FF
 local TECHNIQUES = {
     { id = "naked_singles", name = "Naked Singles", flag = flags.NAKED_SINGLES },
     { id = "hidden_singles", name = "Hidden Singles", flag = flags.HIDDEN_SINGLES },
+    { id = "locked_candidates", name = "Locked Candidates", flag = flags.LOCKED_CANDIDATES },
     { id = "naked_pairs", name = "Naked Pairs", flag = flags.NAKED_PAIRS },
     { id = "hidden_pairs", name = "Hidden Pairs", flag = flags.HIDDEN_PAIRS },
-    { id = "locked_candidates", name = "Locked Candidates", flag = flags.LOCKED_CANDIDATES },
     { id = "naked_triples", name = "Naked Triples", flag = flags.NAKED_TRIPLES },
     { id = "hidden_triples", name = "Hidden Triples", flag = flags.HIDDEN_TRIPLES },
     { id = "x_wing", name = "X-Wing", flag = flags.X_WING },
-    { id = "naked_quads", name = "Naked Quads", flag = flags.NAKED_QUADS },
-    { id = "hidden_quads", name = "Hidden Quads", flag = flags.HIDDEN_QUADS },
-    { id = "swordfish", name = "Swordfish", flag = flags.SWORDFISH },
-    { id = "jellyfish", name = "Jellyfish", flag = flags.JELLYFISH },
     { id = "skyscraper", name = "Skyscraper", flag = flags.SKYSCRAPER },
-    { id = "w_wing", name = "W-Wing", flag = flags.W_WING },
     { id = "xy_wing", name = "XY-Wing", flag = flags.XY_WING },
     { id = "xyz_wing", name = "XYZ-Wing", flag = flags.XYZ_WING },
+    { id = "w_wing", name = "W-Wing", flag = flags.W_WING },
+    { id = "naked_quads", name = "Naked Quads", flag = flags.NAKED_QUADS },
+    { id = "swordfish", name = "Swordfish", flag = flags.SWORDFISH },
+    { id = "hidden_quads", name = "Hidden Quads", flag = flags.HIDDEN_QUADS },
+    { id = "jellyfish", name = "Jellyfish", flag = flags.JELLYFISH },
     { id = "aic", name = "Alternating Inference Chain", flag = flags.ALTERNATING_INFERENCE_CHAIN },
 }
 
@@ -123,6 +123,9 @@ local function copy_cells(cells)
     return result
 end
 
+-- Note: Pattern kinds emitted by detector modules are singular (e.g. "naked_quad",
+-- "hidden_pair", "pointing"), whereas canonical technique IDs are plural ("naked_quads",
+-- "locked_candidates"). project_pattern preserves the detector's pattern.kind.
 local function project_pattern(step, technique)
     local source = step.pattern or {}
     local cells = source.cells

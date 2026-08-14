@@ -220,6 +220,9 @@ storage):
 - [x] M10: stats dashboard + game history (v2 game log with in-progress
       tracking, v1 migration, insight dashboard, browsable per-game pages
       with miniature board, replay from seed)
-- [ ] M8: polish, i18n, on-device testing
+- [x] M8a: complete localization & i18n (gettext wrappers across UI, dynamic
+      difficulty & status labels, all 17 technique names localized, message
+      mapping, `N_` pluralization, `l10n/sudoku.pot` extraction tooling)
+- [ ] M8b: polish, deployment, on-device testing
 
 See PLAN.md for milestone details and the project rules in AGENTS.md.

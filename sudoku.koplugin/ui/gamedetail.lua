@@ -17,6 +17,7 @@ local _ = require("gettext")
 
 local difficulties = require("ui.difficulties")
 local numberbar = require("ui.numberbar")
+local status_helper = require("ui.status")
 local theme = require("ui.theme")
 local util = require("core.util")
 
@@ -95,17 +96,6 @@ function MiniGrid:paintTo(bb, x, y)
     end
 end
 
-local STATUS_LABELS = {
-    in_progress = _("In progress"),
-    finished = _("Finished"),
-    give_up = _("Given up"),
-    abandoned = _("Abandoned"),
-}
-
-local function status_label(status)
-    return STATUS_LABELS[status] or status
-end
-
 local function count_clues(puzzle)
     local n = 0
     for i = 1, 81 do
@@ -143,7 +133,7 @@ function GameDetail:init()
     local function add(text)
         lines[#lines + 1] = TextWidget:new { text = text, width = text_width, face = body_face }
     end
-    add(T(_("#%1 · %2 · %3"), tostring(entry.id or "?"), difficulty, status_label(entry.status)))
+    add(T(_("#%1 · %2 · %3"), tostring(entry.id or "?"), difficulty, status_helper.label(entry.status)))
     if entry.started_at then
         add(T(_("Started: %1"), os.date("%Y-%m-%d %H:%M", entry.started_at)))
     end

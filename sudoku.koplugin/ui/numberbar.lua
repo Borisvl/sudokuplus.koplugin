@@ -5,15 +5,6 @@ local _ = require("gettext")
 
 local numberbar = {}
 
-local LABELS = {
-    undo = _("Undo"),
-    redo = _("Redo"),
-    notes = _("Notes"),
-    check = _("Check"),
-    hint = _("Hint"),
-    menu = _("Menu"),
-}
-
 -- Renders `text` centered inside `rect` and returns the rendered width.
 function numberbar.render_centered(bb, face, text, bold, rect, color)
     local size = RenderText:sizeUtf8Text(0, rect.w, face, text, false, bold)
@@ -33,8 +24,33 @@ function numberbar.render_centered(bb, face, text, bold, rect, color)
     )
 end
 
+local TOOL_LABELS = {
+    undo = function()
+        return _("Undo")
+    end,
+    redo = function()
+        return _("Redo")
+    end,
+    notes = function()
+        return _("Notes")
+    end,
+    check = function()
+        return _("Check")
+    end,
+    hint = function()
+        return _("Hint")
+    end,
+    menu = function()
+        return _("Menu")
+    end,
+}
+
 local function label_for(id)
-    return LABELS[id] or tostring(id)
+    local getter = TOOL_LABELS[id]
+    if getter then
+        return getter()
+    end
+    return tostring(id)
 end
 
 local function paint_row(bb, row)

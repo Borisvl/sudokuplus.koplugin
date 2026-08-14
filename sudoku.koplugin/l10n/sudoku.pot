@@ -1,0 +1,408 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the sudoku package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: sudoku\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-14 21:26+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: sudoku.koplugin/_meta.lua:3 sudoku.koplugin/main.lua:211
+msgid "Sudoku"
+msgstr ""
+
+#: sudoku.koplugin/_meta.lua:4
+msgid "A Sudoku puzzle game for e-ink readers."
+msgstr ""
+
+#: sudoku.koplugin/main.lua:89
+msgid "Generating…"
+msgstr ""
+
+#: sudoku.koplugin/main.lua:100
+msgid "Failed to generate a Sudoku puzzle."
+msgstr ""
+
+#: sudoku.koplugin/main.lua:134
+msgid "Failed to start a game."
+msgstr ""
+
+#: sudoku.koplugin/main.lua:154
+msgid "This game cannot be replayed (no reproduction seed)."
+msgstr ""
+
+#: sudoku.koplugin/main.lua:165
+msgid "No saved game found."
+msgstr ""
+
+#: sudoku.koplugin/main.lua:172
+msgid "Failed to restore the saved game."
+msgstr ""
+
+#: sudoku.koplugin/main.lua:215
+msgid "Continue"
+msgstr ""
+
+#: sudoku.koplugin/main.lua:229 sudoku.koplugin/ui/sudokuview.lua:903
+#: sudoku.koplugin/ui/sudokuview.lua:1009
+msgid "New game"
+msgstr ""
+
+#: sudoku.koplugin/main.lua:233 sudoku.koplugin/ui/sudokuview.lua:912
+#: sudoku.koplugin/ui/sudokuview.lua:1001
+msgid "Statistics"
+msgstr ""
+
+#: sudoku.koplugin/main.lua:240
+msgid "Auto-fill notes"
+msgstr ""
+
+#: sudoku.koplugin/ui/difficulties.lua:12
+msgid "Beginner"
+msgstr ""
+
+#: sudoku.koplugin/ui/difficulties.lua:15
+msgid "Easy"
+msgstr ""
+
+#: sudoku.koplugin/ui/difficulties.lua:18
+msgid "Medium"
+msgstr ""
+
+#: sudoku.koplugin/ui/difficulties.lua:21
+msgid "Hard"
+msgstr ""
+
+#: sudoku.koplugin/ui/difficulties.lua:24
+msgid "Master"
+msgstr ""
+
+#: sudoku.koplugin/ui/difficulties.lua:27
+msgid "Expert"
+msgstr ""
+
+#: sudoku.koplugin/ui/gamedetail.lua:138
+msgid "#%1 · %2 · %3"
+msgstr ""
+
+#: sudoku.koplugin/ui/gamedetail.lua:140
+msgid "Started: %1"
+msgstr ""
+
+#: sudoku.koplugin/ui/gamedetail.lua:142
+msgid "Time: %1"
+msgstr ""
+
+#: sudoku.koplugin/ui/gamedetail.lua:143
+msgid "Mistakes: %1   Check errors: %2"
+msgstr ""
+
+#: sudoku.koplugin/ui/gamedetail.lua:144
+msgid "Hints: %1   Moves: %2"
+msgstr ""
+
+#: sudoku.koplugin/ui/gamedetail.lua:147
+msgid "Correct placements: %1 of %2"
+msgstr ""
+
+#: sudoku.koplugin/ui/gamedetail.lua:159
+msgid "Back"
+msgstr ""
+
+#: sudoku.koplugin/ui/gamedetail.lua:168
+msgid "Play again"
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:9
+msgid "Cannot modify a given cell."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:12
+msgid "Cannot edit notes on a filled cell."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:15
+msgid "Digit already present in the same row, column, or box."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:18
+msgid "The board has conflicts. Fix them before asking for a hint."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:21
+msgid "The board does not match the solution. Fix mistakes first."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:24
+msgid "The board has changed since this hint was generated."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:27
+msgid "Candidate is already absent."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:30
+msgid "Nothing to undo."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:33
+msgid "Nothing to redo."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:36
+msgid "The game is finished."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:39
+msgid "The game is already finished."
+msgstr ""
+
+#: sudoku.koplugin/ui/messages.lua:42
+msgid "The board is not solved."
+msgstr ""
+
+#: sudoku.koplugin/ui/numberbar.lua:29
+msgid "Undo"
+msgstr ""
+
+#: sudoku.koplugin/ui/numberbar.lua:32
+msgid "Redo"
+msgstr ""
+
+#: sudoku.koplugin/ui/numberbar.lua:35
+msgid "Notes"
+msgstr ""
+
+#: sudoku.koplugin/ui/numberbar.lua:38
+msgid "Check"
+msgstr ""
+
+#: sudoku.koplugin/ui/numberbar.lua:41
+msgid "Hint"
+msgstr ""
+
+#: sudoku.koplugin/ui/numberbar.lua:44
+msgid "Menu"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:30
+msgid "#%1 · %2 · %3 · %4"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:49
+msgid "%1: %2"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:62
+msgid "%1 — %2 finished, avg %3, best %4, given up %5"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:110
+msgid "Game history"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:134
+msgid "Started: %1   Finished: %2   Given up: %3"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:140
+msgid "Abandoned: %1   In progress: %2"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:141
+msgid "Completion rate: %1   Win rate: %2"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:142
+msgid "Total playtime: %1"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:144
+msgid "Best time: %1   Average: %2"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:146
+msgid "Current streak: %1   Best streak: %2"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:149
+msgid "Total mistakes: %1 (avg %2 per game)   Check errors: %3"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:155
+msgid "Average moves per game: %1"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:158
+msgid "By difficulty"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:162
+msgid "Most missed strategies"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:166
+msgid "Game history (%1)"
+msgstr ""
+
+#: sudoku.koplugin/ui/statsview.lua:173
+msgid "Sudoku statistics"
+msgstr ""
+
+#: sudoku.koplugin/ui/status.lua:9
+msgid "In progress"
+msgstr ""
+
+#: sudoku.koplugin/ui/status.lua:12
+msgid "Finished"
+msgstr ""
+
+#: sudoku.koplugin/ui/status.lua:15
+msgid "Given up"
+msgstr ""
+
+#: sudoku.koplugin/ui/status.lua:18
+msgid "Abandoned"
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:535
+msgid "%1 — tap Hint for the pattern"
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:537
+msgid "%1 — tap Hint to apply"
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:747
+msgid "No mistakes found."
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:748
+msgid "1 wrong cell found."
+msgid_plural "%1 wrong cells found."
+msgstr[0] ""
+msgstr[1] ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:815
+msgid "Some notes are inconsistent with the board. Fix them first."
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:828
+msgid "No hint available. Re-add notes to: %1"
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:831
+msgid "The puzzle is solved."
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:833
+msgid "No hint available."
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:893
+msgid ""
+"Puzzle solved!\n"
+"\n"
+"Time: %1\n"
+"Mistakes: %2\n"
+"Hints: %3"
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:898
+msgid "Close"
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:985
+msgid "%1 — Time: %2    Mistakes: %3    Hints: %4"
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:994
+msgid "Resume"
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:1020
+msgid "Give up"
+msgstr ""
+
+#: sudoku.koplugin/ui/sudokuview.lua:1030
+msgid "Quit"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:9
+msgid "Naked Singles"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:12
+msgid "Hidden Singles"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:15
+msgid "Naked Pairs"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:18
+msgid "Hidden Pairs"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:21
+msgid "Locked Candidates"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:24
+msgid "Naked Triples"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:27
+msgid "Hidden Triples"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:30
+msgid "X-Wing"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:33
+msgid "Naked Quads"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:36
+msgid "Hidden Quads"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:39
+msgid "Swordfish"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:42
+msgid "Jellyfish"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:45
+msgid "Skyscraper"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:48
+msgid "W-Wing"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:51
+msgid "XY-Wing"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:54
+msgid "XYZ-Wing"
+msgstr ""
+
+#: sudoku.koplugin/ui/techniques.lua:57
+msgid "Alternating Inference Chain"
+msgstr ""

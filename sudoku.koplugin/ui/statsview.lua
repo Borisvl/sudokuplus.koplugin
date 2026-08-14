@@ -6,6 +6,7 @@ local _ = require("gettext")
 
 local difficulties = require("ui.difficulties")
 local stats = require("stats")
+local techniques = require("ui.techniques")
 local util = require("core.util")
 local GameDetail = require("ui.gamedetail")
 
@@ -21,16 +22,7 @@ local function percent(fraction)
     return string.format("%d%%", math.floor((fraction or 0) * 100 + 0.5))
 end
 
-local STATUS_LABELS = {
-    in_progress = _("In progress"),
-    finished = _("Finished"),
-    give_up = _("Given up"),
-    abandoned = _("Abandoned"),
-}
-
-local function status_label(status)
-    return STATUS_LABELS[status] or status
-end
+local status_helper = require("ui.status")
 
 local function game_row_text(entry)
     local difficulty = difficulties.label(entry.difficulty) or entry.difficulty
@@ -38,7 +30,7 @@ local function game_row_text(entry)
         _("#%1 · %2 · %3 · %4"),
         tostring(entry.id or "?"),
         difficulty,
-        status_label(entry.status),
+        status_helper.label(entry.status),
         format_time(entry.duration or 0)
     )
 end
@@ -46,15 +38,15 @@ end
 -- Ranked technique rows for the "Most missed strategies" section.
 local function technique_rows(summary)
     local rows = {}
-    local techniques = {}
+    local techniques_list = {}
     for id, count in pairs(summary.hints_per_technique or {}) do
-        techniques[#techniques + 1] = { id = id, count = count }
+        techniques_list[#techniques_list + 1] = { id = id, count = count }
     end
-    table.sort(techniques, function(a, b)
+    table.sort(techniques_list, function(a, b)
         return a.count > b.count or (a.count == b.count and a.id < b.id)
     end)
-    for i, technique in ipairs(techniques) do
-        rows[#rows + 1] = { text = T(_("%1: %2"), technique.id, tostring(technique.count)) }
+    for i, item in ipairs(techniques_list) do
+        rows[#rows + 1] = { text = T(_("%1: %2"), techniques.label(item.id), tostring(item.count)) }
     end
     return rows
 end

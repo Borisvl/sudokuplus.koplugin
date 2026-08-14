@@ -169,6 +169,7 @@ describe("sudoku layout", function()
         assert.is_true(l.fonts.user >= 32, "entered digits must be large")
         assert.is_true(l.fonts.label >= 18, "button labels must be legible")
         assert.is_true(l.fonts.notes >= 16, "notes must be legible")
+        assert.are.equal(18, l.fonts.notes)
     end)
 
     it("returns nil for an empty cell set", function()

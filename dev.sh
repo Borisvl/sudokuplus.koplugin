@@ -4,6 +4,7 @@
 #   ./dev.sh test [args...] run the busted specs (args passed to `kodev test front`)
 #   ./dev.sh lint           luacheck + stylua --check
 #   ./dev.sh fmt            stylua (apply formatting)
+#   ./dev.sh pot            extract gettext strings into sudoku.koplugin/l10n/sudoku.pot
 # Specs from tests/unit/ are symlinked into the (gitignored) koreader
 # checkout's spec/unit/ directory, mirroring the plugin symlink approach.
 set -euo pipefail
@@ -124,6 +125,9 @@ case "${1:-}" in
     fmt)
         stylua sudoku.koplugin/ tests/ tools/
         exit 0
+        ;;
+    pot)
+        exec ./tools/extract_pot.sh
         ;;
     deploy)
         deploy_to_device "${@:2}"

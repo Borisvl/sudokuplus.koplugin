@@ -11,12 +11,15 @@ local bit = require("bit")
 local logger = require("logger")
 local T = require("ffi/util").template
 local _ = require("gettext")
+local N_ = _.ngettext
 
 local layout = require("ui.layout")
 local difficulties = require("ui.difficulties")
+local messages = require("ui.messages")
 local numberbar = require("ui.numberbar")
 local stats = require("stats")
 local storage = require("storage")
+local techniques = require("ui.techniques")
 local theme = require("ui.theme")
 local util = require("core.util")
 
@@ -399,7 +402,7 @@ function SudokuView:_applyArmed(row, col, as_note)
     self:markToolRowIfChanged()
     self:afterMove()
     if not ok and err ~= nil then
-        UIManager:show(Notification:new { text = err })
+        UIManager:show(Notification:new { text = messages.translate(err) })
     end
 end
 
@@ -526,11 +529,12 @@ function SudokuView:paintTo(bb, x, y)
     if self._hint_stage >= 1 and self._hint_result then
         local banner = self.layout.banner
         bb:paintRect(banner.x, banner.y, banner.w, banner.h, theme.background)
+        local tech_name = techniques.label(self._hint_result.technique.id)
         local text
         if self._hint_stage == 1 then
-            text = T(_("%1 — tap Hint for the pattern"), self._hint_result.technique.name)
+            text = T(_("%1 — tap Hint for the pattern"), tech_name)
         else
-            text = T(_("%1 — tap Hint to apply"), self._hint_result.technique.name)
+            text = T(_("%1 — tap Hint to apply"), tech_name)
         end
         numberbar.render_centered(bb, self.faces.label, text, false, banner, theme.digit)
     end
@@ -588,7 +592,7 @@ function SudokuView:onTap(ev_args, ges)
         self:onHint()
     end
     if not ok and err ~= nil then
-        UIManager:show(Notification:new { text = err })
+        UIManager:show(Notification:new { text = messages.translate(err) })
     end
     self:afterMove()
     return true
@@ -740,7 +744,8 @@ end
 function SudokuView:onCheck()
     local before = self.game:revealed()
     local wrong = self.game:check_for_errors()
-    local text = #wrong == 0 and _("No mistakes found.") or T(_("%1 wrong cell(s) found."), #wrong)
+    local text = #wrong == 0 and _("No mistakes found.")
+        or T(N_("1 wrong cell found.", "%1 wrong cells found.", #wrong), #wrong)
     UIManager:show(Notification:new { text = text })
     self:markRevealedDiff(before)
 end
@@ -789,7 +794,7 @@ function SudokuView:onHint()
             self:markToolRowIfChanged()
             self:_refreshMatchAfterMove()
         elseif err then
-            UIManager:show(Notification:new { text = err })
+            UIManager:show(Notification:new { text = messages.translate(err) })
         end
         self:refresh()
         return true
@@ -797,7 +802,7 @@ function SudokuView:onHint()
 
     local result, err = self.game:hint()
     if not result then
-        UIManager:show(Notification:new { text = err })
+        UIManager:show(Notification:new { text = messages.translate(err) })
         return true
     end
     if result.status == "available" then

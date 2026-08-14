@@ -28,23 +28,55 @@ local all_implemented = flags.ALL
 -- HoDoKu hard-tier examples: x-wing (bf201), swordfish (bf301), jellyfish
 -- (bf401), skyscraper (sk01), naked quads (n401), hidden quads (h401).
 local HARD_PUZZLES = {
-    { "x_wing", "000000000760003002002640009403900070000004903005000020010560000370090041000000060" },
-    { "swordfish", "160540070008001030030800000700050069600902057000000000000030040000000016000164500" },
-    { "jellyfish", "200000003080030050003402100001205400000090000009308600002506900090020070400000001" },
-    { "skyscraper", "000000000001902060000006790902000600370000950005000004140003005709024000000800000" },
-    { "naked_quad", "000000060000030047032500000600007005207010908081004000000002000000000001005870000" },
-    { "hidden_quad", "800570290390000000000200000001000508000496000000800000209000001008000070560000082" },
+    { "x_wing", "000000000760003002002640009403900070000004903005000020010560000370090041000000060", flags.X_WING },
+    {
+        "swordfish",
+        "160540070008001030030800000700050069600902057000000000000030040000000016000164500",
+        flags.SWORDFISH,
+    },
+    {
+        "jellyfish",
+        "200000003080030050003402100001205400000090000009308600002506900090020070400000001",
+        flags.JELLYFISH,
+    },
+    {
+        "skyscraper",
+        "000000000001902060000006790902000600370000950005000004140003005709024000000800000",
+        flags.SKYSCRAPER,
+    },
+    {
+        "naked_quad",
+        "000000060000030047032500000600007005207010908081004000000002000000000001005870000",
+        flags.NAKED_QUADS,
+    },
+    {
+        "hidden_quad",
+        "800570290390000000000200000001000508000496000000800000209000001008000070560000082",
+        flags.HIDDEN_QUADS,
+    },
 }
 
 -- Expert-tier examples: w-wing (w101), xy-wing (y101), xyz-wing (z101), and
 -- rustoku's chain puzzles (x-chain, xy-chain, discontinuous nice loop).
 local EXPERT_PUZZLES = {
-    { "w_wing", "025100000000009030400708900040000800150400000000060004000000008263040000080390106" },
-    { "xy_wing", "000060000000010863003009000904000000300000704570820000000006580690007000000040030" },
-    { "xyz_wing", "069000000000021000000800400001530080007600050000000100000000003902080010000340205" },
-    { "aic", "3.4.2..8...6.......5..7.3.....68..2.....34....6.15.7...1.........9....6...8217..5" },
-    { "aic", "3...4.52858.........2..........74....1....35..5.6...4..78.....21..2......39..68.." },
-    { "aic", "....8.2....5....4..2...5........7......21..971.4....3...........973..52...8.5136." },
+    { "w_wing", "025100000000009030400708900040000800150400000000060004000000008263040000080390106", flags.W_WING },
+    { "xy_wing", "000060000000010863003009000904000000300000704570820000000006580690007000000040030", flags.XY_WING },
+    { "xyz_wing", "069000000000021000000800400001530080007600050000000100000000003902080010000340205", flags.XYZ_WING },
+    {
+        "aic",
+        "3.4.2..8...6.......5..7.3.....68..2.....34....6.15.7...1.........9....6...8217..5",
+        flags.ALTERNATING_INFERENCE_CHAIN,
+    },
+    {
+        "aic",
+        "3...4.52858.........2..........74....1....35..5.6...4..78.....21..2......39..68..",
+        flags.ALTERNATING_INFERENCE_CHAIN,
+    },
+    {
+        "aic",
+        "....8.2....5....4..2...5........7......21..971.4....3...........973..52...8.5136.",
+        flags.ALTERNATING_INFERENCE_CHAIN,
+    },
 }
 
 local function assert_valid_completion(puzzle, completed, label)
@@ -72,20 +104,20 @@ describe("core.techniques.propagator", function()
         assert.are.same({
             "naked_singles",
             "hidden_singles",
+            "locked_candidates",
             "naked_pairs",
             "hidden_pairs",
-            "locked_candidates",
             "naked_triples",
             "hidden_triples",
             "x_wing",
-            "naked_quads",
-            "hidden_quads",
-            "swordfish",
-            "jellyfish",
             "skyscraper",
-            "w_wing",
             "xy_wing",
             "xyz_wing",
+            "w_wing",
+            "naked_quads",
+            "swordfish",
+            "hidden_quads",
+            "jellyfish",
             "aic",
         }, propagator.technique_names())
     end)
@@ -403,7 +435,7 @@ describe("core.techniques.propagator", function()
         end
     end)
 
-    it("solves every hard- and expert-tier example guess-free with all techniques", function()
+    it("exercises every hard- and expert-tier technique and completes guess-free", function()
         local all_puzzles = {}
         for _, entry in ipairs(HARD_PUZZLES) do
             all_puzzles[#all_puzzles + 1] = entry
@@ -412,18 +444,25 @@ describe("core.techniques.propagator", function()
             all_puzzles[#all_puzzles + 1] = entry
         end
         for _, entry in ipairs(all_puzzles) do
-            local name, puzzle = entry[1], entry[2]
-            local s = solver.new(board.from_string(puzzle), { techniques = all_implemented })
-            local path = solve_path.new()
-            assert.is_true(s:propagate(path), name .. " propagation should not dead-end")
-            assert_valid_completion(puzzle, s.board, name)
+            local name, puzzle, flag = entry[1], entry[2], entry[3]
+
+            -- 1. Verify that the example specifically exercises its named technique
+            local target_solver = solver.new(board.from_string(puzzle), { techniques = bit.bor(flags.EASY, flag) })
+            local target_path = solve_path.new()
+            assert.is_true(target_solver:propagate(target_path), name .. " target propagation should not dead-end")
             local used_target = false
-            for _, step in ipairs(path.steps) do
+            for _, step in ipairs(target_path.steps) do
                 if step.pattern and step.pattern.kind == name then
                     used_target = true
                 end
             end
             assert.is_true(used_target, name .. " technique should appear in the solve path")
+
+            -- 2. Verify that all examples solve guess-free when all techniques are enabled
+            local all_solver = solver.new(board.from_string(puzzle), { techniques = all_implemented })
+            local all_path = solve_path.new()
+            assert.is_true(all_solver:propagate(all_path), name .. " all-techniques propagation should not dead-end")
+            assert_valid_completion(puzzle, all_solver.board, name)
         end
     end)
 

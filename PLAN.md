@@ -700,9 +700,23 @@ of; a toggle can be added later if a real conflict shows up.
 `./dev.sh lint` clean, emulator boot smoke on `kobo-aura-one` with no
 errors, PLAN.md updated, commit.
 
-### M8 — Polish, i18n, deployment
+### M8a — Complete localization & i18n (done)
 
-- [ ] gettext-marked strings, settings (e.g., notes on/off)
+Comprehensive internationalization across all user-facing components of the Sudoku plugin using KOReader's `gettext` conventions, preserving zero-dependency pure Lua discipline for `core/`:
+
+- [x] `ui/techniques.lua`: localized display names for all 17 solving strategies (`techniques.label(id)`).
+- [x] `ui/messages.lua`: localized message mapping for pure-engine errors and game notifications (`messages.translate(err)`).
+- [x] `ui/difficulties.lua`: dynamic localized resolution of difficulty labels (`difficulties.list()`, `difficulties.label(id)`).
+- [x] `ui/sudokuview.lua`: wired localized technique labels in progressive hint banner, error notifications, and `N_` pluralization for wrong-cell checking.
+- [x] `ui/statsview.lua` & `ui/gamedetail.lua`: dynamic status labels and translated technique rankings in most-missed strategies.
+- [x] `ui/numberbar.lua`: dynamic button labels for tool row.
+- [x] `tools/extract_pot.sh` & `./dev.sh pot`: automated extraction tooling generating `sudoku.koplugin/l10n/sudoku.pot` with full catalog coverage (98 messages).
+- [x] `tests/unit/sudoku_l10n_spec.lua`: test-first specs covering technique translations, message mappings, difficulty dynamic evaluation, and POT catalog validation.
+
+**Exit criteria**: all 46 specs green via `./dev.sh test`, `./dev.sh lint` clean (0 warnings / 0 errors), `sudoku.koplugin/l10n/sudoku.pot` extracted and verified.
+
+### M8b — Deployment, polish, on-device smoke test
+
 - [ ] README: deploy instructions, rustoku pin update
 - [ ] Kobo on-device smoke test
 

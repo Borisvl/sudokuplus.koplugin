@@ -1,30 +1,48 @@
 local _ = require("gettext")
 
--- Ordered difficulty list for the picker and the stats screen.
-local difficulties = {
-    { id = "beginner", label = _("Beginner") },
-    { id = "easy", label = _("Easy") },
-    { id = "medium", label = _("Medium") },
-    { id = "hard", label = _("Hard") },
-    { id = "master", label = _("Master") },
-    { id = "expert", label = _("Expert") },
+local difficulties = {}
+
+local ORDERED_IDS = { "beginner", "easy", "medium", "hard", "master", "expert" }
+
+-- Ordered difficulty definitions for the picker and the stats screen.
+-- Evaluated dynamically through static getters so language changes immediately update all labels
+-- without transient per-lookup table allocations.
+local GETTERS = {
+    beginner = function()
+        return _("Beginner")
+    end,
+    easy = function()
+        return _("Easy")
+    end,
+    medium = function()
+        return _("Medium")
+    end,
+    hard = function()
+        return _("Hard")
+    end,
+    master = function()
+        return _("Master")
+    end,
+    expert = function()
+        return _("Expert")
+    end,
 }
 
 function difficulties.list()
-    local copy = {}
-    for i, entry in ipairs(difficulties) do
-        copy[i] = { id = entry.id, label = entry.label }
+    local list = {}
+    for i, id in ipairs(ORDERED_IDS) do
+        local getter = GETTERS[id]
+        list[i] = { id = id, label = getter and getter() or id }
     end
-    return copy
+    return list
 end
 
 function difficulties.label(id)
-    for _, entry in ipairs(difficulties) do
-        if entry.id == id then
-            return entry.label
-        end
+    if not id then
+        return nil
     end
-    return nil
+    local getter = GETTERS[id]
+    return getter and getter() or nil
 end
 
 return difficulties
