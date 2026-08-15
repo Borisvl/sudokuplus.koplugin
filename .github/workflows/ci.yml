@@ -14,16 +14,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install StyLua & Luacheck
+        run: |
+          sudo apt-get update && sudo apt-get install -y lua-check
+          curl -fsSL https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux-x86_64.zip -o /tmp/stylua.zip
+          sudo unzip -q -o /tmp/stylua.zip -d /usr/local/bin
+          sudo chmod +x /usr/local/bin/stylua
+          rm /tmp/stylua.zip
+
       - name: Check StyLua formatting
-        uses: JohnnyMorganz/stylua-action@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --check sudokuplus.koplugin/ tests/ tools/
+        run: stylua --check sudokuplus.koplugin/ tests/ tools/
 
       - name: Run Luacheck
-        uses: lunarmodules/luacheck@v1
-        with:
-          args: sudokuplus.koplugin/ tests/ tools/
+        run: luacheck sudokuplus.koplugin/ tests/ tools/
 
   test-core:
     name: Unit Tests (Headless Busted)
