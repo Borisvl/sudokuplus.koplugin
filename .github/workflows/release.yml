@@ -42,7 +42,11 @@ jobs:
             found { print }
           ' CHANGELOG.md > release_notes.md || true
 
-          if [[ ! -s release_notes.md ]]; then
+          if [[ -s release_notes.md ]]; then
+            echo "has_notes=true" >> "$GITHUB_OUTPUT"
+            echo "Extracted $(wc -l < release_notes.md) lines of release notes."
+          else
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
             echo "No custom changelog entry found, defaulting to automated notes."
             rm -f release_notes.md
           fi
@@ -55,8 +59,8 @@ jobs:
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: ${{ inputs.tag || github.ref_name }}
-          body_path: ${{ hashFiles('release_notes.md') != '' && 'release_notes.md' || '' }}
-          generate_release_notes: ${{ hashFiles('release_notes.md') == '' }}
+          body_path: ${{ steps.changelog.outputs.has_notes == 'true' && 'release_notes.md' || '' }}
+          generate_release_notes: ${{ steps.changelog.outputs.has_notes != 'true' }}
           files: dist/sudokuplus.koplugin.zip
           draft: false
           prerelease: false
