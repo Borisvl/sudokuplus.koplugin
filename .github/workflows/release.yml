@@ -35,10 +35,10 @@ jobs:
           VERSION="${TAG#v}"
           echo "Extracting release notes for version $VERSION from CHANGELOG.md..."
           
-          # Extract section between "## [VERSION]" and next "## ["
+          # Extract section between "## [VERSION]" and next "## "
           awk -v ver="$VERSION" '
-            $0 ~ "^## \\[" ver "\\]" { found=1; next }
-            found && /^## \\[/ { found=0 }
+            $0 ~ ("^## \\[" ver "\\]") { found=1; next }
+            found && /^## / { found=0 }
             found { print }
           ' CHANGELOG.md > release_notes.md || true
 
