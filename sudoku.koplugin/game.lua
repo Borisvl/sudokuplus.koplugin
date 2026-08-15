@@ -956,6 +956,21 @@ function mt:started_record()
     return make_record(self, "in_progress", nil)
 end
 
+function mt:final_record()
+    return self._record
+end
+
+local function finalize_game(self, status)
+    if self.finished then
+        return nil, "game is already finished"
+    end
+    local timestamp = finish_timer(self)
+    local record = make_record(self, status, timestamp)
+    self.finished = true
+    self._record = record
+    return record
+end
+
 function mt:finish()
     if self.finished then
         return nil, "game is already finished"
@@ -963,20 +978,11 @@ function mt:finish()
     if not self:is_won() then
         return nil, "board is not solved"
     end
-    local timestamp = finish_timer(self)
-    local record = make_record(self, "finished", timestamp)
-    self.finished = true
-    return record
+    return finalize_game(self, "finished")
 end
 
 function mt:give_up()
-    if self.finished then
-        return nil, "game is already finished"
-    end
-    local timestamp = finish_timer(self)
-    local record = make_record(self, "give_up", timestamp)
-    self.finished = true
-    return record
+    return finalize_game(self, "give_up")
 end
 
 function mt:hint()
@@ -1089,6 +1095,7 @@ function mt:reset()
     self._started_at = nil
     self.timer = { running = self.timer.running, started = self.now(), elapsed = 0 }
     self.finished = false
+    self._record = nil
     return true
 end
 

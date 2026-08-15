@@ -5,7 +5,6 @@ local Font = require("ui/font")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local InputContainer = require("ui/widget/container/inputcontainer")
-local MultiConfirmBox = require("ui/widget/multiconfirmbox")
 local Notification = require("ui/widget/notification")
 local UIManager = require("ui/uimanager")
 local bit = require("bit")
@@ -62,13 +61,10 @@ local SudokuView = InputContainer:extend {
     save_path = nil,
     stats_path = nil,
     new_game_cb = nil,
-    show_stats_cb = nil,
     replay_cb = nil,
 }
 
-local function format_time(seconds)
-    return util.format_time(seconds)
-end
+local format_time = util.format_time
 
 -- Strikes through the digit of a check-revealed (wrong-vs-solution) cell: a
 -- bar across the cell width at vertical center, drawn in the same ink as the
@@ -133,6 +129,7 @@ function SudokuView:init()
     self._match_cells = {}
     self._completed_digits = self.game:completed_digits()
     self._log_started = false
+    self._win_dialog = nil
     self._hold_token = 0
     self._holding_key = nil
 
@@ -852,7 +849,7 @@ end
 -- game id). Called when the first move is made and at save points; only the
 -- save points persist, so per-move activity never touches the disk.
 function SudokuView:updateStats(persist)
-    if not self.stats or self.game.id == nil or not self.game:is_started() then
+    if not self.stats or self.game.id == nil or not self.game:is_started() or self.game:is_finished() then
         return
     end
     local ok, err = stats.track(self.stats, self.game:started_record())
@@ -881,47 +878,82 @@ function SudokuView:onWin()
     -- since the game is finished by then; invalidating here keeps the
     -- state self-consistent).
     self:_invalidateNotesHold()
-    local record, err = self.game:finish()
+    if not self.game:is_finished() then
+        local record, err = self.game:finish()
+        if not record then
+            logger.warn("sudoku: failed to finish game: " .. tostring(err))
+            return
+        end
+        if self.stats then
+            stats.add(self.stats, record)
+            self:persistStats()
+        end
+        self:deleteSave()
+    end
+    self:_showWinDialog()
+end
+
+function SudokuView:_showWinDialog()
+    if self._win_dialog then
+        UIManager:close(self._win_dialog)
+        self._win_dialog = nil
+    end
+    local record = self.game:final_record()
     if not record then
-        logger.warn("sudoku: failed to finish game: " .. tostring(err))
-        return
+        logger.warn("sudoku: attempted to show win dialog without a finished record")
+        record = {
+            duration = self.game:elapsed(),
+            mistakes = self.game:mistakes(),
+            hints = self.game:hints(),
+        }
     end
-    if self.stats then
-        stats.add(self.stats, record)
-        self:persistStats()
-    end
-    self:deleteSave()
     local dialog
-    dialog = MultiConfirmBox:new {
-        text = T(
+    local function close_all()
+        self._win_dialog = nil
+        UIManager:close(dialog)
+        UIManager:close(self, "flashui")
+    end
+    dialog = ButtonDialog:new {
+        title = T(
             _("Puzzle solved!\n\nTime: %1\nMistakes: %2\nHints: %3"),
-            format_time(record.duration),
-            tostring(record.mistakes),
-            tostring(#record.hints)
+            format_time(record.duration or 0),
+            tostring(record.mistakes or 0),
+            tostring(#(record.hints or {}))
         ),
-        cancel_text = _("Close"),
-        cancel_callback = function()
-            UIManager:close(dialog)
-            UIManager:close(self, "flashui")
-        end,
-        choice1_text = _("New game"),
-        choice1_callback = function()
-            local difficulty = self.game:difficulty()
-            UIManager:close(dialog)
-            UIManager:close(self, "flashui")
-            if self.new_game_cb then
-                self.new_game_cb(difficulty)
-            end
-        end,
-        choice2_text = _("Statistics"),
-        choice2_callback = function()
-            UIManager:close(dialog)
-            UIManager:close(self, "flashui")
-            if self.show_stats_cb then
-                self.show_stats_cb()
-            end
-        end,
+        buttons = {
+            {
+                {
+                    text = _("New game"),
+                    callback = function()
+                        self._win_dialog = nil
+                        UIManager:close(dialog)
+                        self:_openDifficultyPicker(function()
+                            self:_showWinDialog()
+                        end)
+                    end,
+                },
+                {
+                    text = _("Statistics"),
+                    callback = function()
+                        self:showStats(function()
+                            if self._win_dialog == dialog then
+                                self._win_dialog = nil
+                                UIManager:close(dialog)
+                            end
+                        end)
+                    end,
+                },
+            },
+            {
+                {
+                    text = _("Close"),
+                    callback = close_all,
+                },
+            },
+        },
+        tap_close_callback = close_all,
     }
+    self._win_dialog = dialog
     UIManager:show(dialog)
 end
 
@@ -1098,6 +1130,10 @@ end
 -- outside taps / Back, which MultiConfirmBox did not — the old pause menu
 -- stayed paused when dismissed by tapping outside).
 function SudokuView:openMenu()
+    if self.game:is_finished() then
+        self:_showWinDialog()
+        return
+    end
     self.game:pause()
     self.menu_open = true
     -- A key press right before the menu opened may have armed the notes
@@ -1123,7 +1159,9 @@ function SudokuView:openMenu()
                 {
                     text = _("Statistics"),
                     callback = function()
-                        self:showStats()
+                        self:showStats(function()
+                            UIManager:close(dialog)
+                        end)
                     end,
                 },
             },
@@ -1190,16 +1228,24 @@ function SudokuView:openMenu()
     UIManager:show(dialog)
 end
 
--- Opens the statistics screen on top of the open pause menu (the game stays
--- paused; closing the stats view reveals the pause menu again). "full":
--- like the Tools-menu path, the pause dialog stays open underneath, so the
--- new fullscreen page must refresh the whole screen itself.
-function SudokuView:showStats()
+-- Opens the statistics screen on top of the open pause menu or win dialog
+-- (closing the stats view reveals the previous screen again). "full":
+-- the previous view stays open underneath, so the new fullscreen page must
+-- refresh the whole screen itself.
+function SudokuView:showStats(parent_close_cb)
     self:updateStats(false)
     local statsview = require("ui.statsview")
     UIManager:show(
         statsview.dashboard(self.stats or stats.new(), {
-            replay_cb = self.replay_cb,
+            replay_cb = function(seed, difficulty)
+                if parent_close_cb then
+                    parent_close_cb()
+                end
+                UIManager:close(self, "flashui")
+                if self.replay_cb then
+                    self.replay_cb(seed, difficulty)
+                end
+            end,
         }),
         "full"
     )
@@ -1210,13 +1256,15 @@ function SudokuView:onSuspend()
     -- Key releases are dropped while the device sleeps, so a pending notes
     -- hold could never be invalidated by its release; drop it here instead.
     self:_invalidateNotesHold()
-    if self.save_path then
-        local ok, err = storage.save(self.save_path, self.game:serialize())
-        if not ok then
-            logger.warn("sudoku: failed to save on suspend: " .. tostring(err))
+    if not self.game:is_finished() then
+        if self.save_path then
+            local ok, err = storage.save(self.save_path, self.game:serialize())
+            if not ok then
+                logger.warn("sudoku: failed to save on suspend: " .. tostring(err))
+            end
         end
+        self:updateStats(true)
     end
-    self:updateStats(true)
     return true
 end
 

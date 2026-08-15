@@ -50,6 +50,16 @@ describe("sudoku view", function()
         return table.concat(chars)
     end
 
+    local function count_closed(list, widget)
+        local n = 0
+        for _, entry in ipairs(list) do
+            if entry == widget then
+                n = n + 1
+            end
+        end
+        return n
+    end
+
     local function new_game(puzzle, solution)
         local g, err = game.new {
             puzzle = board.from_string(puzzle),
@@ -537,57 +547,392 @@ describe("sudoku view", function()
         assert.is_nil(io.open(save_path, "rb"))
     end)
 
-    it("offers a new game and statistics on win", function()
+    it("offers a new game, statistics, and close on win", function()
         local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
-        local started, stats_requested
-        local view = new_view(new_game(puzzle, SOLUTION), {
-            new_game_cb = function(difficulty)
-                started = difficulty
-            end,
-            show_stats_cb = function()
-                stats_requested = true
-            end,
-        })
-        local dialog
+        local view = new_view(new_game(puzzle, SOLUTION))
+        local dialog, picker_dialog, stats_menu
         local UIManager = require("ui/uimanager")
         local original_show = UIManager.show
         local original_close = UIManager.close
         local closed = {}
-        local function count_closed(widget)
-            local n = 0
-            for _, entry in ipairs(closed) do
-                if entry == widget then
-                    n = n + 1
-                end
-            end
-            return n
-        end
         UIManager.show = function(_, widget)
-            if widget and widget.cancel_text then
+            if widget and widget.buttons and widget.title and widget.title:find("Puzzle solved", 1, true) then
+                dialog = widget
+            elseif widget and widget.buttons and widget.title and widget.title:find("Choose difficulty", 1, true) then
+                picker_dialog = widget
+            elseif widget and widget.item_table then
+                stats_menu = widget
+            end
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
+
+        assert.is_not_nil(dialog, "win must show a ButtonDialog")
+        assert.is_true(dialog.title:find("Puzzle solved", 1, true) ~= nil)
+        assert.are.equal("New game", dialog.buttons[1][1].text)
+        assert.are.equal("Statistics", dialog.buttons[1][2].text)
+        assert.are.equal("Close", dialog.buttons[2][1].text)
+
+        -- 1. Test "New game": opens difficulty picker
+        dialog.buttons[1][1].callback()
+        assert.is_not_nil(picker_dialog, "tapping New game opens difficulty picker")
+        assert.are.equal(dialog, closed[1], "the win dialog is closed before opening picker")
+
+        -- 2. Test cancelling difficulty picker re-opens win dialog
+        local cancel_button = picker_dialog.buttons[#picker_dialog.buttons][1]
+        assert.are.equal("Cancel", cancel_button.text)
+        dialog = nil
+        cancel_button.callback()
+        assert.is_not_nil(dialog, "cancelling picker re-shows win dialog")
+
+        -- 3. Test "Statistics": opens statsview without closing view
+        stats_menu = nil
+        dialog.buttons[1][2].callback()
+        assert.is_not_nil(stats_menu, "tapping Statistics opens dashboard")
+        assert.are.equal(0, count_closed(closed, view), "opening statistics must not close SudokuView")
+
+        -- 4. Test "Close" button closes dialog and view
+        dialog.buttons[2][1].callback()
+        assert.are.equal(1, count_closed(closed, view), "tapping Close closes SudokuView")
+    end)
+
+    it("is idempotent onWin and guards against stacking win dialogs", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local s = stats.new()
+        local view = new_view(new_game(puzzle, SOLUTION), {
+            stats = s,
+            save_path = save_path,
+            stats_path = stats_path,
+        })
+        local shown = {}
+        local closed = {}
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons and widget.title and widget.title:find("Puzzle solved", 1, true) then
+                shown[#shown + 1] = widget
+            end
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
+
+        assert.are.equal(1, #shown)
+        assert.are.equal(1, #s.games)
+        assert.are.equal("finished", s.games[1].status)
+
+        -- Fire onWin a second time
+        view:onWin()
+        assert.are.equal(2, #shown)
+        assert.are.equal(shown[1], closed[1], "first dialog is closed so dialogs never stack")
+        assert.are.equal(1, #s.games, "stats must not record game twice")
+    end)
+
+    it("closes dialog and view on outside-tap / Back (tap_close_callback) on win dialog", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local view = new_view(new_game(puzzle, SOLUTION))
+        local dialog
+        local closed = {}
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons and widget.title and widget.title:find("Puzzle solved", 1, true) then
                 dialog = widget
             end
         end
         UIManager.close = function(_, widget)
             closed[#closed + 1] = widget
         end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
         tap_button(view, "number_row", solution_cell(0, 3))
         tap_cell(view, 0, 3)
         tap_button(view, "number_row", solution_cell(8, 0))
         tap_cell(view, 8, 0)
-        assert.is_not_nil(dialog, "win must show a dialog")
-        assert.is_true(dialog.text:find("Puzzle solved", 1, true) ~= nil)
-        assert.are.equal("New game", dialog.choice1_text)
-        assert.are.equal("Statistics", dialog.choice2_text)
-        assert.is_nil(started)
-        dialog.choice1_callback()
-        assert.are.equal(dialog, closed[1], "the win dialog must be closed before starting a new game")
-        assert.are.equal("easy", started, "new game restarts at the same difficulty")
-        assert.is_nil(stats_requested)
-        dialog.choice2_callback()
-        assert.are.equal(2, count_closed(dialog), "the win dialog must be closed again before opening statistics")
-        assert.is_true(stats_requested, "statistics open from the win dialog")
-        UIManager.show = original_show
-        UIManager.close = original_close
+        assert.is_not_nil(dialog)
+
+        dialog.tap_close_callback()
+        assert.are.equal(dialog, closed[1], "tap_close_callback closes dialog")
+        assert.are.equal(view, closed[2], "tap_close_callback closes view")
+    end)
+
+    it("does not emit spurious log warnings when opening statistics on a finished game", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local s = stats.new()
+        local view = new_view(new_game(puzzle, SOLUTION), {
+            stats = s,
+            save_path = save_path,
+            stats_path = stats_path,
+        })
+        local logger = require("logger")
+        local warnings = {}
+        local original_warn = logger.warn
+        logger.warn = function(msg)
+            warnings[#warnings + 1] = msg
+        end
+        local dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons and widget.title and widget.title:find("Puzzle solved", 1, true) then
+                dialog = widget
+            end
+        end
+        finally(function()
+            logger.warn = original_warn
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
+        assert.is_not_nil(dialog)
+
+        dialog.buttons[1][2].callback() -- tap Statistics
+        for _, w in ipairs(warnings) do
+            assert.is_nil(w:find("game is already finished", 1, true), "no spurious warning on stats open: " .. w)
+        end
+    end)
+
+    it("replays game from win-dialog statistics screen and cleans up parent view and dialog", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local replayed_seed, replayed_difficulty
+        local s = stats.new()
+        local view = new_view(new_game(puzzle, SOLUTION), {
+            stats = s,
+            replay_cb = function(seed, difficulty)
+                replayed_seed = seed
+                replayed_difficulty = difficulty
+            end,
+        })
+        local shown_widgets = {}
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        local closed = {}
+        UIManager.show = function(_, widget)
+            shown_widgets[#shown_widgets + 1] = widget
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
+        local win_dialog = shown_widgets[1]
+        assert.is_not_nil(win_dialog)
+
+        win_dialog.buttons[1][2].callback()
+        local stats_menu = shown_widgets[2]
+        assert.is_not_nil(stats_menu)
+        assert.are.equal(0, count_closed(closed, view))
+
+        -- Find game history in stats_menu and replay
+        local history_item
+        for _, item in ipairs(stats_menu.item_table) do
+            if item.text and item.text:find("Game history", 1, true) then
+                history_item = item
+            end
+        end
+        assert.is_not_nil(history_item)
+
+        history_item.callback()
+        local history_menu = shown_widgets[3]
+        assert.is_not_nil(history_menu)
+        assert.is_true(#history_menu.item_table >= 1)
+
+        history_menu.item_table[1].callback()
+        local detail_view = shown_widgets[4]
+        assert.is_not_nil(detail_view)
+
+        -- Trigger "Play again"
+        assert.is_not_nil(detail_view.replay_cb)
+        detail_view.replay_cb(12345, "easy")
+        assert.are.equal(12345, replayed_seed)
+        assert.are.equal("easy", replayed_difficulty)
+        assert.are.equal(1, count_closed(closed, view), "replaying from stats must close old SudokuView")
+        assert.are.equal(1, count_closed(closed, win_dialog), "replaying from stats must close parent win dialog")
+    end)
+
+    it("replays game from pause-menu statistics screen and cleans up parent view and dialog", function()
+        local s = stats.new()
+        local id = assert(stats.reserve_id(s))
+        local replayed_seed, replayed_difficulty
+        local g = new_game(PUZZLE, SOLUTION, function()
+            return 1000
+        end)
+        g.id = id
+        local view = new_view(g, {
+            stats = s,
+            replay_cb = function(seed, difficulty)
+                replayed_seed = seed
+                replayed_difficulty = difficulty
+            end,
+        })
+        assert.is_true(g:place(0, 2, 4))
+        view:afterMove()
+
+        local shown_widgets = {}
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        local closed = {}
+        UIManager.show = function(_, widget)
+            shown_widgets[#shown_widgets + 1] = widget
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        view:openMenu()
+        local pause_dialog = shown_widgets[1]
+        assert.is_not_nil(pause_dialog)
+
+        pause_dialog.buttons[1][2].callback() -- tap Statistics
+        local stats_menu = shown_widgets[2]
+        assert.is_not_nil(stats_menu)
+
+        local history_item
+        for _, item in ipairs(stats_menu.item_table) do
+            if item.text and item.text:find("Game history", 1, true) then
+                history_item = item
+            end
+        end
+        assert.is_not_nil(history_item)
+
+        history_item.callback()
+        local history_menu = shown_widgets[3]
+        assert.is_not_nil(history_menu)
+        assert.is_true(#history_menu.item_table >= 1)
+
+        history_menu.item_table[1].callback()
+        local detail_view = shown_widgets[4]
+        assert.is_not_nil(detail_view)
+
+        -- Trigger "Play again"
+        assert.is_not_nil(detail_view.replay_cb)
+        detail_view.replay_cb(54321, "hard")
+        assert.are.equal(54321, replayed_seed)
+        assert.are.equal("hard", replayed_difficulty)
+        assert.are.equal(1, count_closed(closed, view), "replaying from stats must close old SudokuView")
+        assert.are.equal(1, count_closed(closed, pause_dialog), "replaying from stats must close parent pause dialog")
+    end)
+
+    it("starts selected difficulty when chosen from win dialog", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local started
+        local view = new_view(new_game(puzzle, SOLUTION), {
+            new_game_cb = function(difficulty)
+                started = difficulty
+            end,
+        })
+        local dialog, picker_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        local closed = {}
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons and widget.title and widget.title:find("Puzzle solved", 1, true) then
+                dialog = widget
+            elseif widget and widget.buttons and widget.title and widget.title:find("Choose difficulty", 1, true) then
+                picker_dialog = widget
+            end
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
+        assert.is_not_nil(dialog)
+
+        dialog.buttons[1][1].callback()
+        assert.is_not_nil(picker_dialog)
+
+        local hard_button
+        for _, row in ipairs(picker_dialog.buttons) do
+            for _, button in ipairs(row) do
+                if button.text == "Hard" then
+                    hard_button = button
+                end
+            end
+        end
+        assert.is_not_nil(hard_button)
+        hard_button.callback()
+        assert.are.equal("hard", started, "new game starts at chosen difficulty")
+    end)
+
+    it("re-opens win dialog when menu is tapped on a finished board", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local view = new_view(new_game(puzzle, SOLUTION))
+        local dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons and widget.title and widget.title:find("Puzzle solved", 1, true) then
+                dialog = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
+        assert.is_not_nil(dialog)
+
+        -- Tap menu again
+        dialog = nil
+        view:openMenu()
+        assert.is_not_nil(dialog, "openMenu on finished board re-shows win dialog")
     end)
 
     it("reveals a hint in three taps: name, pattern, apply", function()
@@ -869,6 +1214,36 @@ describe("sudoku view", function()
         assert.is_false(restored.timer.running, "the suspended game is saved paused")
     end)
 
+    it("does not re-save a finished game on suspend", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local s = stats.new()
+        local view = new_view(new_game(puzzle, SOLUTION), {
+            save_path = save_path,
+            stats = s,
+            stats_path = stats_path,
+        })
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function() end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
+        assert.is_true(view.game:is_finished())
+        assert.is_nil(io.open(save_path, "rb"), "winning deletes the save file")
+
+        -- Suspend the device while on the win screen
+        view:onSuspend()
+        assert.is_nil(io.open(save_path, "rb"), "suspend must not recreate the save file for a finished game")
+        assert.is_nil(storage.load(save_path))
+    end)
+
     it("resumes the timer when the pause menu is dismissed by tapping outside", function()
         local g = new_game(PUZZLE, SOLUTION)
         local view = new_view(g)
@@ -950,6 +1325,10 @@ describe("sudoku view", function()
         UIManager.close = function(_, widget)
             closed[#closed + 1] = widget
         end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
         view:openMenu()
         assert.is_not_nil(dialog)
         local new_game_button
@@ -993,8 +1372,6 @@ describe("sudoku view", function()
         assert.is_not_nil(hard_button, "picker offers Hard difficulty")
         hard_button.callback()
 
-        UIManager.show = original_show
-        UIManager.close = original_close
         assert.are.equal("hard", started, "new game starts at chosen difficulty")
     end)
 
@@ -1034,6 +1411,10 @@ describe("sudoku view", function()
                 confirm_box = widget
             end
         end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
         view:openMenu()
         assert.is_not_nil(dialog)
 
@@ -1051,8 +1432,6 @@ describe("sudoku view", function()
 
         -- Confirm reset
         confirm_box.ok_callback()
-        UIManager.show = original_show
-        UIManager.close = original_close
 
         assert.are.equal(0, g:get(0, 2), "board is reverted")
         assert.are.equal(0, g:get_notes(0, 3), "notes are cleared")
@@ -1087,6 +1466,10 @@ describe("sudoku view", function()
                 notified = widget.text
             end
         end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
         view:openMenu()
         assert.is_not_nil(dialog)
 
@@ -1113,9 +1496,6 @@ describe("sudoku view", function()
         fill_notes_button.callback()
         assert.is_not_nil(notified, "shows notification on conflict")
         assert.is_false(view.menu_open, "menu closes gracefully on error")
-
-        UIManager.show = original_show
-        UIManager.close = original_close
     end)
 
     it("prompts confirmation before giving up", function()
@@ -1133,6 +1513,10 @@ describe("sudoku view", function()
                 confirm_box = widget
             end
         end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
         view:openMenu()
         assert.is_not_nil(dialog)
 
@@ -1158,8 +1542,6 @@ describe("sudoku view", function()
         view:openMenu()
         give_up_button.callback()
         confirm_box.ok_callback()
-        UIManager.show = original_show
-        UIManager.close = original_close
         assert.is_true(g:is_finished(), "confirming finishes the game as give up")
     end)
 
@@ -1168,22 +1550,24 @@ describe("sudoku view", function()
         local view = new_view(g)
         local UIManager = require("ui/uimanager")
         local dialog
+        local shown, refreshtype
         local original_show = UIManager.show
-        UIManager.show = function(_, widget)
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget, mode)
             if widget and widget.buttons then
                 dialog = widget
+            elseif widget and widget.item_table then
+                shown = widget
+                refreshtype = mode
             end
         end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
         view:openMenu()
         assert.is_not_nil(dialog)
-        local shown
-        local refreshtype
-        UIManager.show = function(_, widget, mode)
-            shown = widget
-            refreshtype = mode
-        end
         dialog.buttons[1][2].callback()
-        UIManager.show = original_show
         assert.is_not_nil(shown, "Statistics must open the stats view")
         assert.is_not_nil(shown.item_table, "the stats dashboard is a menu")
         assert.are.equal("full", refreshtype, "the stats page must refresh the whole screen")

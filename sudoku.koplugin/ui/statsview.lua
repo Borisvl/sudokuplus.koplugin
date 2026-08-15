@@ -14,9 +14,7 @@ local Screen = Device.screen
 
 local statsview = {}
 
-local function format_time(seconds)
-    return util.format_time(seconds)
-end
+local format_time = util.format_time
 
 local function percent(fraction)
     return string.format("%d%%", math.floor((fraction or 0) * 100 + 0.5))

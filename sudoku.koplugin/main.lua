@@ -86,9 +86,6 @@ function Sudoku:_viewForGame(g, stats_data)
             new_game_cb = function(new_difficulty)
                 self:startGame(new_difficulty)
             end,
-            show_stats_cb = function()
-                self:showStatistics()
-            end,
             replay_cb = function(replay_seed, replay_difficulty)
                 self:replayGame(replay_seed, replay_difficulty)
             end,
@@ -235,12 +232,7 @@ function Sudoku:addToMainMenu(menu_items)
             {
                 text = _("Continue"),
                 enabled_func = function()
-                    local file = io.open(SAVE_PATH, "rb")
-                    if file then
-                        file:close()
-                        return true
-                    end
-                    return false
+                    return storage.exists(SAVE_PATH)
                 end,
                 callback = function()
                     self:continueGame()

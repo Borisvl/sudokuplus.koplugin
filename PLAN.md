@@ -898,5 +898,18 @@ Added requested features to the in-game pause menu:
 - [x] `l10n/sudoku.pot`, `l10n/de/sudoku.po`, `sudoku.mo`: extracted and compiled gettext translations for new menu and dialog strings
 - [x] `tests/unit/*_spec.lua`: comprehensive specs covering reset, bulk note filling & undo, no-op handling, conflict guards, stats lifecycle, difficulty picker, and confirmation flows
 
+### M10.2 — Post-game menu consistency and statistics navigation (done)
 
+Feedback:
+1. The post-game menu and the in-game menu button behaved differently on "New game" (post-game immediately restarted at the same difficulty instead of opening the difficulty picker).
+2. Opening statistics from the post-game menu and closing it caused the whole plugin to exit instead of returning to the previous screen.
 
+Changes:
+- **ButtonDialog on victory**: Converted post-game dialog from `MultiConfirmBox` to `ButtonDialog` with standard styling, matching the pause menu and difficulty picker.
+- **Difficulty selection on win**: Tapping "New game" opens `_openDifficultyPicker`, letting the player choose their difficulty for the next game or Cancel to return to the victory dialog.
+- **Persistent view on statistics**: Opening statistics from the post-game dialog keeps `SudokuView` on the stack so dismissing the statistics dashboard returns directly to the game/victory screen.
+- **Replay cleanup**: When a replay is started from within statistics, cleanly closes parent dialogs and views before launching the replayed game.
+- **Finished board menu wiring**: Tapping the toolbar "Menu" button on a finished puzzle re-opens the post-game dialog (`_showWinDialog`).
+
+- [x] `ui/sudokuview.lua`: Replaced `MultiConfirmBox` with `ButtonDialog` in `_showWinDialog` / `onWin`, wired difficulty picker to victory "New game", preserved view on `showStats`, handled parent dialog cleanup on replay, and routed finished game menu clicks to `_showWinDialog`.
+- [x] `tests/unit/sudoku_view_spec.lua`: Expanded specs to verify victory dialog options, difficulty picker launch and cancellation, stats dashboard navigation without view exit, replay cleanup, and finished board menu tap behavior.
