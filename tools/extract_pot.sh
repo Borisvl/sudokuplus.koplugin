@@ -25,6 +25,7 @@ find sudokuplus.koplugin -name "*.lua" -print0 | sort -z | xargs -0 "$XGETTEXT_B
     --keyword=NC_:1c,2,3 \
     --keyword=_ \
     --add-comments=@translators \
+    --no-wrap \
     --output="$TMP_FILE"
 
 POT_UPDATED=0
@@ -48,7 +49,7 @@ for po in "$OUTPUT_DIR"/*/*.po "$OUTPUT_DIR"/*.po; do
     [[ -f "$po" ]] || continue
 
     if [[ "$POT_UPDATED" -eq 1 && -n "$MSGMERGE_BIN" ]]; then
-        "$MSGMERGE_BIN" -q --backup=none --update "$po" "$OUTPUT_FILE"
+        "$MSGMERGE_BIN" -q --backup=none --no-wrap --update "$po" "$OUTPUT_FILE"
         printf "Merged %s with latest POT.\n" "$po"
     fi
 
