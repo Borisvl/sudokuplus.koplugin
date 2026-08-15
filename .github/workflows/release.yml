@@ -51,12 +51,19 @@ jobs:
       - name: Build Release Package
         run: ./tools/package_release.sh
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          name: ${{ inputs.tag || github.ref_name }}
-          body_path: release_notes.md
-          files: dist/sudokuplus.koplugin.zip
-          draft: false
-          prerelease: false
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists on GitHub. Updating notes and asset..."
+            gh release edit "$TAG" --title "$TAG" --notes-file release_notes.md
+            gh release upload "$TAG" dist/sudokuplus.koplugin.zip --clobber
+          else
+            echo "Creating new release $TAG..."
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file release_notes.md \
+              dist/sudokuplus.koplugin.zip
+          fi
