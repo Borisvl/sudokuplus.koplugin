@@ -38,9 +38,14 @@ jobs:
       - name: Install LuaJIT & Busted
         run: sudo apt-get update && sudo apt-get install -y luajit lua-busted
 
+      - name: Setup plugin directory symlink
+        run: |
+          mkdir -p plugins
+          ln -s ../sudokuplus.koplugin plugins/sudokuplus.koplugin
+
       - name: Run pure-Lua unit tests
         run: |
-          busted --lua=luajit --lpath="sudokuplus.koplugin/?.lua;;" \
+          busted --lua=luajit \
             tests/unit/sudoku_board_spec.lua \
             tests/unit/sudoku_candidates_spec.lua \
             tests/unit/sudoku_game_serialize_spec.lua \
