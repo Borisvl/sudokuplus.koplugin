@@ -20,7 +20,7 @@ every session and every agent working in this repository.
 
 ## Core library discipline
 
-- `sudoku.koplugin/core/` is pure Lua with **zero KOReader dependencies**
+- `sudokuplus.koplugin/core/` is pure Lua with **zero KOReader dependencies**
   (no `ui/`, no `UIManager`, no `Device`). It must be fully unit-testable
   headless.
 - Keep it deterministic: inject randomness (PRNG) and time instead of using
@@ -53,7 +53,7 @@ Every milestone must end with all of:
 
 ## Repository layout
 
-- `sudoku.koplugin/` — plugin source (deployed as-is to the device).
+- `sudokuplus.koplugin/` — plugin source (deployed as-is to the device).
 - `tests/unit/` — busted specs, symlinked into the (gitignored) koreader
   checkout's `spec/unit/` directory by the dev setup.
 - `third_party/` — dev dependencies (koreader checkout, pinned rustoku clone),

@@ -2,7 +2,7 @@ describe("sudoku theme", function()
     local theme
     setup(function()
         require("commonrequire")
-        package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
+        package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
         theme = require("ui.theme")
     end)
 

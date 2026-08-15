@@ -5,7 +5,7 @@
 local source = debug.getinfo(1, "S").source
 local script_path = source:sub(1, 1) == "@" and source:sub(2) or source
 local project_root = script_path:match("^(.*)/tools/[^/]+$") or "."
-package.path = project_root .. "/sudoku.koplugin/?.lua;" .. package.path
+package.path = project_root .. "/sudokuplus.koplugin/?.lua;" .. package.path
 
 local board = require("core.board")
 local generator = require("core.generator")

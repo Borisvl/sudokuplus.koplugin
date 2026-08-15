@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Dev helper for the Sudoku plugin.
+# Dev helper for the Sudoku+ plugin.
 #   ./dev.sh                build (incremental) and run the KOReader emulator
 #   ./dev.sh test [args...] run the busted specs (defaults to sudoku specs; pass --all for full frontend suite)
 #   ./dev.sh lint           luacheck + stylua --check
 #   ./dev.sh fmt            stylua (apply formatting)
-#   ./dev.sh pot            extract gettext strings into sudoku.koplugin/l10n/sudoku.pot
+#   ./dev.sh pot            extract gettext strings into sudokuplus.koplugin/l10n/sudokuplus.pot
 # Specs from tests/unit/ are symlinked into the (gitignored) koreader
 # checkout's spec/unit/ directory, mirroring the plugin symlink approach.
 set -euo pipefail
@@ -13,16 +13,18 @@ source env.sh
 
 PROJECT_ROOT="$(pwd)"
 KOREADER=third_party/koreader
-PLUGIN_SOURCE="$PROJECT_ROOT/sudoku.koplugin"
+PLUGIN_SOURCE="$PROJECT_ROOT/sudokuplus.koplugin"
 KOREADER_PLUGINS="$PROJECT_ROOT/$KOREADER/plugins"
 
 link_plugin() {
     local plugin_root="$1"
-    local plugin_link="$plugin_root/sudoku.koplugin"
+    local plugin_link="$plugin_root/sudokuplus.koplugin"
     if [[ -e "$plugin_link" && ! -L "$plugin_link" ]]; then
         printf 'refusing to replace non-symlink %s\n' "$plugin_link" >&2
         return 1
     fi
+    # Clean up old legacy link if present
+    rm -f "$plugin_root/sudoku.koplugin"
     ln -sfn "$PLUGIN_SOURCE" "$plugin_link"
 }
 
@@ -76,7 +78,7 @@ deploy_to_device() {
         return 1
     fi
     volume="${candidates[0]}"
-    local dest="$volume/.adds/koreader/plugins/sudoku.koplugin"
+    local dest="$volume/.adds/koreader/plugins/sudokuplus.koplugin"
 
     # Syntax gate: never land a file that fails to compile on the device.
     local luajit luajit_file
@@ -119,12 +121,12 @@ deploy_to_device() {
 
 case "${1:-}" in
     lint)
-        luacheck sudoku.koplugin/ tests/ tools/
-        stylua --check sudoku.koplugin/ tests/ tools/
+        luacheck sudokuplus.koplugin/ tests/ tools/
+        stylua --check sudokuplus.koplugin/ tests/ tools/
         exit 0
         ;;
     fmt)
-        stylua sudoku.koplugin/ tests/ tools/
+        stylua sudokuplus.koplugin/ tests/ tools/
         exit 0
         ;;
     pot)

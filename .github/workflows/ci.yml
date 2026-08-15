@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Code Quality (Luacheck & StyLua)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Lua & Luarocks
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "luajit-openresty"
+
+      - name: Setup Luarocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install Luacheck
+        run: luarocks install luacheck
+
+      - name: Check StyLua formatting
+        uses: JohnnyMorganz/stylua-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --check sudokuplus.koplugin/ tests/ tools/
+
+      - name: Run Luacheck
+        run: luacheck sudokuplus.koplugin/ tests/ tools/
+
+  test-core:
+    name: Unit Tests (Headless Busted)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Lua & Luarocks
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "luajit-openresty"
+
+      - name: Setup Luarocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install Busted
+        run: luarocks install busted
+
+      - name: Run pure-Lua unit tests
+        run: |
+          busted --lua=luajit --lpath="sudokuplus.koplugin/?.lua;;" \
+            tests/unit/sudoku_board_spec.lua \
+            tests/unit/sudoku_candidates_spec.lua \
+            tests/unit/sudoku_game_serialize_spec.lua \
+            tests/unit/sudoku_game_spec.lua \
+            tests/unit/sudoku_generator_game_spec.lua \
+            tests/unit/sudoku_generator_spec.lua \
+            tests/unit/sudoku_hints_spec.lua \
+            tests/unit/sudoku_json_spec.lua \
+            tests/unit/sudoku_layout_spec.lua \
+            tests/unit/sudoku_masks_spec.lua \
+            tests/unit/sudoku_prng_spec.lua \
+            tests/unit/sudoku_smoke_spec.lua \
+            tests/unit/sudoku_solve_path_spec.lua \
+            tests/unit/sudoku_solver_spec.lua \
+            tests/unit/sudoku_stats_spec.lua \
+            tests/unit/sudoku_storage_spec.lua \
+            tests/unit/sudoku_technique_*.lua \
+            tests/unit/sudoku_techniques_*.lua \
+            tests/unit/sudoku_util_spec.lua

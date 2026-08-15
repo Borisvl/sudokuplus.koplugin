@@ -1,4 +1,4 @@
-package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
+package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local flags = require("core.techniques.flags")
 local solve_path = require("core.solve_path")

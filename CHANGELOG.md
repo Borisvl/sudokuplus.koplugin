@@ -1,0 +1,40 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2026-08-15
+
+Initial release of **Sudoku+** (`sudokuplus.koplugin`), a full-featured, logical Sudoku puzzle game and tutor for KOReader.
+
+### Added
+- **17 Logical Solving Techniques**: Complete human-technique solver ported from `rustoku` / HoDoKu logic, including Naked/Hidden Singles, Pairs, Triples, Quads, Locked Candidates, X-Wing, Swordfish, Jellyfish, Skyscraper, W-Wing, XY-Wing, XYZ-Wing, and Alternating Inference Chains (AIC).
+- **Human-Grade Puzzle Generator**:
+  - 6 balanced difficulty tiers: Beginner, Easy, Medium, Hard, Master, and Expert.
+  - 5 grid symmetry modes (Rotational 180°, Rotational 90°, Diagonal, Horizontal, Vertical) plus asymmetric generation.
+  - Guarantee of unique solutions solvable with pure deduction (zero guessing required).
+- **Progressive 3-Stage Hint Engine**:
+  - Step 1: Technique Identification & Explanation (e.g. "Skyscraper on candidate 5 in rows 2 and 7").
+  - Step 2: Visual Highlight (highlights base cells, pincers, and candidate eliminations on the grid).
+  - Step 3: Action Execution (applies the deduction directly to notes or fills the cell).
+- **E-Ink Refresh Engine**:
+  - Flicker-free partial refresh pipeline with per-cell dirty region bounding.
+  - Dedicated `"ui"` hardware refresh modes avoiding unnecessary full-screen flashes during gameplay.
+  - High-contrast, clean typography tailored for Kobo, Kindle, PocketBook, and Android e-readers.
+- **Rich Analytics & Game History**:
+  - Complete player dashboard: games played, win rate, best/average times, current & best streaks, mistake counters, and most-missed technique insights.
+  - Interactive game history browser with miniature board visualizations.
+  - Seed-based puzzle replay system to retry specific boards or share puzzles.
+- **Quality-of-Life Controls**:
+  - Pen & Pencil note-taking modes with automatic note pruning upon digit placement.
+  - "Auto-fill notes" helper setting.
+  - Live rule-violation detection & on-demand "Check Board" solver verification.
+  - Full Undo / Redo history stack.
+- **Internationalization (i18n)**:
+  - Complete gettext catalog (`sudokuplus.pot`) with English and German (`de`) translations out of the box.
+- **Open-Source Tooling**:
+  - Comprehensive test suite (46 suites: 39 pure-Lua headless + 7 KOReader integration specs).
+  - Automated CI (Luacheck + StyLua + Busted).
+  - Release packager script generating clean, install-ready `.zip` archives.

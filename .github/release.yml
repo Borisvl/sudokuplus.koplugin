@@ -1,0 +1,20 @@
+changelog:
+  categories:
+    - title: "🚀 Features & Gameplay"
+      labels:
+        - "feature"
+        - "enhancement"
+    - title: "🐛 Bug Fixes & Stability"
+      labels:
+        - "fix"
+        - "bug"
+    - title: "🌐 Translations & Localization"
+      labels:
+        - "l10n"
+        - "i18n"
+        - "translation"
+    - title: "🛠️ Development & Maintenance"
+      labels:
+        - "chore"
+        - "ci"
+        - "documentation"

@@ -14,4 +14,4 @@ third_party/
 *.log
 *~
 *.po~
-messages.mo
+dist/

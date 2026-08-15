@@ -19,13 +19,13 @@ local statsview = require("ui.statsview")
 local SudokuView = require("ui.sudokuview")
 
 local Sudoku = WidgetContainer:extend {
-    name = "sudoku",
+    name = "sudokuplus",
     is_doc_only = false,
 }
 
-local SAVE_PATH = DataStorage:getDataDir() .. "/sudoku_save"
-local STATS_PATH = DataStorage:getDataDir() .. "/sudoku_stats"
-local AUTOFILL_SETTING = "sudoku_autofill_notes"
+local SAVE_PATH = DataStorage:getDataDir() .. "/sudokuplus_save"
+local STATS_PATH = DataStorage:getDataDir() .. "/sudokuplus_stats"
+local AUTOFILL_SETTING = "sudokuplus_autofill_notes"
 
 -- Puzzle-generation seed from the wall clock at millisecond resolution.
 -- os.time() alone has one-second granularity, so back-to-back games would
@@ -43,12 +43,12 @@ local function load_plugin_translations(plugin_path)
         lang = G_reader_settings and G_reader_settings:readSetting("language")
     end
     if lang and lang ~= "C" and not lang:match("^en") then
-        local base_path = plugin_path or "plugins/sudoku.koplugin"
+        local base_path = plugin_path or "plugins/sudokuplus.koplugin"
         local candidates = { lang, lang:match("^([a-z]+)") }
         for idx = 1, #candidates do
             local l = candidates[idx]
             if l then
-                local mo = base_path .. "/l10n/" .. l .. "/sudoku.mo"
+                local mo = base_path .. "/l10n/" .. l .. "/sudokuplus.mo"
                 if _.loadMO and _.loadMO(mo) then
                     break
                 end
@@ -235,8 +235,8 @@ function Sudoku:addToMainMenu(menu_items)
             end,
         }
     end
-    menu_items.sudoku = {
-        text = _("Sudoku"),
+    menu_items.sudokuplus = {
+        text = _("Sudoku+"),
         sorting_hint = "more_tools",
         sub_item_table = {
             {

@@ -1,4 +1,4 @@
-package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
+package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local board = require("core.board")
 local candidates = require("core.candidates")

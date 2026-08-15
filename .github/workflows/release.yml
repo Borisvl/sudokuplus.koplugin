@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag version (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build & Publish Release Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install gettext
+        run: sudo apt-get update && sudo apt-get install -y gettext
+
+      - name: Extract Changelog Section
+        id: changelog
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [[ -n "${{ github.event.inputs.tag }}" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "Extracting release notes for version $VERSION from CHANGELOG.md..."
+          
+          # Extract section between "## [VERSION]" and next "## ["
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && /^## \\[/ { found=0 }
+            found { print }
+          ' CHANGELOG.md > release_notes.md || true
+
+          if [[ ! -s release_notes.md ]]; then
+            echo "No custom changelog entry found, defaulting to automated notes."
+            rm -f release_notes.md
+          fi
+
+      - name: Build Release Package
+        run: ./tools/package_release.sh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: ${{ inputs.tag || github.ref_name }}
+          body_path: ${{ hashFiles('release_notes.md') != '' && 'release_notes.md' || '' }}
+          generate_release_notes: ${{ hashFiles('release_notes.md') == '' }}
+          files: dist/sudokuplus.koplugin.zip
+          draft: false
+          prerelease: false

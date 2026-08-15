@@ -1,4 +1,4 @@
-package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
+package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 describe("sudoku localization", function()
     local _
@@ -107,16 +107,16 @@ describe("sudoku localization", function()
     end)
 
     describe("POT catalog coverage", function()
-        it("contains all critical gettext msgids in plugins/sudoku.koplugin/l10n/sudoku.pot", function()
-            local file = io.open("plugins/sudoku.koplugin/l10n/sudoku.pot", "rb")
-                or io.open("sudoku.koplugin/l10n/sudoku.pot", "rb")
-            assert.is_not_nil(file, "sudoku.pot must exist and be readable")
+        it("contains all critical gettext msgids in plugins/sudokuplus.koplugin/l10n/sudokuplus.pot", function()
+            local file = io.open("plugins/sudokuplus.koplugin/l10n/sudokuplus.pot", "rb")
+                or io.open("sudokuplus.koplugin/l10n/sudokuplus.pot", "rb")
+            assert.is_not_nil(file, "sudokuplus.pot must exist and be readable")
             local content = file:read("*a")
             file:close()
 
             local required_msgids = {
-                "Sudoku",
-                "A Sudoku puzzle game for e-ink readers.",
+                "Sudoku+",
+                "A logical Sudoku puzzle game and tutor for e-ink readers.",
                 "Beginner",
                 "Easy",
                 "Medium",
@@ -174,8 +174,8 @@ describe("sudoku localization", function()
             _G.G_reader_settings = saved_G_reader_settings
         end)
 
-        it("loads and applies German translations from sudoku.mo and parses plural headers", function()
-            local mo_path = "plugins/sudoku.koplugin/l10n/de/sudoku.mo"
+        it("loads and applies German translations from sudokuplus.mo and parses plural headers", function()
+            local mo_path = "plugins/sudokuplus.koplugin/l10n/de/sudokuplus.mo"
             local loaded = _.loadMO(mo_path)
             assert.is_true(loaded, "German MO file should load cleanly")
 
@@ -230,7 +230,7 @@ describe("sudoku localization", function()
             }
 
             Sudoku:new {
-                path = "plugins/sudoku.koplugin",
+                path = "plugins/sudokuplus.koplugin",
                 ui = {
                     menu = {
                         registerToMainMenu = function() end,

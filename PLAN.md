@@ -1075,10 +1075,31 @@ deduplicates shared pure helpers into `core/util.lua`, and completes l10n catalo
 - [x] `tests/unit/sudoku_game_serialize_spec.lua`: test `game_serialize` directly, verify v1 rejection, remove tautology
 - [x] `tests/unit/sudoku_stats_spec.lua`: verify rejection of v1 stats
 - [x] `tests/unit/sudoku_statsview_spec.lua` & `tests/unit/sudoku_menu_spec.lua`: updated test fixtures
-- [x] `sudoku.koplugin/l10n/`: extract gettext catalog and compile German translations
+- [x] `sudokuplus.koplugin/l10n/`: extract gettext catalog and compile German translations
 
 **Exit criteria**: all 46 test suites green via `./dev.sh test`, `./dev.sh lint` clean (0 warnings / 0 errors),
 `./dev.sh fmt` clean, `./dev.sh pot` up to date, PLAN.md and README.md updated.
+
+### M13 — Open-Source Release Preparation (Sudoku+)
+
+Rebrand plugin as **Sudoku+** (`sudokuplus.koplugin`), isolate storage namespaces, set up AGPL-3.0 licensing with rustoku MIT attribution, configure GitHub Actions CI/CD workflows, add community templates, overhaul documentation, and add release packaging tooling.
+
+- [x] Rename root plugin folder to `sudokuplus.koplugin/`
+- [x] Update `_meta.lua` (`fullname = _("Sudoku+")`, description)
+- [x] Update `main.lua` container name, menu item, save/stats storage paths (`sudokuplus_save`, `sudokuplus_stats`), settings key (`sudokuplus_autofill_notes`), and translation loader
+- [x] Update test suites in `tests/unit/*_spec.lua` to reference `plugins/sudokuplus.koplugin`
+- [x] Update `dev.sh` and `tools/extract_pot.sh` paths and packaging
+- [x] Create `LICENSE` (AGPL-3.0 with rustoku MIT copyright & HoDoKu notices)
+- [x] Create release packager script `tools/package_release.sh`
+- [x] Create GitHub Actions CI workflow `.github/workflows/ci.yml` (Luacheck + StyLua + Busted)
+- [x] Create GitHub Actions Release workflow `.github/workflows/release.yml` with automatic changelog extraction
+- [x] Create GitHub release note config `.github/release.yml`, Issue Templates, and PR Template
+- [x] Create `CHANGELOG.md` (v1.0.0 initial release)
+- [x] Create `CONTRIBUTING.md` (developer & translation guidelines)
+- [x] Create `doc/screenshots/README.md`
+- [x] Overhaul `README.md` for open-source users & developers
+
+**Exit criteria**: all 46 specs green (`./dev.sh test`), `./dev.sh lint` clean (0 warnings / 0 errors), `./dev.sh pot` up to date, package script creates clean `sudokuplus.koplugin.zip`, documentation complete.
 
 ---
 

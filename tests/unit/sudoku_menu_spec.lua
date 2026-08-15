@@ -1,4 +1,4 @@
-package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
+package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 describe("sudoku plugin menu", function()
     local DataStorage
@@ -9,7 +9,7 @@ describe("sudoku plugin menu", function()
     local save_path
 
     local function item_with(text)
-        for _, item in ipairs(menu_items.sudoku.sub_item_table) do
+        for _, item in ipairs(menu_items.sudokuplus.sub_item_table) do
             if item.text == text then
                 return item
             end
@@ -40,7 +40,7 @@ describe("sudoku plugin menu", function()
         Sudoku = require("main")
         menu_items = {}
         Sudoku:addToMainMenu(menu_items)
-        save_path = DataStorage:getDataDir() .. "/sudoku_save"
+        save_path = DataStorage:getDataDir() .. "/sudokuplus_save"
         os.remove(save_path)
     end)
 
@@ -52,11 +52,11 @@ describe("sudoku plugin menu", function()
         created_baks = {}
     end)
 
-    it("registers a Sudoku submenu with continue, new-game, statistics and the notes toggle", function()
-        assert.is_not_nil(menu_items.sudoku)
-        assert.is_table(menu_items.sudoku.sub_item_table)
+    it("registers a Sudoku+ submenu with continue, new-game, statistics and the notes toggle", function()
+        assert.is_not_nil(menu_items.sudokuplus)
+        assert.is_table(menu_items.sudokuplus.sub_item_table)
         local texts = {}
-        for _, item in ipairs(menu_items.sudoku.sub_item_table) do
+        for _, item in ipairs(menu_items.sudokuplus.sub_item_table) do
             texts[#texts + 1] = item.text
         end
         assert.are.same({ "Continue", "New game", "Statistics", "Auto-fill notes" }, texts)
@@ -429,22 +429,22 @@ describe("sudoku plugin menu", function()
                 {
                     icon = "resources/icons/mdlight/appbar.tools.svg",
                     text = "Tools",
-                    sub_item_table = menu_items.sudoku.sub_item_table,
+                    sub_item_table = menu_items.sudokuplus.sub_item_table,
                 },
             },
         }
-        menu.item_table = menu_items.sudoku.sub_item_table
+        menu.item_table = menu_items.sudokuplus.sub_item_table
         menu:updateItems(1)
         assert.is_not_nil(menu)
     end)
 
     it("flips the auto-fill notes setting through the toggle", function()
-        G_reader_settings:saveSetting("sudoku_autofill_notes", false)
+        G_reader_settings:saveSetting("sudokuplus_autofill_notes", false)
         local toggle = item_with("Auto-fill notes")
         assert.is_false(toggle.checked_func())
         toggle.callback()
-        assert.is_true(G_reader_settings:isTrue("sudoku_autofill_notes"))
+        assert.is_true(G_reader_settings:isTrue("sudokuplus_autofill_notes"))
         toggle.callback()
-        assert.is_false(G_reader_settings:isTrue("sudoku_autofill_notes"))
+        assert.is_false(G_reader_settings:isTrue("sudokuplus_autofill_notes"))
     end)
 end)
