@@ -52,14 +52,31 @@ describe("sudoku plugin menu", function()
         created_baks = {}
     end)
 
-    it("registers a Sudoku+ submenu with continue, new-game, statistics and the notes toggle", function()
+    it("registers a Sudoku+ submenu with continue, new-game, statistics, help, and the notes toggle", function()
         assert.is_not_nil(menu_items.sudokuplus)
         assert.is_table(menu_items.sudokuplus.sub_item_table)
         local texts = {}
         for _, item in ipairs(menu_items.sudokuplus.sub_item_table) do
             texts[#texts + 1] = item.text
         end
-        assert.are.same({ "Continue", "New game", "Statistics", "Auto-fill notes" }, texts)
+        assert.are.same({ "Continue", "New game", "Statistics", "Help", "Auto-fill notes" }, texts)
+    end)
+
+    it("opens help menu via Help item", function()
+        local help_item = item_with("Help")
+        assert.is_not_nil(help_item)
+        assert.is_true(help_item.keep_menu_open)
+        local shown_widget
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            shown_widget = widget
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+        help_item.callback()
+        assert.is_not_nil(shown_widget)
     end)
 
     it("offers all six difficulties under New game", function()

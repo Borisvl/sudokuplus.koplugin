@@ -1573,6 +1573,43 @@ describe("sudoku view", function()
         assert.are.equal("full", refreshtype, "the stats page must refresh the whole screen")
     end)
 
+    it("opens the help menu from the pause menu", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        local view = new_view(g)
+        local UIManager = require("ui/uimanager")
+        local dialog
+        local shown, refreshtype
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget, mode)
+            if widget and widget.buttons then
+                dialog = widget
+            elseif widget and widget.item_table then
+                shown = widget
+                refreshtype = mode
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+        view:openMenu()
+        assert.is_not_nil(dialog)
+        local help_button
+        for _, row in ipairs(dialog.buttons) do
+            for _, button in ipairs(row) do
+                if button.text == "Help" then
+                    help_button = button
+                end
+            end
+        end
+        assert.is_not_nil(help_button, "pause menu offers Help")
+        help_button.callback()
+        assert.is_not_nil(shown, "Help must open the help menu")
+        assert.is_not_nil(shown.item_table, "the help widget is a menu")
+        assert.are.equal("full", refreshtype, "the help page must refresh the whole screen")
+    end)
+
     describe("refresh modes and regions", function()
         local UIManager
         local calls

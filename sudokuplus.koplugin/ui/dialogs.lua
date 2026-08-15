@@ -7,6 +7,7 @@ local T = require("ffi/util").template
 local _ = require("gettext")
 
 local difficulties = require("ui.difficulties")
+local help = require("ui.help")
 local messages = require("ui.messages")
 local stats = require("stats")
 local util = require("core.util")
@@ -280,6 +281,14 @@ function dialogs.open_menu(view)
                     end,
                 },
                 {
+                    text = _("Help"),
+                    callback = function()
+                        help.show_menu()
+                    end,
+                },
+            },
+            {
+                {
                     text = _("Give up"),
                     callback = function()
                         UIManager:close(dialog)
@@ -288,8 +297,6 @@ function dialogs.open_menu(view)
                         end)
                     end,
                 },
-            },
-            {
                 {
                     text = _("Quit"),
                     callback = function()

@@ -32,9 +32,13 @@ Initial release of **Sudoku+** (`sudokuplus.koplugin`), a full-featured, logical
   - "Auto-fill notes" helper setting.
   - Live rule-violation detection & on-demand "Check Board" solver verification.
   - Full Undo / Redo history stack.
+- **Interactive In-Game & Menu Help Section**:
+  - Structured, two-topic guide ("How to play & controls", "Features, hints & tools") with rich Markdown formatting (`text_format = "md"`).
+  - Accessible directly from both the main KOReader Tools menu and the in-game pause dialog.
+  - Explains number-first input, notes mode, long-press gestures, matching digit highlights, hardware key navigation, 3-step hints, conflict detection, auto-clean, difficulty tiers, and statistics.
 - **Internationalization (i18n)**:
   - Complete gettext catalog (`sudokuplus.pot`) with English and German (`de`) translations out of the box.
 - **Open-Source Tooling**:
-  - Comprehensive test suite (46 suites: 39 pure-Lua headless + 7 KOReader integration specs).
+  - Comprehensive test suite (47 suites: 39 pure-Lua headless + 8 KOReader integration specs).
   - Automated CI (Luacheck + StyLua + Busted).
   - Release packager script generating clean, install-ready `.zip` archives.

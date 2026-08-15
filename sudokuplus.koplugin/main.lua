@@ -15,6 +15,7 @@ local prng = require("core.prng")
 local stats = require("stats")
 local storage = require("storage")
 local util = require("core.util")
+local help = require("ui.help")
 local statsview = require("ui.statsview")
 local SudokuView = require("ui.sudokuview")
 
@@ -257,6 +258,13 @@ function Sudoku:addToMainMenu(menu_items)
                 keep_menu_open = true,
                 callback = function()
                     self:showStatistics()
+                end,
+            },
+            {
+                text = _("Help"),
+                keep_menu_open = true,
+                callback = function()
+                    help.show_menu()
                 end,
             },
             {

@@ -1101,6 +1101,25 @@ Rebrand plugin as **Sudoku+** (`sudokuplus.koplugin`), isolate storage namespace
 
 **Exit criteria**: all 46 specs green (`./dev.sh test`), `./dev.sh lint` clean (0 warnings / 0 errors), `./dev.sh pot` up to date, package script creates clean `sudokuplus.koplugin.zip`, documentation complete.
 
+### M13.1 — In-Game & Menu Help Section (How to use it)
+
+Adds a structured, localized Help section explaining game usage, controls, gestures, assistance tools, and difficulty tiers, accessible from both the main KOReader Tools menu and the in-game pause menu:
+
+- **Help module architecture (`ui/help.lua`)**: Modular catalog with 2 focused topics ("How to play & controls", "Features, hints & tools") rendering rich Markdown via native KOReader `Menu` and scrollable `TextViewer` (`text_format = "md"`). Designed for future expansion into solving tactics and strategies.
+- **Controls & Input Guide**: Explains Sudoku objectives, number-first pen mode (arm/place/erase/replace/disarm), Notes mode, quick mode-flip long-press gesture (~0.5s), matching digit highlighting, and hardware button shortcuts (page-turn/arrow cycling, completed digit skipping, hold for notes toggle).
+- **Features & Tools Guide**: Explains 3-step progressive hints, conflict vs. check-board mistake detection, smart auto-clean, fill all notes, undo/redo, puzzle reset, 6 difficulty tiers (Beginner–Expert), and statistics/history replay.
+- **Menu integration**: Added "Help" to the main Tools → Sudoku+ menu (with `keep_menu_open`) and to the in-game pause menu (Row 3 beside "Fill all notes", balancing the pause dialog into 4 rows of 2 buttons).
+- **Localization**: Full German translations in `l10n/de/sudokuplus.po` compiled to `.mo` with dynamic runtime translation support.
+
+- [x] `sudokuplus.koplugin/ui/help.lua`: Topic catalog, formatted Markdown getters, `Menu` builder, and `TextViewer` presenter.
+- [x] `sudokuplus.koplugin/ui/dialogs.lua`: In-game pause menu updated with Help button on Row 3 and balanced 4×2 grid layout.
+- [x] `sudokuplus.koplugin/main.lua`: Main menu registered with Help entry opening help menu.
+- [x] `sudokuplus.koplugin/l10n/`: Updated POT template and compiled German translation catalog with 0 fuzzy entries.
+- [x] `tests/unit/sudoku_help_spec.lua`: Comprehensive unit tests covering topic definitions, markdown content retrieval, menu construction, and TextViewer invocation.
+- [x] `tests/unit/sudoku_menu_spec.lua` & `tests/unit/sudoku_view_spec.lua`: Updated menu and pause dialog tests.
+
+**Exit criteria**: all 47 test suites green via `./dev.sh test`, `./dev.sh lint` clean (0 warnings / 0 errors), `./dev.sh fmt` clean, `./dev.sh pot` up to date.
+
 ---
 
 ## Variant roadmap (Sudoku X + Killer Sudoku)

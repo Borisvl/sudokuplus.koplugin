@@ -9,6 +9,7 @@ describe("sudoku localization", function()
     local messages
     local difficulties
     local status
+    local help
     local Sudoku
 
     setup(function()
@@ -21,6 +22,7 @@ describe("sudoku localization", function()
         messages = require("ui.messages")
         difficulties = require("ui.difficulties")
         status = require("ui.status")
+        help = require("ui.help")
         Sudoku = require("main")
     end)
 
@@ -174,6 +176,15 @@ describe("sudoku localization", function()
             _G.G_reader_settings = saved_G_reader_settings
         end)
 
+        it("contains no fuzzy translations in the German PO file", function()
+            local po_path = "plugins/sudokuplus.koplugin/l10n/de/sudokuplus.po"
+            local f = io.open(po_path, "r")
+            assert.is_not_nil(f, "German PO file must exist")
+            local content = f:read("*all")
+            f:close()
+            assert.is_nil(content:find("#, fuzzy", 1, true), "PO file must not contain unverified fuzzy entries")
+        end)
+
         it("loads and applies German translations from sudokuplus.mo and parses plural headers", function()
             local mo_path = "plugins/sudokuplus.koplugin/l10n/de/sudokuplus.mo"
             local loaded = _.loadMO(mo_path)
@@ -214,6 +225,15 @@ describe("sudoku localization", function()
                 messages.translate("action is stale")
             )
 
+            -- Help topic titles and body localization
+            local help_topics = help.topics()
+            assert.are.equal("Spielregeln & Steuerung", help_topics[1].title)
+            assert.are.equal("Funktionen, Tipps & Werkzeuge", help_topics[2].title)
+            local features_text = help.get_text("features")
+            assert.is_not_nil(features_text:find("Gesperrte Kandidaten", 1, true))
+            assert.is_not_nil(features_text:find("Nackte Dreier und Versteckte Dreier", 1, true))
+            assert.is_not_nil(features_text:find("übersehene Strategie", 1, true))
+
             -- Plural forms
             assert.are.equal("1 falsche Zelle gefunden.", T(N_("1 wrong cell found.", "%1 wrong cells found.", 1), 1))
             assert.are.equal("3 falsche Zellen gefunden.", T(N_("1 wrong cell found.", "%1 wrong cells found.", 3), 3))
@@ -241,6 +261,8 @@ describe("sudoku localization", function()
             assert.are.equal("Nackte Einer", techniques.label("naked_singles"))
             assert.are.equal("Anfänger", difficulties.label("beginner"))
             assert.are.equal("Erneut spielen", _("Play again"))
+            assert.are.equal("Spielregeln & Steuerung", help.topics()[1].title)
+            assert.are.equal("Funktionen, Tipps & Werkzeuge", help.topics()[2].title)
         end)
     end)
 end)

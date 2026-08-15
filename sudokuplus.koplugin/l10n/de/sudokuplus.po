@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sudokuplus\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 14:24+0200\n"
+"POT-Creation-Date: 2026-08-15 16:26+0200\n"
 "PO-Revision-Date: 2026-08-15 14:45+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: sudokuplus.koplugin/_meta.lua:3 sudokuplus.koplugin/main.lua:239
+#: sudokuplus.koplugin/_meta.lua:3 sudokuplus.koplugin/main.lua:240
 msgid "Sudoku+"
 msgstr "Sudoku+"
 
@@ -24,55 +24,59 @@ msgstr "Sudoku+"
 msgid "A logical Sudoku puzzle game and tutor for e-ink readers."
 msgstr "Ein logisches Sudoku-Rätselspiel und Tutor für E-Reader."
 
-#: sudokuplus.koplugin/main.lua:108
+#: sudokuplus.koplugin/main.lua:109
 msgid "Generating…"
 msgstr "Wird generiert…"
 
-#: sudokuplus.koplugin/main.lua:119
+#: sudokuplus.koplugin/main.lua:120
 msgid "Failed to generate a Sudoku puzzle."
 msgstr "Sudoku-Rätsel konnte nicht generiert werden."
 
-#: sudokuplus.koplugin/main.lua:153
+#: sudokuplus.koplugin/main.lua:154
 msgid "Failed to start a game."
 msgstr "Spiel konnte nicht gestartet werden."
 
-#: sudokuplus.koplugin/main.lua:173
+#: sudokuplus.koplugin/main.lua:174
 msgid "This game cannot be replayed (no reproduction seed)."
 msgstr ""
 "Dieses Spiel kann nicht wiederholt werden (kein Replay-Seed vorhanden)."
 
-#: sudokuplus.koplugin/main.lua:191
+#: sudokuplus.koplugin/main.lua:192
 msgid "The save was corrupted; a backup was kept at %1"
 msgstr ""
 "Der Spielstand war beschädigt; eine Sicherungskopie wurde erstellt unter %1"
 
-#: sudokuplus.koplugin/main.lua:195
+#: sudokuplus.koplugin/main.lua:196
 msgid "Failed to restore the saved game."
 msgstr "Gespeichertes Spiel konnte nicht wiederhergestellt werden."
 
-#: sudokuplus.koplugin/main.lua:199
+#: sudokuplus.koplugin/main.lua:200
 msgid "No saved game found."
 msgstr "Kein gespeichertes Spiel gefunden."
 
-#: sudokuplus.koplugin/main.lua:243
+#: sudokuplus.koplugin/main.lua:244
 msgid "Continue"
 msgstr "Fortsetzen"
 
-#: sudokuplus.koplugin/main.lua:252 sudokuplus.koplugin/ui/dialogs.lua:67
-#: sudokuplus.koplugin/ui/dialogs.lua:249
+#: sudokuplus.koplugin/main.lua:253 sudokuplus.koplugin/ui/dialogs.lua:68
+#: sudokuplus.koplugin/ui/dialogs.lua:250
 msgid "New game"
 msgstr "Neues Spiel"
 
-#: sudokuplus.koplugin/main.lua:256 sudokuplus.koplugin/ui/dialogs.lua:77
-#: sudokuplus.koplugin/ui/dialogs.lua:239
+#: sudokuplus.koplugin/main.lua:257 sudokuplus.koplugin/ui/dialogs.lua:78
+#: sudokuplus.koplugin/ui/dialogs.lua:240
 msgid "Statistics"
 msgstr "Statistiken"
 
-#: sudokuplus.koplugin/main.lua:263
+#: sudokuplus.koplugin/main.lua:264 sudokuplus.koplugin/ui/dialogs.lua:284
+msgid "Help"
+msgstr "Hilfe"
+
+#: sudokuplus.koplugin/main.lua:271
 msgid "Auto-fill notes"
 msgstr "Notizen automatisch ausfüllen"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:59
+#: sudokuplus.koplugin/ui/dialogs.lua:60
 msgid ""
 "Puzzle solved!\n"
 "\n"
@@ -86,55 +90,55 @@ msgstr ""
 "Fehler: %2\n"
 "Tipps: %3"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:90
+#: sudokuplus.koplugin/ui/dialogs.lua:91
 msgid "Close"
 msgstr "Schließen"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:127
-#: sudokuplus.koplugin/ui/dialogs.lua:182
-#: sudokuplus.koplugin/ui/dialogs.lua:201
+#: sudokuplus.koplugin/ui/dialogs.lua:128
+#: sudokuplus.koplugin/ui/dialogs.lua:183
+#: sudokuplus.koplugin/ui/dialogs.lua:202
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:137
+#: sudokuplus.koplugin/ui/dialogs.lua:138
 msgid "New game — Choose difficulty"
 msgstr "Neues Spiel — Schwierigkeit wählen"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:151
+#: sudokuplus.koplugin/ui/dialogs.lua:152
 msgid "Reset this puzzle from the beginning? All progress will be lost."
 msgstr ""
 "Dieses Rätsel von vorne beginnen? Der gesamte Fortschritt geht verloren."
 
-#: sudokuplus.koplugin/ui/dialogs.lua:152
+#: sudokuplus.koplugin/ui/dialogs.lua:153
 msgid "Reset"
 msgstr "Zurücksetzen"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:195
+#: sudokuplus.koplugin/ui/dialogs.lua:196
 msgid "Are you sure you want to give up?"
 msgstr "Möchtest du wirklich aufgeben?"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:196
-#: sudokuplus.koplugin/ui/dialogs.lua:283
+#: sudokuplus.koplugin/ui/dialogs.lua:197
+#: sudokuplus.koplugin/ui/dialogs.lua:292
 msgid "Give up"
 msgstr "Aufgeben"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:224
+#: sudokuplus.koplugin/ui/dialogs.lua:225
 msgid "%1 — Time: %2    Mistakes: %3    Hints: %4"
 msgstr "%1 — Zeit: %2    Fehler: %3    Tipps: %4"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:233
+#: sudokuplus.koplugin/ui/dialogs.lua:234
 msgid "Resume"
 msgstr "Fortsetzen"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:258
+#: sudokuplus.koplugin/ui/dialogs.lua:259
 msgid "Reset puzzle"
 msgstr "Rätsel zurücksetzen"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:269
+#: sudokuplus.koplugin/ui/dialogs.lua:270
 msgid "Fill all notes"
 msgstr "Alle Notizen ausfüllen"
 
-#: sudokuplus.koplugin/ui/dialogs.lua:294
+#: sudokuplus.koplugin/ui/dialogs.lua:301
 msgid "Quit"
 msgstr "Beenden"
 
@@ -193,6 +197,326 @@ msgstr "Zurück"
 #: sudokuplus.koplugin/ui/gamedetail.lua:166
 msgid "Play again"
 msgstr "Erneut spielen"
+
+#: sudokuplus.koplugin/ui/help.lua:15
+msgid "How to play & controls"
+msgstr "Spielregeln & Steuerung"
+
+#: sudokuplus.koplugin/ui/help.lua:18
+msgid "Objective, number-first pen mode, notes, gestures, and hardware keys."
+msgstr "Ziel des Spiels, Ziffer-zuerst-Stiftmodus, Notizen, Gesten und Tasten."
+
+#: sudokuplus.koplugin/ui/help.lua:24
+msgid "Features, hints & tools"
+msgstr "Funktionen, Tipps & Werkzeuge"
+
+#: sudokuplus.koplugin/ui/help.lua:27
+msgid ""
+"Progressive hints, mistake checking, auto-clean, difficulties, and "
+"statistics."
+msgstr ""
+"Schrittweise Tipps, Fehlerprüfung, Auto-Bereinigung, Schwierigkeitsgrade und "
+"Statistiken."
+
+#: sudokuplus.koplugin/ui/help.lua:56
+msgid "### Goal & Basic Rules"
+msgstr "### Ziel & Grundregeln"
+
+#: sudokuplus.koplugin/ui/help.lua:58
+msgid ""
+"Fill the 9×9 grid so that every row, column, and 3×3 box contains digits 1 "
+"to 9 with no duplicates."
+msgstr ""
+"Fülle das 9×9-Gitter so aus, dass jede Zeile, Spalte und jeder 3×3-Block "
+"alle Ziffern von 1 bis 9 ohne Wiederholungen enthält."
+
+#: sudokuplus.koplugin/ui/help.lua:60
+msgid "### Number-First Input (Pen Mode)"
+msgstr "### Ziffer-zuerst-Eingabe (Stiftmodus)"
+
+#: sudokuplus.koplugin/ui/help.lua:62
+msgid ""
+"- **Arm a digit:** Tap any number (1–9) on the bottom bar. The button "
+"inverts to show it is armed."
+msgstr ""
+"- **Ziffer aktivieren:** Tippe auf eine Zahl (1–9) in der unteren Leiste. "
+"Die Schaltfläche wird invertiert dargestellt."
+
+#: sudokuplus.koplugin/ui/help.lua:63
+msgid ""
+"- **Place digit:** Tap an empty cell on the board to write the armed digit."
+msgstr ""
+"- **Ziffer setzen:** Tippe auf ein leeres Feld, um die aktive Ziffer "
+"einzutragen."
+
+#: sudokuplus.koplugin/ui/help.lua:64
+msgid ""
+"- **Erase digit:** Tap a cell already containing the armed digit to erase it."
+msgstr ""
+"- **Ziffer löschen:** Tippe auf ein Feld mit derselben Ziffer, um sie zu "
+"entfernen."
+
+#: sudokuplus.koplugin/ui/help.lua:65
+msgid ""
+"- **Replace digit:** Tap a cell containing a different number to replace it."
+msgstr ""
+"- **Ziffer ersetzen:** Tippe auf ein Feld mit einer anderen Zahl, um sie zu "
+"überschreiben."
+
+#: sudokuplus.koplugin/ui/help.lua:66
+msgid ""
+"- **Disarm:** Tap the armed number button again to return to neutral "
+"selection mode."
+msgstr ""
+"- **Deaktivieren:** Tippe die aktive Zahlenschaltfläche erneut an, um in den "
+"neutralen Auswahlmodus zurückzukehren."
+
+#: sudokuplus.koplugin/ui/help.lua:67
+msgid ""
+"- **Selection mode:** When no digit is armed, tapping a cell selects it "
+"without altering the board."
+msgstr ""
+"- **Auswahlmodus:** Ist keine Ziffer aktiv, wählt Antippen ein Feld aus, "
+"ohne das Spielfeld zu verändern."
+
+#: sudokuplus.koplugin/ui/help.lua:69
+msgid "### Pencil Marks & Notes Mode"
+msgstr "### Kandidaten & Notizenmodus"
+
+#: sudokuplus.koplugin/ui/help.lua:71
+msgid ""
+"- **Toggle Notes:** Tap the *Notes* button in the tool row to toggle pencil "
+"marks mode."
+msgstr ""
+"- **Notizen umschalten:** Tippe auf *Notizen* in der Werkzeugleiste, um den "
+"Notizenmodus umzuschalten."
+
+#: sudokuplus.koplugin/ui/help.lua:72
+msgid ""
+"- **Adding notes:** With Notes mode **ON**, tapping a cell with an armed "
+"digit toggles that note."
+msgstr ""
+"- **Notizen setzen:** Bei aktivem Notizenmodus (**AN**) schaltet das "
+"Antippen eines Feldes die Ziffer als Notiz um."
+
+#: sudokuplus.koplugin/ui/help.lua:74
+msgid "### Quick Mode-Flip Gesture"
+msgstr "### Schnellwechsel-Geste"
+
+#: sudokuplus.koplugin/ui/help.lua:76
+msgid ""
+"- **Long-press (`~0.5s`):** Holding a cell while a digit is armed "
+"temporarily inverts the mode:"
+msgstr ""
+"- **Langes Drücken (`~0,5 s`):** Halten eines Feldes bei aktiver Ziffer "
+"invertiert vorübergehend den Modus:"
+
+#: sudokuplus.koplugin/ui/help.lua:77
+msgid "  - *Notes mode OFF:* Long-press writes/toggles a pencil mark note."
+msgstr ""
+"  - *Notizenmodus AUS:* Langes Drücken schreibt/schaltet eine Notiz um."
+
+#: sudokuplus.koplugin/ui/help.lua:78
+msgid "  - *Notes mode ON:* Long-press places a permanent number."
+msgstr "  - *Notizenmodus AN:* Langes Drücken setzt eine feste Ziffer."
+
+#: sudokuplus.koplugin/ui/help.lua:80
+msgid "### Matching Digit Highlights"
+msgstr "### Hervorhebung gleicher Ziffern"
+
+#: sudokuplus.koplugin/ui/help.lua:82
+msgid ""
+"- Arming a digit or selecting a cell highlights all matching digits and "
+"notes across the board."
+msgstr ""
+"- Das Aktivieren einer Ziffer oder Auswählen eines Feldes hebt alle gleichen "
+"Ziffern und Notizen auf dem Spielfeld grau hervor."
+
+#: sudokuplus.koplugin/ui/help.lua:84
+msgid "### Hardware Key Shortcuts (Kobo & E-Readers)"
+msgstr "### Tastenkürzel (Kobo & E-Reader)"
+
+#: sudokuplus.koplugin/ui/help.lua:86
+msgid ""
+"- **Short press page turn / arrow keys:** Cycles digits 1–9. Completed "
+"digits are skipped!"
+msgstr ""
+"- **Blättertasten / Pfeiltasten kurz drücken:** Wechselt durch Ziffern 1–9. "
+"Vollständige Ziffern werden übersprungen!"
+
+#: sudokuplus.koplugin/ui/help.lua:87
+msgid ""
+"- **Hold page turn / arrow key (`≥ 0.5s`):** Toggles Notes mode on/off "
+"without touching the screen."
+msgstr ""
+"- **Blättertaste / Pfeiltaste gedrückt halten (`≥ 0,5 s`):** Schaltet den "
+"Notizenmodus um, ohne den Bildschirm zu berühren."
+
+#: sudokuplus.koplugin/ui/help.lua:91
+msgid "### Progressive 3-Step Hints"
+msgstr "### Schrittweise 3-Stufen-Tipps"
+
+#: sudokuplus.koplugin/ui/help.lua:93
+msgid ""
+"Tap the *Hint* button in the toolbar for progressive, step-by-step "
+"assistance:"
+msgstr "Tippe auf *Tipp* in der Werkzeugleiste für schrittweise Unterstützung:"
+
+#: sudokuplus.koplugin/ui/help.lua:95
+msgid ""
+"- **Step 1 (Strategy Name):** Displays the next solving technique banner "
+"(e.g. *Naked Pair*)."
+msgstr ""
+"- **Stufe 1 (Strategiename):** Zeigt die nächste anwendbare Lösungstechnik "
+"als Banner an (z. B. *Nacktes Paar*)."
+
+#: sudokuplus.koplugin/ui/help.lua:96
+msgid ""
+"- **Step 2 (Visual Clue):** Highlights pattern cells and eliminations "
+"directly on the board."
+msgstr ""
+"- **Stufe 2 (Visueller Hinweis):** Hebt die beteiligten Musterfelder und "
+"Ausschlüsse direkt auf dem Spielfeld hervor."
+
+#: sudokuplus.koplugin/ui/help.lua:97
+msgid ""
+"- **Step 3 (Apply):** Applies the logical deduction to the board or "
+"candidate notes."
+msgstr ""
+"- **Stufe 3 (Anwenden):** Wendet den logischen Schluss direkt auf das "
+"Spielfeld oder die Notizen an."
+
+#: sudokuplus.koplugin/ui/help.lua:98
+msgid ""
+"- *Note:* Requesting a hint is recorded in your statistics as an overlooked "
+"strategy."
+msgstr ""
+"- *Hinweis:* Das Anfordern eines Tipps wird in deinen Statistiken als "
+"übersehene Strategie gewertet."
+
+#: sudokuplus.koplugin/ui/help.lua:100
+msgid "### Mistake Checking & Conflicts"
+msgstr "### Fehlerprüfung & Konflikte"
+
+#: sudokuplus.koplugin/ui/help.lua:102
+msgid ""
+"- **Live Conflicts:** Immediate dark highlight on duplicate numbers "
+"violating row, col, or box rules."
+msgstr ""
+"- **Live-Konflikte:** Sofortige dunkle Hervorhebung von doppelten Ziffern, "
+"die Zeilen-, Spalten- oder Blockregeln verletzen."
+
+#: sudokuplus.koplugin/ui/help.lua:103
+msgid ""
+"- **Check Board:** Tapping *Check* compares with solution and marks wrong "
+"entries with strikethrough."
+msgstr ""
+"- **Spielfeld prüfen:** Tippe auf *Prüfen*, um das Spielfeld mit der Lösung "
+"abzugleichen und falsche Einträge durchzustreichen."
+
+#: sudokuplus.koplugin/ui/help.lua:105
+msgid "### Smart Auto-Clean & Bulk Notes"
+msgstr "### Intelligente Notizenbereinigung & Auto-Notizen"
+
+#: sudokuplus.koplugin/ui/help.lua:107
+msgid ""
+"- **Auto-clean:** Placing a number removes candidate from peers. Erase/undo "
+"restores previous notes."
+msgstr ""
+"- **Auto-Bereinigung:** Das Setzen einer Ziffer entfernt diese Notiz aus "
+"Nachbarfeldern. Löschen/Rückgängig stellt Notizen wieder her."
+
+#: sudokuplus.koplugin/ui/help.lua:108
+msgid ""
+"- **Auto-fill notes setting:** Starts new games with legal pencil marks pre-"
+"populated (in *Tools*)."
+msgstr ""
+"- **Notizen automatisch ausfüllen:** Startet neue Spiele mit allen gültigen "
+"Notizen vorausgefüllt (im Menü *Werkzeuge*)."
+
+#: sudokuplus.koplugin/ui/help.lua:109
+msgid ""
+"- **Fill all notes:** Populates all remaining legal notes at any time from "
+"the pause Menu."
+msgstr ""
+"- **Alle Notizen ausfüllen:** Füllt jederzeit alle verbleibenden gültigen "
+"Notizen über das Pausenmenü aus."
+
+#: sudokuplus.koplugin/ui/help.lua:111
+msgid "### Undo, Redo & Reset"
+msgstr "### Rückgängig, Wiederholen & Zurücksetzen"
+
+#: sudokuplus.koplugin/ui/help.lua:113
+msgid ""
+"- Full undo/redo history for digit placements, note edits, and hint actions."
+msgstr ""
+"- Vollständiger Verlauf für Ziffernplatzierungen, Notizenänderungen und Tipp-"
+"Aktionen."
+
+#: sudokuplus.koplugin/ui/help.lua:114
+msgid ""
+"- **Reset puzzle:** Restarts the current puzzle from the beginning via the "
+"pause Menu."
+msgstr ""
+"- **Rätsel zurücksetzen:** Startet das aktuelle Rätsel über das Pausenmenü "
+"von vorne."
+
+#: sudokuplus.koplugin/ui/help.lua:116
+msgid "### Difficulty Tiers"
+msgstr "### Schwierigkeitsgrade"
+
+#: sudokuplus.koplugin/ui/help.lua:118
+msgid "- **Beginner:** Pure singles, 38+ initial clues."
+msgstr "- **Anfänger:** Nackte/Versteckte Einer, 38+ vorgegebene Ziffern."
+
+#: sudokuplus.koplugin/ui/help.lua:119
+msgid "- **Easy:** Pure singles, under 38 clues."
+msgstr "- **Leicht:** Nackte/Versteckte Einer, unter 38 vorgegebene Ziffern."
+
+#: sudokuplus.koplugin/ui/help.lua:120
+msgid "- **Medium:** Introduces Naked Pairs and Locked Candidates."
+msgstr "- **Mittel:** Erfordert Nackte Paare und Gesperrte Kandidaten."
+
+#: sudokuplus.koplugin/ui/help.lua:121
+msgid "- **Hard:** Introduces Hidden Pairs, Naked Triples, and Hidden Triples."
+msgstr ""
+"- **Schwer:** Erfordert Versteckte Paare, Nackte Dreier und Versteckte "
+"Dreier."
+
+#: sudokuplus.koplugin/ui/help.lua:122
+msgid ""
+"- **Master:** Introduces X-Wing, Skyscraper, Naked Quads, and Wings (XY, "
+"XYZ, W-Wing)."
+msgstr ""
+"- **Meister:** Erfordert X-Wing, Skyscraper, Nackte Vierer und Wings (XY, "
+"XYZ, W-Wing)."
+
+#: sudokuplus.koplugin/ui/help.lua:123
+msgid "- **Expert:** Introduces Hidden Quads, Swordfish, Jellyfish, and AIC."
+msgstr ""
+"- **Experte:** Erfordert Versteckte Vierer, Swordfish, Jellyfish und "
+"Alternierende Inferenzkette (AIC)."
+
+#: sudokuplus.koplugin/ui/help.lua:125
+msgid "### Statistics & Game History"
+msgstr "### Statistiken & Spielverlauf"
+
+#: sudokuplus.koplugin/ui/help.lua:127
+msgid ""
+"- Track completion rates, streaks, best/average times, and overlooked "
+"strategies in *Statistics*."
+msgstr ""
+"- Verfolge Abschlussraten, Serien, Best- und Durchschnittszeiten sowie "
+"übersehene Strategien in den *Statistiken*."
+
+#: sudokuplus.koplugin/ui/help.lua:128
+msgid "- Review and replay past puzzles from the *Game history* log."
+msgstr ""
+"- Sieh dir vergangene Partien im *Spielverlauf* an und spiele sie erneut."
+
+#: sudokuplus.koplugin/ui/help.lua:164
+msgid "Sudoku+ Help"
+msgstr "Sudoku+ Hilfe"
 
 #: sudokuplus.koplugin/ui/messages.lua:9
 msgid "Cannot modify a given cell."
@@ -449,3 +773,9 @@ msgstr "XYZ-Wing"
 #: sudokuplus.koplugin/ui/techniques.lua:57
 msgid "Alternating Inference Chain"
 msgstr "Alternierende Inferenzkette"
+
+#~ msgid ""
+#~ "• Hard: Introduces X-Wing, Quads, Swordfish, Skyscraper, and Jellyfish."
+#~ msgstr ""
+#~ "• Schwer: Erfordert X-Wing, Quadrupel, Swordfish, Skyscraper und "
+#~ "Jellyfish."
