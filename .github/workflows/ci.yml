@@ -32,18 +32,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Lua & Luarocks
-        uses: leafo/gh-actions-lua@v10
-        with:
-          luaVersion: "luajit-openresty"
-
-      - name: Setup Luarocks
-        uses: leafo/gh-actions-luarocks@v4
-        with:
-          luarocksVersion: "3.11.1"
-
-      - name: Install Busted
-        run: luarocks install busted
+      - name: Install LuaJIT & Busted
+        run: sudo apt-get update && sudo apt-get install -y luajit lua-busted
 
       - name: Run pure-Lua unit tests
         run: |
