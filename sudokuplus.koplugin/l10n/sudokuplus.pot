@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sudokuplus\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 18:26+0200\n"
+"POT-Creation-Date: 2026-08-15 18:42+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,11 +18,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: sudokuplus.koplugin/_meta.lua:4 sudokuplus.koplugin/main.lua:240
+#: sudokuplus.koplugin/_meta.lua:10 sudokuplus.koplugin/main.lua:240
 msgid "Sudoku+"
 msgstr ""
 
-#: sudokuplus.koplugin/_meta.lua:5
+#: sudokuplus.koplugin/_meta.lua:11
 msgid "A logical Sudoku puzzle game and tutor for e-ink readers."
 msgstr ""
 
