@@ -14,17 +14,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Lua & Luarocks
-        uses: leafo/gh-actions-lua@v10
-        with:
-          luaVersion: "luajit-openresty"
-
-      - name: Setup Luarocks
-        uses: leafo/gh-actions-luarocks@v4
-
-      - name: Install Luacheck
-        run: luarocks install luacheck
-
       - name: Check StyLua formatting
         uses: JohnnyMorganz/stylua-action@v1
         with:
@@ -32,7 +21,9 @@ jobs:
           args: --check sudokuplus.koplugin/ tests/ tools/
 
       - name: Run Luacheck
-        run: luacheck sudokuplus.koplugin/ tests/ tools/
+        uses: lunarmodules/luacheck@v1
+        with:
+          args: sudokuplus.koplugin/ tests/ tools/
 
   test-core:
     name: Unit Tests (Headless Busted)
@@ -48,6 +39,8 @@ jobs:
 
       - name: Setup Luarocks
         uses: leafo/gh-actions-luarocks@v4
+        with:
+          luarocksVersion: "3.11.1"
 
       - name: Install Busted
         run: luarocks install busted
