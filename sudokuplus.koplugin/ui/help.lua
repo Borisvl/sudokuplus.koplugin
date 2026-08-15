@@ -2,7 +2,10 @@ local Device = require("device")
 local Menu = require("ui/widget/menu")
 local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
+local T = require("ffi/util").template
 local _ = require("gettext")
+
+local meta = require("_meta")
 
 local Screen = Device.screen
 
@@ -25,6 +28,15 @@ local TOPIC_DEFS = {
         end,
         summary_fn = function()
             return _("Progressive hints, mistake checking, auto-clean, difficulties, and statistics.")
+        end,
+    },
+    {
+        id = "about",
+        title_fn = function()
+            return _("About & Credits")
+        end,
+        summary_fn = function()
+            return _("Version, license, credits, and acknowledgments.")
         end,
     },
 }
@@ -126,6 +138,29 @@ function help.get_text(topic_id)
             "",
             _("- Track completion rates, streaks, best/average times, and overlooked strategies in *Statistics*."),
             _("- Review and replay past puzzles from the *Game history* log."),
+        }, "\n")
+    elseif topic_id == "about" then
+        return table.concat({
+            _("### Sudoku+ for KOReader"),
+            "",
+            _("A logical Sudoku puzzle game and interactive tutor crafted specifically for e-ink readers."),
+            "",
+            T(_("- **Version:** %1"), meta.version or "1.0.0"),
+            T(_("- **Copyright:** %1"), "© 2026 Boris von Loesch and contributors"),
+            T(_("- **License:** %1"), "GNU Affero General Public License v3.0 (AGPL-3.0)"),
+            T(_("- **Repository:** %1"), "https://github.com/Borisvl/sudokuplus.koplugin"),
+            "",
+            _("### Credits & Attribution"),
+            "",
+            _(
+                "- **Logical Solver & Generator:** Core algorithms and human deduction"
+                    .. " techniques are ported from **rustoku** by Samuel Huang (MIT License)."
+            ),
+            _(
+                "- **Techniques & Test Datasets:** Technique taxonomies and benchmark"
+                    .. " puzzles are derived from the **HoDoKu** project by Bernhard Hobiger."
+            ),
+            _("- **Platform:** Built for **KOReader** and its e-ink reading community."),
         }, "\n")
     end
     return nil

@@ -14,9 +14,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install StyLua & Luacheck
+      - name: Install StyLua, Luacheck & gettext
         run: |
-          sudo apt-get update && sudo apt-get install -y lua-check
+          sudo apt-get update && sudo apt-get install -y lua-check gettext
           curl -fsSL https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux-x86_64.zip -o /tmp/stylua.zip
           sudo unzip -q -o /tmp/stylua.zip -d /usr/local/bin
           sudo chmod +x /usr/local/bin/stylua
@@ -27,6 +27,11 @@ jobs:
 
       - name: Run Luacheck
         run: luacheck sudokuplus.koplugin/ tests/ tools/
+
+      - name: Check POT & translation freshness
+        run: |
+          ./tools/extract_pot.sh
+          git diff --exit-code sudokuplus.koplugin/l10n/
 
   test-core:
     name: Unit Tests (Headless Busted)

@@ -1120,6 +1120,17 @@ Adds a structured, localized Help section explaining game usage, controls, gestu
 
 **Exit criteria**: all 47 test suites green via `./dev.sh test`, `./dev.sh lint` clean (0 warnings / 0 errors), `./dev.sh fmt` clean, `./dev.sh pot` up to date.
 
+### M13.2 — Release Polish, Versioning, CI & Attribution
+
+- [x] Embed gameplay screenshot `doc/screenshots/sudoku_plus.png` into `README.md`
+- [x] Add "About & Credits" topic to Help viewer with version, author copyright (Boris von Loesch), AGPL-3.0 license, and upstream attributions
+- [x] Set `_meta.lua` as the single source of truth for version (`1.0.0`) and name (`sudokuplus`), with automated test assertions
+- [x] Make `tools/extract_pot.sh` idempotent (preserving POT timestamps when messages are unchanged)
+- [x] Add automated POT and translation freshness validation to GitHub Actions CI workflow
+- [x] Full German translation catalog updated and compiled
+
+**Exit criteria**: all 47 test suites green via `./dev.sh test`, `./dev.sh lint` clean (0 warnings / 0 errors), `./dev.sh fmt` clean, `./dev.sh pot` up to date, package script creates clean `sudokuplus.koplugin.zip`.
+
 ---
 
 ## Variant roadmap (Sudoku X + Killer Sudoku)

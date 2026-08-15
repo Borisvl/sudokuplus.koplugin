@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sudokuplus\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 16:26+0200\n"
+"POT-Creation-Date: 2026-08-15 18:15+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,11 +18,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: sudokuplus.koplugin/_meta.lua:3 sudokuplus.koplugin/main.lua:240
+#: sudokuplus.koplugin/_meta.lua:4 sudokuplus.koplugin/main.lua:240
 msgid "Sudoku+"
 msgstr ""
 
-#: sudokuplus.koplugin/_meta.lua:4
+#: sudokuplus.koplugin/_meta.lua:5
 msgid "A logical Sudoku puzzle game and tutor for e-ink readers."
 msgstr ""
 
@@ -192,263 +192,317 @@ msgstr ""
 msgid "Play again"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:15
+#: sudokuplus.koplugin/ui/help.lua:18
 msgid "How to play & controls"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:18
+#: sudokuplus.koplugin/ui/help.lua:21
 msgid "Objective, number-first pen mode, notes, gestures, and hardware keys."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:24
+#: sudokuplus.koplugin/ui/help.lua:27
 msgid "Features, hints & tools"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:27
+#: sudokuplus.koplugin/ui/help.lua:30
 msgid ""
 "Progressive hints, mistake checking, auto-clean, difficulties, and "
 "statistics."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:56
+#: sudokuplus.koplugin/ui/help.lua:36
+msgid "About & Credits"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:39
+msgid "Version, license, credits, and acknowledgments."
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:68
 msgid "### Goal & Basic Rules"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:58
+#: sudokuplus.koplugin/ui/help.lua:70
 msgid ""
 "Fill the 9×9 grid so that every row, column, and 3×3 box contains digits 1 "
 "to 9 with no duplicates."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:60
+#: sudokuplus.koplugin/ui/help.lua:72
 msgid "### Number-First Input (Pen Mode)"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:62
+#: sudokuplus.koplugin/ui/help.lua:74
 msgid ""
 "- **Arm a digit:** Tap any number (1–9) on the bottom bar. The button "
 "inverts to show it is armed."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:63
+#: sudokuplus.koplugin/ui/help.lua:75
 msgid ""
 "- **Place digit:** Tap an empty cell on the board to write the armed digit."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:64
+#: sudokuplus.koplugin/ui/help.lua:76
 msgid ""
 "- **Erase digit:** Tap a cell already containing the armed digit to erase it."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:65
+#: sudokuplus.koplugin/ui/help.lua:77
 msgid ""
 "- **Replace digit:** Tap a cell containing a different number to replace it."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:66
+#: sudokuplus.koplugin/ui/help.lua:78
 msgid ""
 "- **Disarm:** Tap the armed number button again to return to neutral "
 "selection mode."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:67
+#: sudokuplus.koplugin/ui/help.lua:79
 msgid ""
 "- **Selection mode:** When no digit is armed, tapping a cell selects it "
 "without altering the board."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:69
+#: sudokuplus.koplugin/ui/help.lua:81
 msgid "### Pencil Marks & Notes Mode"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:71
+#: sudokuplus.koplugin/ui/help.lua:83
 msgid ""
 "- **Toggle Notes:** Tap the *Notes* button in the tool row to toggle pencil "
 "marks mode."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:72
+#: sudokuplus.koplugin/ui/help.lua:84
 msgid ""
 "- **Adding notes:** With Notes mode **ON**, tapping a cell with an armed "
 "digit toggles that note."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:74
+#: sudokuplus.koplugin/ui/help.lua:86
 msgid "### Quick Mode-Flip Gesture"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:76
+#: sudokuplus.koplugin/ui/help.lua:88
 msgid ""
 "- **Long-press (`~0.5s`):** Holding a cell while a digit is armed "
 "temporarily inverts the mode:"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:77
+#: sudokuplus.koplugin/ui/help.lua:89
 msgid "  - *Notes mode OFF:* Long-press writes/toggles a pencil mark note."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:78
+#: sudokuplus.koplugin/ui/help.lua:90
 msgid "  - *Notes mode ON:* Long-press places a permanent number."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:80
+#: sudokuplus.koplugin/ui/help.lua:92
 msgid "### Matching Digit Highlights"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:82
+#: sudokuplus.koplugin/ui/help.lua:94
 msgid ""
 "- Arming a digit or selecting a cell highlights all matching digits and "
 "notes across the board."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:84
+#: sudokuplus.koplugin/ui/help.lua:96
 msgid "### Hardware Key Shortcuts (Kobo & E-Readers)"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:86
+#: sudokuplus.koplugin/ui/help.lua:98
 msgid ""
 "- **Short press page turn / arrow keys:** Cycles digits 1–9. Completed "
 "digits are skipped!"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:87
+#: sudokuplus.koplugin/ui/help.lua:99
 msgid ""
 "- **Hold page turn / arrow key (`≥ 0.5s`):** Toggles Notes mode on/off "
 "without touching the screen."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:91
+#: sudokuplus.koplugin/ui/help.lua:103
 msgid "### Progressive 3-Step Hints"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:93
+#: sudokuplus.koplugin/ui/help.lua:105
 msgid ""
 "Tap the *Hint* button in the toolbar for progressive, step-by-step "
 "assistance:"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:95
+#: sudokuplus.koplugin/ui/help.lua:107
 msgid ""
 "- **Step 1 (Strategy Name):** Displays the next solving technique banner "
 "(e.g. *Naked Pair*)."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:96
+#: sudokuplus.koplugin/ui/help.lua:108
 msgid ""
 "- **Step 2 (Visual Clue):** Highlights pattern cells and eliminations "
 "directly on the board."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:97
+#: sudokuplus.koplugin/ui/help.lua:109
 msgid ""
 "- **Step 3 (Apply):** Applies the logical deduction to the board or "
 "candidate notes."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:98
+#: sudokuplus.koplugin/ui/help.lua:110
 msgid ""
 "- *Note:* Requesting a hint is recorded in your statistics as an overlooked "
 "strategy."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:100
+#: sudokuplus.koplugin/ui/help.lua:112
 msgid "### Mistake Checking & Conflicts"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:102
+#: sudokuplus.koplugin/ui/help.lua:114
 msgid ""
 "- **Live Conflicts:** Immediate dark highlight on duplicate numbers "
 "violating row, col, or box rules."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:103
+#: sudokuplus.koplugin/ui/help.lua:115
 msgid ""
 "- **Check Board:** Tapping *Check* compares with solution and marks wrong "
 "entries with strikethrough."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:105
+#: sudokuplus.koplugin/ui/help.lua:117
 msgid "### Smart Auto-Clean & Bulk Notes"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:107
+#: sudokuplus.koplugin/ui/help.lua:119
 msgid ""
 "- **Auto-clean:** Placing a number removes candidate from peers. Erase/undo "
 "restores previous notes."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:108
+#: sudokuplus.koplugin/ui/help.lua:120
 msgid ""
 "- **Auto-fill notes setting:** Starts new games with legal pencil marks pre-"
 "populated (in *Tools*)."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:109
+#: sudokuplus.koplugin/ui/help.lua:121
 msgid ""
 "- **Fill all notes:** Populates all remaining legal notes at any time from "
 "the pause Menu."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:111
+#: sudokuplus.koplugin/ui/help.lua:123
 msgid "### Undo, Redo & Reset"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:113
+#: sudokuplus.koplugin/ui/help.lua:125
 msgid ""
 "- Full undo/redo history for digit placements, note edits, and hint actions."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:114
+#: sudokuplus.koplugin/ui/help.lua:126
 msgid ""
 "- **Reset puzzle:** Restarts the current puzzle from the beginning via the "
 "pause Menu."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:116
+#: sudokuplus.koplugin/ui/help.lua:128
 msgid "### Difficulty Tiers"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:118
+#: sudokuplus.koplugin/ui/help.lua:130
 msgid "- **Beginner:** Pure singles, 38+ initial clues."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:119
+#: sudokuplus.koplugin/ui/help.lua:131
 msgid "- **Easy:** Pure singles, under 38 clues."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:120
+#: sudokuplus.koplugin/ui/help.lua:132
 msgid "- **Medium:** Introduces Naked Pairs and Locked Candidates."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:121
+#: sudokuplus.koplugin/ui/help.lua:133
 msgid "- **Hard:** Introduces Hidden Pairs, Naked Triples, and Hidden Triples."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:122
+#: sudokuplus.koplugin/ui/help.lua:134
 msgid ""
 "- **Master:** Introduces X-Wing, Skyscraper, Naked Quads, and Wings (XY, "
 "XYZ, W-Wing)."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:123
+#: sudokuplus.koplugin/ui/help.lua:135
 msgid "- **Expert:** Introduces Hidden Quads, Swordfish, Jellyfish, and AIC."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:125
+#: sudokuplus.koplugin/ui/help.lua:137
 msgid "### Statistics & Game History"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:127
+#: sudokuplus.koplugin/ui/help.lua:139
 msgid ""
 "- Track completion rates, streaks, best/average times, and overlooked "
 "strategies in *Statistics*."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:128
+#: sudokuplus.koplugin/ui/help.lua:140
 msgid "- Review and replay past puzzles from the *Game history* log."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/help.lua:164
+#: sudokuplus.koplugin/ui/help.lua:144
+msgid "### Sudoku+ for KOReader"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:146
+msgid ""
+"A logical Sudoku puzzle game and interactive tutor crafted specifically for "
+"e-ink readers."
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:148
+msgid "- **Version:** %1"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:149
+msgid "- **Copyright:** %1"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:150
+msgid "- **License:** %1"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:151
+msgid "- **Repository:** %1"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:153
+msgid "### Credits & Attribution"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:156
+msgid ""
+"- **Logical Solver & Generator:** Core algorithms and human deduction "
+"techniques are ported from **rustoku** by Samuel Huang (MIT License)."
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:160
+msgid ""
+"- **Techniques & Test Datasets:** Technique taxonomies and benchmark puzzles "
+"are derived from the **HoDoKu** project by Bernhard Hobiger."
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:163
+msgid "- **Platform:** Built for **KOReader** and its e-ink reading community."
+msgstr ""
+
+#: sudokuplus.koplugin/ui/help.lua:199
 msgid "Sudoku+ Help"
 msgstr ""
 

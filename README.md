@@ -7,6 +7,10 @@
 
 A full-featured, logical Sudoku puzzle game and interactive tutor crafted specifically for e-ink readers running [KOReader](https://github.com/koreader/koreader) (Kobo, Kindle, PocketBook, Android).
 
+<p align="center">
+  <img src="doc/screenshots/sudoku_plus.png" alt="Sudoku+ Gameplay on KOReader" width="480">
+</p>
+
 ---
 
 ## ✨ Features
@@ -114,7 +118,7 @@ dev.sh                   # Build, lint, test, format, and emulator launcher
 
 ## 📜 License & Credits
 
-- **License**: Released under the **[GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE)**.
+- **License**: Released under the **[GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE)**. Copyright © 2026 Boris von Loesch and contributors.
 - **Solver & Techniques**: The Lua core is a port of **[rustoku](https://github.com/huangsam/rustoku)** (MIT License) by Samuel Huang. Pinned reference commit: `afef526d93fa176d75b4c8350cc387b10be6928b`.
 - **Techniques & Test Fixtures**: Technique definitions and standard test boards derive from the **[HoDoKu](https://hodoku.sourceforge.net/)** project by Bernhard Hobiger.
 - **Platform**: Built for **[KOReader](https://github.com/koreader/koreader)**.
