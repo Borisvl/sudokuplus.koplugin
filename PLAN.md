@@ -84,11 +84,17 @@ sudoku.koplugin/
 │   ├── solve_path.lua           # SolveStep/SolvePath w/ technique + PATTERN metadata
 │   ├── techniques/
 │   │   ├── flags.lua            # technique bitflags + difficulty tiers
-│   │   ├── units.lua            # row/col/box cell lists
+│   │   ├── units.lua            # row/col/box cell lists (+ variant units)
 │   │   ├── propagator.lua       # deterministic technique loop (mediator)
 │   │   └── <17 technique files> # naked/hidden singles/pairs/triples/quads,
 │   │                            # locked candidates, X-Wing, Swordfish, Jellyfish,
 │   │                            # Skyscraper, W-Wing, XY-Wing, XYZ-Wing, AIC
+│   ├── variants/                # variant constraint descriptors (pure, data+logic)
+│   │   ├── classic.lua          # no-op descriptor (the default)
+│   │   ├── diag.lua             # Sudoku X: the two diagonal units
+│   │   ├── killer.lua           # Killer: cage model, combo pruning
+│   │   └── killer_puzzles.lua   # M15 predefined puzzle set (6, one per tier)
+│   ├── variants.lua             # variant registry (get/list)
 │   ├── generator.lua            # unique-solution + symmetry + difficulty-targeted
 │   └── hints.lua                # progressive hint derivation + missed-strategy classification
 ├── game.lua                     # game state machine: board, notes, undo/redo,
@@ -1074,3 +1080,378 @@ deduplicates shared pure helpers into `core/util.lua`, and completes l10n catalo
 **Exit criteria**: all 46 test suites green via `./dev.sh test`, `./dev.sh lint` clean (0 warnings / 0 errors),
 `./dev.sh fmt` clean, `./dev.sh pot` up to date, PLAN.md and README.md updated.
 
+---
+
+## Variant roadmap (Sudoku X + Killer Sudoku)
+
+Milestones M13–M16 add variant support. (Numbering continues after the existing
+M11 code-review fixes and M12 modularization milestones, which are unrelated
+to variants.) Both target variants stay 9×9 with digits 1–9, so the board
+model, notes grids, undo/redo, stats and hint machinery carry over; the
+variant work is about the *constraint model*, which today is hardwired to
+row/col/box in `masks.lua`, `solver.validate`, `candidates.lua`,
+`units.lua`, `game.lua` mistake marking, `hints.lua`/`game_serialize.lua`
+notes legality, and the generator's difficulty model.
+
+### Design decision #11 (resolved with the user) — variant architecture
+
+- A **variant descriptor** (see M13 interface below) is injected through
+  solver → candidates → hints → game → generator. `"classic"` is the default;
+  every hook is guarded so classic behavior stays byte-identical (guarded by
+  the existing parity specs + `tools/bench_*` gates — M9's perf work is at
+  risk here and must not regress).
+- **Technique topology stays classic**: `units.sees`/`units.each_peer` keep
+  their row/col/box semantics for wings/AIC/fish chain validity. Variant
+  constraints reach the 17 techniques *through candidate filtering* (sound by
+  construction), and variant-specific deductions come from the
+  unit-scanning techniques (subsets, locked candidates) once variant units
+  are registered in `units.for_each_unit`. A separate
+  `each_conflict_peer` hook drives game mistake marking and note auto-clean,
+  so the game layer and the solver can never disagree about what a peer is.
+- **Difficulty**: all three variants share the same 6 tiers (Beginner–Expert),
+  each variant with its own calibration (classic: clue ranges + weights;
+  X: re-measured like P3; Killer: cage-structure metrics, M16).
+- **Stats are per-variant**: log entries carry `variant` (+ `variant_data`
+  for Killer cages); `summary()` gains per-variant sections beside the
+  global totals; history rows show the variant.
+- **Killer puzzle sourcing**: algorithmic generator (M16), not a puzzle bank.
+  M15 ships 6 predefined puzzles purely to make the game playable while the
+  generator is built.
+- **Killer has no givens**: the board starts empty; the puzzle data *is* the
+  cage set. `game.new`'s "at least one given" check and the clue-based
+  beginner/easy split in `solve_path.classify` must become variant-aware.
+- **Technique selection is per-variant**: a variant may contribute technique
+  modules (M16: the killer techniques). The propagator composes its order as
+  `classic ∪ variant:techniques()` and the shared flag registry
+  (`flags.lua`) stays the single allocation authority — but classic tier
+  composites (`EASY`/`MEDIUM`/`ALL`) never include variant bits, so variant
+  code can never execute in a classic solve (no perf or behavior leakage, and
+  adding a variant cannot shift classic step numbering or hint stability).
+  A variant technique's tier lives in the per-variant technique table, not in
+  the global `flags.difficulty` branches.
+- **Variant boundary (documented ceiling)**: a variant may *add* constraints
+  (extra units, candidate refinement, peer sets, full-board rules) but never
+  *change* the classic geometry — `masks.lua` box math, `units.sees`/
+  `each_peer`, and the fish crossing semantics stay 9×9 row/col/box. Soundness
+  of the 17 classic techniques follows from superset peers + candidate
+  refinement. Geometry-changing variants (Jigsaw regions, toroidal boards)
+  are out of scope; they would need `masks.lua`/`sees` generalization, which
+  the hook surface does not provide.
+- **Game layer gets stateless legality only**: live mistake marking and note
+  legality use `is_safe_extra` + `each_conflict_peer` (peer-local rules);
+  stateful variant deductions (killer combos) live in the solver state, which
+  is derived purely from `(board, variant_data)` and can be rebuilt by the
+  game layer for `legal_mask_for`/autofill. A future variant whose *live*
+  violation is non-local (e.g. thermo) must add a game-side state hook.
+- **Combined variants are out of scope**: `opts.variant` names exactly one
+  descriptor; Killer-X and similar stacks are not planned. The descriptor
+  model would in principle compose (unit union, chained state), but no
+  composition machinery is built.
+
+### M13 — Variant architecture refactor (foundation, no user-visible change)
+
+Planned: introduce the variant abstraction with `classic` as the only
+registered variant. No game-play behavior changes; the variant picker dialog
+(Classic only) is the single user-visible addition, and stats gain
+data-only per-variant sections (statsview rendering lands in M15). The
+milestone is guarded by parity and performance, so M14/M15 can build on it
+safely.
+
+**Descriptor interface** (all functions optional; a missing function = no-op):
+
+```lua
+{
+  name = "classic",                       -- save-format identifier
+  -- M14+: extra unit descriptors { type = "diag", index = n } + cell lists
+  extra_units = function(self) return { unit, ... } end,
+  -- Solver-side state, created per solver instance (and per clone):
+  -- derived purely from (board, masks), so clone_state() rebuilds it.
+  new_state = function(self, board, masks) return state_or_nil end,
+  -- state:filter_candidates(mask, r, c) -> mask     legal-candidate refinement
+  -- state:after_place(r, c, num) / state:after_remove(r, c, num)
+  -- state:refresh_candidates(candidates, r, c)       recompute affected cells (killer cage)
+  is_safe_extra = function(self, r, c, num, board) return bool end,  -- beyond row/col/box
+  each_conflict_peer = function(self, r, c, fn) end,  -- mistake-marking/auto-clean peers
+  validate_board = function(self, board) return true | nil, err end, -- full-board extra rules
+  restore_data = function(self, data) return data_or_nil, err end,   -- variant payload round-trip
+  serialize_data = function(self, data) return data end,
+  -- M16+: per-variant technique modules { { name, flag, tier }, ... } —
+  -- composed by the propagator as `classic ∪ variant:techniques()` (design
+  -- decision #11); never run in classic solves
+  techniques = function(self) return {} end,
+}
+```
+
+Registry: `core/variants.lua` (`variants.get(name)`, `variants.list()`)
+mapping names to descriptor modules in `core/variants/`.
+
+- [ ] `core/variants/classic.lua` — the no-op descriptor (`new_state` returns
+      nil so every hot path skips variant work)
+- [ ] `core/variants.lua` — registry + `get`/`list` + spec
+      (`tests/unit/sudoku_variants_spec.lua`: get/list, unknown-name error,
+      classic no-op behavior)
+- [ ] `core/solver.lua`: `solver.new(b, opts)` accepts `opts.variant`
+      (descriptor or name; default classic); `solver.validate(b, opts)` gains
+      the variant (public call sites in `game.lua`, `game_serialize.lua`,
+      `hints.lua` pass it); validate runs `is_safe_extra` per placed digit
+      and `validate_board` on full boards; initial candidate computation
+      passes through `state:filter_candidates`; `place_number`/
+      `remove_number` call `after_place`/`after_remove` +
+      `refresh_candidates` (all behind `if variant_state then` guards);
+      `clone_state` rebuilds the variant state from the cloned board+masks;
+      `is_solved` adds `validate_board`
+- [ ] `core/candidates.lua`: `update_affected_cells_for` gains an optional
+      trailing `hooks` table (`extra_peers(r,c)` for the subtractive
+      placement branch, `refresh_cells(c, r, col, m, b)` for variant recompute).
+      Classic call sites unchanged; propagator/solver pass their variant hooks
+- [ ] `core/techniques/units.lua`: `for_each_unit(fn, variant)` iterates
+      classic units then `variant:extra_units()` cells (cached per variant
+      module); `units.sees`/`each_peer` stay classic (design decision #11)
+- [ ] `core/techniques/propagator.lua`: `propagator.new` accepts the variant
+      descriptor/state; new `prop:for_each_unit(fn)` used by the
+      unit-scanning techniques (locked candidates, naked/hidden
+      singles/pairs/triples/quads switch their `units.for_each_unit` call
+      sites); the technique order composes as `classic ∪
+      variant:techniques()` (empty for classic — the M16 plumbing is
+      scaffolded now); `count_affected_cells`/`count_candidates_eliminated`
+      include `each_conflict_peer` for accurate step metadata
+- [ ] `game.lua`: `game.new(options)` accepts `variant` (name; default
+      `"classic"`) + `variant_data`; `conflicts_board`/`is_safe_board` scan
+      `each_conflict_peer` in addition to `units.each_peer`; `legal_mask_for`
+      derives variant-filtered legal masks per call from `(board,
+      variant_data)` — the same derivation rule the solver state uses
+      (autofill + fill-all-notes); the "at least one given" check becomes
+      variant-aware (a variant may allow zero givens — Killer)
+- [ ] `core/hints.lua`: `hints.next(state, opts)` accepts the variant;
+      notes-legality checks use variant-filtered masks; solution validation
+      runs `validate_board`
+- [ ] `game_serialize.lua`: `VERSION = 3`; `serialize` writes `variant` +
+      `variant_data`; `restore` accepts v2 saves as classic (variant missing
+      → `"classic"`), v3 requires a registered variant name and
+      `variant_data` passing `restore_data`
+- [ ] `stats.lua`: log entries gain optional `variant` (default `"classic"`,
+      backfilled on load) + `variant_data`; `summary()` gains per-variant ×
+      per-difficulty sections (count/avg/best/mistakes) beside global totals
+      (data-only in M13; `statsview` rendering is M15)
+- [ ] `main.lua` + `ui/dialogs.lua`: variant picker dialog
+      (`ui/variants.lua` — ordered localized id/label list, spec) inserted
+      before the difficulty picker; only Classic selectable until M14/M15
+- [ ] Parity + performance guard: `sudoku_solver_spec`, `sudoku_hints_spec`,
+      `sudoku_game_spec` stay green unchanged; `sudoku_game_serialize_spec`
+      gains v2-accept + v3-round-trip cases (the VERSION assertion moves to 3);
+      `tools/bench_propagation.lua`, `tools/bench_solver.lua`,
+      `tools/bench_generation.lua` gates unchanged (classic hot paths must not
+      regress)
+
+**Exit criteria**: all specs green via `./dev.sh test`, `./dev.sh lint`
+clean, `./dev.sh fmt` clean, bench tools pass their gates, emulator boot
+smoke on `kobo-aura-one` with no errors (touches game/save code), PLAN.md +
+README updated, commit.
+
+### M14 — Sudoku X (variant: diag)
+
+Planned (decisions resolved with the user): **X-specific techniques are in
+scope from day one** — the two diagonals become registered units, so
+diagonal naked/hidden subsets and diagonal locked candidates come nearly
+free from the M13 unit plumbing; the shared fish engine (already generic
+over base/cover units per M2c) is generalized to accept diagonal units;
+AIC `sees` topology stays classic (candidate filtering carries the diagonal
+constraint; chains remain sound). Difficulty shares the same 6 tiers with
+X-specific calibration (measured in this milestone, P3-style). Generator
+reuses the whole classic pipeline (sample → dig → classify) with the
+diag-aware solver, so uniqueness and classification automatically respect
+the diagonals.
+
+- [ ] `core/variants/diag.lua`: two diagonal units (index 0: NW–SE, index 1:
+      NE–SW); `extra_units`, `extra_peers` (the 8 other diagonal cells, for
+      subtractive candidate updates), `is_safe_extra` (diagonal presence),
+      `each_conflict_peer`, `validate_board` (each diagonal holds 1–9 —
+      implied by no-dups on a full board, but validated explicitly for
+      puzzle/solution data)
+- [ ] `core/techniques/units.lua`: `units.diag_cells(idx)`,
+      `units.diag_unit(idx)`, diagonal units in `for_each_unit(fn, variant)`;
+      spec
+- [ ] Unit-scanning techniques: switch their unit iteration to
+      `prop:for_each_unit` (M13 plumbing; the diag descriptor activates
+      diagonal scanning). Port X example puzzles (diagonal locked
+      candidates, diagonal hidden pair, diagonal naked subset) as failing
+      specs per technique; pattern metadata records the diagonal unit
+      descriptor (`type = "diag"`), already generic
+- [ ] `core/techniques/fish.lua`: generalize base/cover unit selection to
+      unit descriptors so a diagonal can serve as base or cover (sizes 1–2;
+      larger diagonal fish only if ported examples demand them); spec with a
+      diagonal-X-Wing example. Diagonal fish are geometrically degenerate,
+      not pure plumbing: each diagonal crosses every row/col exactly once,
+      and the two diagonals share the center cell (a center cell sits on
+      both base lines) — the generalization must verify crossing/intersection
+      semantics explicitly, with any ambiguity resolved in the spec example
+- [ ] `core/generator.lua`: `generate`/`generate_game` accept
+      `variant = "diag"`; the **sampler must be variant-aware** — a classic
+      `sample_solution` grid satisfies both diagonals only ~1 in 10⁶ times
+      ((9!/9⁹)² per grid), so sampling classic + resample-on-reject never
+      terminates; X sampling fills an empty grid through the diag-aware
+      solver (M13 plumbing), then digs/classifies as planned; per-variant
+      difficulty calibration tables (keep the
+      classic tables as defaults; add a variant-keyed override layer);
+      measure hit rates and record the calibrated X ranges/weights in
+      PLAN.md (P3/RM4 methodology); `solve_path.classify` beginner/easy
+      clue-count split reused for X
+- [ ] `game.lua` + `game_serialize.lua`: variant `"diag"` end-to-end —
+      diagonal duplicate marking, autofill/fill-all-notes respect the
+      diagonals, save round-trip; specs
+- [ ] `ui/sudokuview.lua`: paint the two diagonals (thin gray band below the
+      digit ink, distinct from grid lines); `sudoku_view_spec` pixel checks
+- [ ] `main.lua`/`ui/dialogs.lua`: "Sudoku X" enabled in the variant picker;
+      l10n labels + pot extraction
+- [ ] `tools/bench_generation.lua`: X generation gate (≤ 3 s per sample)
+
+**Exit criteria**: all specs green, `./dev.sh lint`/`./dev.sh fmt` clean,
+X calibration numbers recorded in PLAN.md, emulator boot smoke on
+`kobo-aura-one` (play one X game), PLAN.md + README updated, commit.
+
+### M15 — Killer: playable with predefined puzzles
+
+Planned (decisions resolved with the user): the first Killer milestone
+delivers the **core cage model, solver support, validation, and UI**, using
+**6 predefined puzzles** (one per difficulty tier) stored as a pure data
+module. Killer puzzles have **no givens**: the board starts empty, the
+puzzle data is the cage set, and difficulty labels are stored (not
+classified). **The hint pipeline runs unmodified and stays sound**: cage
+pruning keeps all 17 techniques sound, so the M4 pipeline executes — but
+with zero givens and no cage-combination technique until M16, hints on a
+fresh Killer board are sparse (mostly "no hint" until the board fills); the
+first genuinely useful Killer deduction (cage combinations) arrives in M16.
+The second Killer milestone (M16) adds algorithmic generation, Killer
+techniques, and difficulty calibration.
+
+**Cage model** (specified for the implementer):
+- A cage = `{ sum = N, cells = { {r,c}, ... } }`; cages partition all 81
+  cells exactly (no overlap, no gap), each holds 1–9 cells, `sum` is an
+  integer in 1..45, digits within a cage are distinct, and the placed digits
+  sum to `sum`. All of this is validated by `restore_data` and enforced by
+  the solver.
+- **Live mistake rule** (game conflict marking): for a cage, let S = sum of
+  placed digits and E = count of empty cage cells. A cage is in violation
+  iff `S + E > sum` (unreachable) or (`E == 0` and `S ~= sum`). All *filled*
+  cells of a violating cage are marked conflicting.
+- **Candidate pruning**: per cage, the set of valid digit combinations
+  (distinct digits summing to `sum`, consistent with already placed digits);
+  a cell's candidates = classic legal mask ∩ (union of digits over the
+  cage's valid combos). Combination tables for (size, target) are
+  precomputed module-level once. Empty candidate set = contradiction (the
+  backtracker dead-ends naturally).
+- **Note auto-clean**: placing a digit removes it from the notes of
+  `each_conflict_peer` cells (cage-mates), consistent with classic peers.
+
+- [ ] `core/variants/killer.lua`: `restore_data` (strict cage-table
+      validation incl. partition check), `new_state` (per-cage combo state,
+      derived from board+masks; rebuild-per-node is the accepted first
+      pass), `filter_candidates`, `after_place`/`after_remove` (restrict/
+      expand the cage's combos), `refresh_candidates` (recompute all cells
+      of the affected cage), `is_safe_extra` (no cage duplicate),
+      `each_conflict_peer` (cage-mates), `validate_board` (every cage sums
+      exactly), `serialize_data`
+- [ ] `core/variants/killer_puzzles.lua`: 6 puzzles (one per tier), each
+      `{ id, difficulty, cages = {...}, solution = "81-char" }`. Verify in
+      specs: cage partition valid, solution satisfies every cage + global
+      rules, `count_solutions(2) == 1` per puzzle, and the puzzle solves
+      guess-free with the technique set available in M15 (classic 17 +
+      pruning; if any tier puzzle needs more, pick a replacement or downgrade
+      its tier — record the decision in PLAN.md)
+- [ ] Solver/candidates specs (`sudoku_variant_killer_spec.lua`): combo
+      pruning (e.g. 2-cell cage sum 3 ⇒ both cells {1,2}; sum 17 ⇒ {8,9};
+      single-cell cages force the digit), dead-end rollback, all 6 puzzles
+      solve to their stored solution
+- [ ] `game.lua`: zero-given allowance for Killer; cage violations in
+      `conflicts_board`; cage-aware auto-clean; specs (marking, undo/redo,
+      notes)
+- [ ] `game_serialize.lua`: `variant_data` cage round-trip; v3 restore
+      validates cages; specs
+- [ ] `stats.lua`: entries carry `variant = "killer"` + `variant_data`
+      (cages) so history replay is lossless; games-list rows show the
+      variant; `ui/statsview.lua` renders the M13 per-variant `summary()`
+      sections
+- [ ] `main.lua`/`ui/dialogs.lua`: variant picker → Killer difficulty picker
+      selects the predefined puzzle (deterministic per difficulty);
+      replay/"Play again" rebuilds the game from the stored cages+solution
+      (no generator involvement)
+- [ ] `ui/sudokuview.lua` variant extras (Killer): cage borders (a dark line
+      on every cell edge whose two cells are in different cages, over the
+      grid lines), sum label (small corner digit, top-left cell of each
+      cage; `layout.lua` gains a `FONT_SUM_DP` constant), per-cage
+      completion highlight (light fill when a cage is filled and correct —
+      theme color); `sudoku_view_spec` pixel checks
+- [ ] l10n: variant names ("Killer Sudoku"), cage-data error messages; pot
+      extraction + German catalog
+- [ ] Emulator smoke: full loop (menu → play a Killer puzzle → notes → hints
+      → win → stats shows the variant) on `kobo-aura-one`
+
+**Exit criteria**: all specs green, `./dev.sh lint`/`./dev.sh fmt` clean,
+emulator smoke, PLAN.md + README updated, commit.
+
+### M16 — Killer generation, techniques & difficulty
+
+Planned (decisions resolved with the user): **algorithmic Killer
+generation** (not a puzzle bank) plus the **Killer technique family** that
+makes Killer hints and difficulty meaningful. This is the highest-risk
+milestone; expect P3/RM4-style iterative calibration, and treat the
+generator pipeline and the calibration as separate tasks.
+
+**Killer techniques** (new technique modules with the existing
+`apply(prop)`/`flags()` interface; registered **per-variant** per design
+decision #11 — the propagator runs them only in Killer solves, and the
+classic composites stay untouched):
+- `killer_combinations` — cage combo restriction/placement (the most basic
+  Killer deduction; order right after `hidden_singles`). Flag bit 2 (free
+  region), tier easy in the per-variant technique table.
+- `killer_45_rule` — innies/outies: house sum 45 vs the cages intersecting
+  a row/col/box yields hidden cage sum constraints. Flag bit 13 (free
+  region), tier medium in the per-variant technique table.
+- Patterns: `kind = "cage_combination"` / `"innie_outie"` with cage cells +
+  values; `flags.TECHNIQUE_SCORES` entries (combinations 15, 45-rule 40);
+  l10n labels; specs with ported example puzzles (choose small, well-known
+  Killer examples and record sources in the spec headers).
+
+**Generator** (`core/generator.lua` + killer helpers):
+1. Sample a full classic solution grid (existing `sample_solution`).
+2. Tessellate: partition the 81 cells into cages of 1–9 cells (start from
+   singletons, randomly merge adjacent cages; adjacency preferred for
+   visual quality, size ≤ 9 enforced). Each cage's target = the sum of its
+   digits in the sampled solution (guarantees a solution exists).
+3. Difficulty shaping: uniform tessellation yields easy puzzles; harder
+   tiers need crafted structure — define measurable cage-structure metrics
+   (share of 2-cell cages, cage alignment with boxes, count of cages
+   crossing box borders, average cage size) and use weighted sampling +
+   measurement to hit each tier (P3 methodology; iterate until measured hit
+   rates are usable, record the calibrated tables in PLAN.md).
+4. Uniqueness + classification: mirror classic `classify_puzzle` — killer
+   `TIER_TECHNIQUES` per difficulty from the per-variant technique tables
+   (classic ∪ killer), `count_solutions(2)` with killer techniques, P4
+   search budget, no guessing. `solve_path.classify`'s clue-based
+   beginner/easy split must become variant-aware (Killer: e.g.
+   combinations-only solve vs. 45-rule).
+5. Payload: `{ board = empty, solution, cages, difficulty, variant, seed }`.
+
+- [ ] `core/techniques/flags.lua`: allocate the killer flag bits (2, 13) in
+      the shared registry only — the classic tier composites
+      (`EASY = 0xFF`, `MEDIUM`, `ALL`) stay byte-identical, so killer
+      techniques never execute in a classic solve; killer tiers (easy /
+      medium) live in the per-variant technique table
+- [ ] `core/techniques/killer_combinations.lua` + spec
+- [ ] `core/techniques/killer_45_rule.lua` + spec
+- [ ] `propagator.lua`: per-variant technique selection — the propagator
+      builds its order as `classic ∪ variant:techniques()` (M13 plumbing);
+      `hints.lua` TECHNIQUES entries gain the same per-variant composition
+- [ ] `core/generator.lua`: killer generation pipeline (steps 1–5 above) +
+      per-variant tier technique tables + variant-aware classification
+- [ ] Calibration: measurement run (`tools/bench_generation.lua` extended
+      with a Killer gate, ≤ 3 s per sample on the dev Mac), hit-rate tables
+      recorded in PLAN.md
+- [ ] `main.lua`/`ui/dialogs.lua`: Killer difficulty picker switches from
+      the predefined set to generated puzzles
+- [ ] l10n for the new technique names; pot extraction
+
+**Exit criteria**: all specs green, `./dev.sh lint`/`./dev.sh fmt` clean,
+`tools/bench_generation.lua` killer gate passes, emulator boot smoke on
+`kobo-aura-one` with no errors, calibration numbers recorded in PLAN.md,
+PLAN.md + README updated, commit.
