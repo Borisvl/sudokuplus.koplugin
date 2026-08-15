@@ -22,6 +22,16 @@ describe("sudoku plugin menu", function()
         error("no menu item " .. text)
     end
 
+    local created_baks = {}
+    local function track_bak(text)
+        if type(text) == "string" then
+            local bak = text:match("(%S+%.bak)")
+            if bak then
+                created_baks[#created_baks + 1] = bak
+            end
+        end
+    end
+
     setup(function()
         require("commonrequire")
         DataStorage = require("datastorage")
@@ -36,6 +46,10 @@ describe("sudoku plugin menu", function()
 
     after_each(function()
         os.remove(save_path)
+        for _, p in ipairs(created_baks) do
+            os.remove(p)
+        end
+        created_baks = {}
     end)
 
     it("registers a Sudoku submenu with continue, new-game, statistics and the notes toggle", function()
@@ -151,6 +165,153 @@ describe("sudoku plugin menu", function()
         assert.is_not_nil(shown, "Continue must show the game view")
         assert.are.equal(2, shown.game:get(0, 2))
         assert.is_true(shown.game.timer.running, "resumed game must start its timer")
+    end)
+
+    it("backs up corrupt JSON save on continue, shows info and disables continue (B2)", function()
+        local file = io.open(save_path, "wb")
+        file:write('{"version": corrupt_json')
+        file:close()
+
+        local continue = item_with("Continue")
+        assert.is_true(continue.enabled_func())
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            shown = widget
+            track_bak(widget and widget.text)
+        end
+        continue.callback()
+        UIManager.show = original_show
+
+        assert.is_not_nil(shown)
+        assert.is_true(string.find(shown.text, "corrupted") ~= nil)
+        assert.is_false(storage.exists(save_path), "corrupted save must be moved")
+        assert.is_false(continue.enabled_func(), "continue must now be disabled")
+    end)
+
+    it("backs up semantically invalid save on continue, shows info and disables continue (B2)", function()
+        local file = io.open(save_path, "wb")
+        file:write('{"version": 1, "board": "invalid_length"}')
+        file:close()
+
+        local continue = item_with("Continue")
+        assert.is_true(continue.enabled_func())
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            shown = widget
+            track_bak(widget and widget.text)
+        end
+        continue.callback()
+        UIManager.show = original_show
+
+        assert.is_not_nil(shown)
+        assert.is_true(string.find(shown.text, "corrupted") ~= nil)
+        assert.is_true(string.find(shown.text, "invalid difficulty") ~= nil)
+        assert.is_false(storage.exists(save_path), "invalid save must be moved")
+        assert.is_false(continue.enabled_func(), "continue must now be disabled")
+    end)
+
+    it("backs up future unsupported version save on continue and reports version error", function()
+        local file = io.open(save_path, "wb")
+        file:write('{"version": 99, "board": "530070000"}')
+        file:close()
+
+        local continue = item_with("Continue")
+        assert.is_true(continue.enabled_func())
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            shown = widget
+            track_bak(widget and widget.text)
+        end
+        continue.callback()
+        UIManager.show = original_show
+
+        assert.is_not_nil(shown)
+        assert.is_true(string.find(shown.text, "corrupted") ~= nil)
+        assert.is_true(string.find(shown.text, "unsupported save version: 99") ~= nil)
+        assert.is_false(storage.exists(save_path), "future version save must be moved")
+        assert.is_false(continue.enabled_func(), "continue must now be disabled")
+    end)
+
+    it("backs up timer-drifted save on continue and reports drift error", function()
+        local valid_puzzle = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+        local valid_solution = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+        local board = require("core.board")
+        local g = game.new({
+            puzzle = board.from_string(valid_puzzle),
+            solution = board.from_string(valid_solution),
+            difficulty = "easy",
+            now = function()
+                return 1000
+            end,
+        })
+        local payload = g:serialize()
+        payload.timer.running = true
+        payload.timer.started = os.time() - 8 * 86400
+        storage.save(save_path, payload)
+
+        local continue = item_with("Continue")
+        assert.is_true(continue.enabled_func())
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            shown = widget
+            track_bak(widget and widget.text)
+        end
+        continue.callback()
+        UIManager.show = original_show
+
+        assert.is_not_nil(shown)
+        assert.is_true(string.find(shown.text, "corrupted") ~= nil)
+        assert.is_true(string.find(shown.text, "invalid timer state") ~= nil)
+        assert.is_false(storage.exists(save_path), "drifted save must be moved")
+        assert.is_false(continue.enabled_func(), "continue must now be disabled")
+    end)
+
+    it("shows failure message and keeps continue enabled when backup rename fails", function()
+        local file = io.open(save_path, "wb")
+        file:write('{"version": corrupt_json')
+        file:close()
+
+        local continue = item_with("Continue")
+        assert.is_true(continue.enabled_func())
+
+        -- luacheck: push ignore 122
+        local real_rename = os.rename
+        os.rename = function(old, new)
+            if old == save_path then
+                return nil, "rename failed permission denied"
+            end
+            return real_rename(old, new)
+        end
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            shown = widget
+            track_bak(widget and widget.text)
+        end
+        continue.callback()
+        UIManager.show = original_show
+        os.rename = real_rename
+        -- luacheck: pop
+
+        assert.is_not_nil(shown)
+        assert.is_true(string.find(shown.text, "Failed to restore") ~= nil)
+        assert.is_true(string.find(shown.text, "rename failed") ~= nil)
+        assert.is_true(storage.exists(save_path), "save must remain in place if backup failed")
+        assert.is_true(continue.enabled_func(), "continue must remain enabled when save still exists")
     end)
 
     it("starts a new game with a wall-clock timer", function()

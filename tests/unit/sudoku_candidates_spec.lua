@@ -156,7 +156,7 @@ describe("core.candidates", function()
         end
         masks.remove_number(m, 0, 0, 1)
         board.set(b, 0, 0, 0)
-        candidates.update_affected_cells(c, 0, 0, m, b)
+        candidates.update_affected_cells_for(c, 0, 0, m, b, nil)
         assert.are.same(
             { 1, 2, 3, 4, 5, 6, 7, 8, 9 },
             candidates.get_candidates(c, 0, 0),

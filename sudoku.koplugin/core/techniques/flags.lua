@@ -23,6 +23,9 @@ flags.XY_WING = bit.lshift(1, 25)
 flags.XYZ_WING = bit.lshift(1, 26)
 flags.ALTERNATING_INFERENCE_CHAIN = bit.lshift(1, 27)
 
+-- Beginner and Easy share the same technique mask (naked & hidden singles);
+-- the difficulty split is determined by clue count (>= 38 for beginner) in
+-- solve_path.classify.
 flags.BEGINNER = 0xFF
 flags.EASY = 0xFF
 flags.MEDIUM = bit.bor(flags.NAKED_PAIRS, flags.LOCKED_CANDIDATES)

@@ -118,16 +118,17 @@ function board.count_clues(b)
     return count
 end
 
-function board.iter_empty_cells(b)
-    local cells = {}
-    for r = 0, 8 do
-        for c = 0, 8 do
-            if board.is_empty(b, r, c) then
-                cells[#cells + 1] = { r, c }
-            end
+function board.solution_preserves_givens(puzzle, solution)
+    if type(puzzle) ~= "table" or type(solution) ~= "table" then
+        return false
+    end
+    for i = 1, 81 do
+        local given = puzzle[i]
+        if given ~= 0 and solution[i] ~= given then
+            return false
         end
     end
-    return cells
+    return true
 end
 
 return board

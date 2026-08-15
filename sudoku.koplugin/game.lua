@@ -288,13 +288,8 @@ function game.new(options)
     if board.count_clues(solution) ~= 81 then
         return nil, "solution must contain 81 values"
     end
-    for r = 0, 8 do
-        for c = 0, 8 do
-            local given = board.get(puzzle, r, c)
-            if given ~= 0 and board.get(solution, r, c) ~= given then
-                return nil, "solution does not preserve the puzzle givens"
-            end
-        end
+    if not board.solution_preserves_givens(puzzle, solution) then
+        return nil, "solution does not preserve the puzzle givens"
     end
 
     if type(difficulty) ~= "string" or not util.is_difficulty(difficulty) then
@@ -789,6 +784,12 @@ local function redo_entry(self, entry)
     if entry.kind == "place" then
         self.board[cell_index(entry.r, entry.c)] = entry.value
         self.notes[entry.r + 1][entry.c + 1] = 0
+        for _, cell in ipairs(entry.restored or {}) do
+            local cr, cc, val = cell[1], cell[2], cell[3]
+            if is_safe_board(self.board, cr, cc, val) then
+                add_note_digit(self, cr, cc, val)
+            end
+        end
         auto_clean(self, entry.r, entry.c, entry.value)
     elseif entry.kind == "erase" then
         self.board[cell_index(entry.r, entry.c)] = 0
@@ -1357,15 +1358,11 @@ function game.restore(data, opts)
     if board.count_clues(solution) ~= 81 then
         return nil, "solution must contain 81 values"
     end
-    for i = 1, 81 do
-        if puzzle[i] ~= 0 then
-            if solution[i] ~= puzzle[i] then
-                return nil, "solution does not preserve the puzzle givens"
-            end
-            if current[i] ~= puzzle[i] then
-                return nil, "board does not preserve the puzzle givens"
-            end
-        end
+    if not board.solution_preserves_givens(puzzle, solution) then
+        return nil, "solution does not preserve the puzzle givens"
+    end
+    if not board.solution_preserves_givens(puzzle, current) then
+        return nil, "board does not preserve the puzzle givens"
     end
 
     local notes = {}

@@ -39,14 +39,6 @@ function candidates.rollback(c, trail, marker)
     trail.size = marker
 end
 
-function candidates.restore(c, snapshot)
-    for r = 1, 9 do
-        for col = 1, 9 do
-            c[r][col] = snapshot[r][col]
-        end
-    end
-end
-
 function candidates.get(c, r, col)
     return c[r + 1][col + 1]
 end
@@ -94,12 +86,6 @@ function candidates.count(mask)
 end
 
 local DIGIT_BITS = { 1, 2, 4, 8, 16, 32, 64, 128, 256 }
-
--- Additive recomputation variant: used by specs and fallback board resets to
--- re-derive candidates from row/col/box masks from scratch.
-function candidates.update_affected_cells(c, r, col, m, b, trail)
-    candidates.update_affected_cells_for(c, r, col, m, b, nil, trail)
-end
 
 -- Invariant: candidates ⊆ legal masks for every empty cell. Subtractive placement updates
 -- maintain this monotonically via bit.band(old_cand, elim_bit), avoiding

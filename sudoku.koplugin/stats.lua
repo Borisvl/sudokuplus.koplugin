@@ -262,6 +262,9 @@ function stats.abandon(s, id, ended_at)
     if type(s) ~= "table" or s.version ~= VERSION then
         return nil, "stats must be a stats table"
     end
+    if type(ended_at) ~= "number" or not util.is_finite(ended_at) or ended_at < 0 then
+        return nil, "ended_at must be a non-negative number"
+    end
     local entry = id and find_entry(s, id)
     if not entry then
         return nil, "no tracked game with that id"

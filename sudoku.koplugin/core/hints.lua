@@ -164,13 +164,8 @@ local function validate_solution(solution, b)
     if board.count_clues(solution) ~= 81 then
         return nil, "solution must contain 81 values"
     end
-    for r = 0, 8 do
-        for c = 0, 8 do
-            local given = board.get(b, r, c)
-            if given ~= 0 and board.get(solution, r, c) ~= given then
-                return nil, "solution does not preserve the puzzle givens"
-            end
-        end
+    if not board.solution_preserves_givens(b, solution) then
+        return nil, "solution does not preserve the puzzle givens"
     end
     return true
 end

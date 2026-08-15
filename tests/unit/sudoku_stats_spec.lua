@@ -259,6 +259,31 @@ describe("stats", function()
         assert.is_nil(stats.add(s, record({ ended_at = math.huge })))
     end)
 
+    it("rejects invalid ended_at in stats.abandon (R4)", function()
+        local s = stats.new()
+        assert.is_not_nil(stats.track(s, in_progress_record({ id = 42 })))
+
+        local bad_nil, err_nil = stats.abandon(s, 42, nil)
+        assert.is_nil(bad_nil)
+        assert.are.equal("ended_at must be a non-negative number", err_nil)
+
+        local bad_neg, err_neg = stats.abandon(s, 42, -10)
+        assert.is_nil(bad_neg)
+        assert.are.equal("ended_at must be a non-negative number", err_neg)
+
+        local bad_str, err_str = stats.abandon(s, 42, "now")
+        assert.is_nil(bad_str)
+        assert.are.equal("ended_at must be a non-negative number", err_str)
+
+        local bad_nan, err_nan = stats.abandon(s, 42, 0 / 0)
+        assert.is_nil(bad_nan)
+        assert.are.equal("ended_at must be a non-negative number", err_nan)
+
+        local bad_inf, err_inf = stats.abandon(s, 42, 1 / 0)
+        assert.is_nil(bad_inf)
+        assert.are.equal("ended_at must be a non-negative number", err_inf)
+    end)
+
     it("computes per-difficulty count, average, best and mistakes", function()
         local s = stats.new()
         stats.add(s, record({ id = 1, difficulty = "easy", duration = 100, mistakes = 1 }))

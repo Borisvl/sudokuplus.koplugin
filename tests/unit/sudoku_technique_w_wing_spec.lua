@@ -107,4 +107,55 @@ describe("core.techniques.w_wing", function()
         assert.are.equal(81, board.count_clues(s.board))
         assert.is_not_nil(solver.validate(s.board))
     end)
+
+    it("does not fire when a bridge end is a pincer (soundness requirement)", function()
+        local b = board.new()
+        local c = candidates.new()
+
+        local function mask(...)
+            local v = 0
+            for _, d in ipairs({ ... }) do
+                v = bit.bor(v, bit.lshift(1, d - 1))
+            end
+            return v
+        end
+
+        local full = mask(1, 2, 3, 4, 5, 6, 7, 8, 9)
+        local full_no_1 = mask(2, 3, 4, 5, 6, 7, 8, 9)
+
+        for r = 0, 8 do
+            for col = 0, 8 do
+                candidates.set(c, r, col, full)
+            end
+        end
+
+        -- In row 0, remove candidate 1 from cols 1..3 and 5..8 so candidate 1 in row 0
+        -- appears only at col 0 and col 4 (a strong link / conjugate pair).
+        for col = 1, 3 do
+            candidates.set(c, 0, col, full_no_1)
+        end
+        for col = 5, 8 do
+            candidates.set(c, 0, col, full_no_1)
+        end
+
+        -- Pincers {1, 2}: (0, 0) and (4, 4)
+        candidates.set(c, 0, 0, mask(1, 2))
+        candidates.set(c, 4, 4, mask(1, 2))
+
+        -- Bridge end S2: (0, 4) has candidate 1 (and 3); S1 is (0, 0) which is pincer 1
+        -- (0, 4) sees pincer 2 (4, 4) along col 4
+        candidates.set(c, 0, 4, mask(1, 3))
+
+        -- Cell (4, 0) sees both pincers (0, 0) in col 0 and (4, 4) in row 4, and has candidate 2
+        candidates.set(c, 4, 0, mask(2, 3))
+
+        local s = solver.new(b, { candidates = c, techniques = flags.W_WING })
+        local path = solve_path.new()
+        assert.is_true(s:propagate(path))
+
+        local steps = w_wing_steps(path)
+        assert.are.equal(0, #steps)
+        -- Candidate 2 at (4, 0) was NOT eliminated
+        assert.are_not.equal(0, bit.band(candidates.get(s.candidates, 4, 0), bit.lshift(1, 1)))
+    end)
 end)

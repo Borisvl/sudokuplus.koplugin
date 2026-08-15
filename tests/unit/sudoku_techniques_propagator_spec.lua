@@ -625,7 +625,14 @@ describe("core.techniques.propagator", function()
             local path = solve_path.new()
 
             for _ = 1, 8 do
-                local empty = board.iter_empty_cells(s.board)
+                local empty = {}
+                for r = 0, 8 do
+                    for c = 0, 8 do
+                        if board.raw_is_empty(s.board, r, c) then
+                            empty[#empty + 1] = { r, c }
+                        end
+                    end
+                end
                 if #empty == 0 then
                     break
                 end

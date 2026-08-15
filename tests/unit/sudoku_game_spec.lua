@@ -514,6 +514,33 @@ describe("game", function()
         assert.is_true(has_note(instance, 0, 3, 6))
     end)
 
+    it("restores notes on redo of a cell replacement (B1)", function()
+        local instance = new_game()
+
+        -- Cell (0, 3) gets note 2
+        assert.is_true(instance:toggle_note(0, 3, 2))
+        assert.is_true(has_note(instance, 0, 3, 2))
+
+        -- Place 2 at (0, 2) -> auto-cleans note 2 from (0, 3)
+        assert.is_true(instance:place(0, 2, 2))
+        assert.is_false(has_note(instance, 0, 3, 2), "placing 2 auto-cleans note 2")
+
+        -- Replace (0, 2) with 5 -> restores note 2 at (0, 3)
+        assert.is_true(instance:place(0, 2, 5))
+        assert.are.equal(5, instance:get(0, 2))
+        assert.is_true(has_note(instance, 0, 3, 2), "replacing 2 with 5 restores note 2")
+
+        -- Undo replacement -> reverts to 2 at (0, 2), removing note 2 from (0, 3)
+        assert.is_true(instance:undo())
+        assert.are.equal(2, instance:get(0, 2))
+        assert.is_false(has_note(instance, 0, 3, 2), "undoing replace removes restored note")
+
+        -- Redo replacement -> reverts to 5 at (0, 2), note 2 MUST be restored at (0, 3)
+        assert.is_true(instance:redo())
+        assert.are.equal(5, instance:get(0, 2))
+        assert.is_true(has_note(instance, 0, 3, 2), "redoing replace re-restores note 2")
+    end)
+
     it("clears the redo stack on a new move", function()
         local instance = new_game()
 

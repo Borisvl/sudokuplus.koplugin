@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sudoku\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-14 22:27+0200\n"
+"POT-Creation-Date: 2026-08-15 12:31+0200\n"
 "PO-Revision-Date: 2026-08-14 21:35+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: sudoku.koplugin/_meta.lua:3 sudoku.koplugin/main.lua:232
+#: sudoku.koplugin/_meta.lua:3 sudoku.koplugin/main.lua:234
 msgid "Sudoku"
 msgstr "Sudoku"
 
@@ -24,46 +24,47 @@ msgstr "Sudoku"
 msgid "A Sudoku puzzle game for e-ink readers."
 msgstr "Ein Sudoku-Rätselspiel für E-Reader."
 
-#: sudoku.koplugin/main.lua:110
+#: sudoku.koplugin/main.lua:108
 msgid "Generating…"
 msgstr "Wird generiert…"
 
-#: sudoku.koplugin/main.lua:121
+#: sudoku.koplugin/main.lua:119
 msgid "Failed to generate a Sudoku puzzle."
 msgstr "Sudoku-Rätsel konnte nicht generiert werden."
 
-#: sudoku.koplugin/main.lua:155
+#: sudoku.koplugin/main.lua:153
 msgid "Failed to start a game."
 msgstr "Spiel konnte nicht gestartet werden."
 
-#: sudoku.koplugin/main.lua:175
+#: sudoku.koplugin/main.lua:173
 msgid "This game cannot be replayed (no reproduction seed)."
 msgstr ""
 "Dieses Spiel kann nicht wiederholt werden (kein Replay-Seed vorhanden)."
 
-#: sudoku.koplugin/main.lua:186
+#: sudoku.koplugin/main.lua:190
+msgid "The save was corrupted; a backup was kept at %1"
+msgstr ""
+"Der Spielstand war beschädigt; eine Sicherungskopie wurde erstellt unter %1"
+
+#: sudoku.koplugin/main.lua:194
 msgid "No saved game found."
 msgstr "Kein gespeichertes Spiel gefunden."
 
-#: sudoku.koplugin/main.lua:193
-msgid "Failed to restore the saved game."
-msgstr "Gespeichertes Spiel konnte nicht wiederhergestellt werden."
-
-#: sudoku.koplugin/main.lua:236
+#: sudoku.koplugin/main.lua:238
 msgid "Continue"
 msgstr "Fortsetzen"
 
-#: sudoku.koplugin/main.lua:250 sudoku.koplugin/ui/sudokuview.lua:907
-#: sudoku.koplugin/ui/sudokuview.lua:1132
+#: sudoku.koplugin/main.lua:247 sudoku.koplugin/ui/sudokuview.lua:926
+#: sudoku.koplugin/ui/sudokuview.lua:1170
 msgid "New game"
 msgstr "Neues Spiel"
 
-#: sudoku.koplugin/main.lua:254 sudoku.koplugin/ui/sudokuview.lua:916
-#: sudoku.koplugin/ui/sudokuview.lua:1124
+#: sudoku.koplugin/main.lua:251 sudoku.koplugin/ui/sudokuview.lua:936
+#: sudoku.koplugin/ui/sudokuview.lua:1160
 msgid "Statistics"
 msgstr "Statistiken"
 
-#: sudoku.koplugin/main.lua:261
+#: sudoku.koplugin/main.lua:258
 msgid "Auto-fill notes"
 msgstr "Notizen automatisch ausfüllen"
 
@@ -197,67 +198,67 @@ msgstr "Tipp"
 msgid "Menu"
 msgstr "Menü"
 
-#: sudoku.koplugin/ui/statsview.lua:30
+#: sudoku.koplugin/ui/statsview.lua:28
 msgid "#%1 · %2 · %3 · %4"
 msgstr "#%1 · %2 · %3 · %4"
 
-#: sudoku.koplugin/ui/statsview.lua:49
+#: sudoku.koplugin/ui/statsview.lua:47
 msgid "%1: %2"
 msgstr "%1: %2"
 
-#: sudoku.koplugin/ui/statsview.lua:62
+#: sudoku.koplugin/ui/statsview.lua:60
 msgid "%1 — %2 finished, avg %3, best %4, given up %5"
 msgstr "%1 — %2 beendet, Ø %3, Bestzeit %4, aufgegeben %5"
 
-#: sudoku.koplugin/ui/statsview.lua:110
+#: sudoku.koplugin/ui/statsview.lua:108
 msgid "Game history"
 msgstr "Spielverlauf"
 
-#: sudoku.koplugin/ui/statsview.lua:134
+#: sudoku.koplugin/ui/statsview.lua:132
 msgid "Started: %1   Finished: %2   Given up: %3"
 msgstr "Gestartet: %1   Beendet: %2   Aufgegeben: %3"
 
-#: sudoku.koplugin/ui/statsview.lua:140
+#: sudoku.koplugin/ui/statsview.lua:138
 msgid "Abandoned: %1   In progress: %2"
 msgstr "Abgebrochen: %1   Laufend: %2"
 
-#: sudoku.koplugin/ui/statsview.lua:141
+#: sudoku.koplugin/ui/statsview.lua:139
 msgid "Completion rate: %1   Win rate: %2"
 msgstr "Abschlussquote: %1   Gewinnquote: %2"
 
-#: sudoku.koplugin/ui/statsview.lua:142
+#: sudoku.koplugin/ui/statsview.lua:140
 msgid "Total playtime: %1"
 msgstr "Gesamte Spielzeit: %1"
 
-#: sudoku.koplugin/ui/statsview.lua:144
+#: sudoku.koplugin/ui/statsview.lua:142
 msgid "Best time: %1   Average: %2"
 msgstr "Bestzeit: %1   Durchschnitt: %2"
 
-#: sudoku.koplugin/ui/statsview.lua:146
+#: sudoku.koplugin/ui/statsview.lua:144
 msgid "Current streak: %1   Best streak: %2"
 msgstr "Aktuelle Serie: %1   Beste Serie: %2"
 
-#: sudoku.koplugin/ui/statsview.lua:149
+#: sudoku.koplugin/ui/statsview.lua:147
 msgid "Total mistakes: %1 (avg %2 per game)   Check errors: %3"
 msgstr "Fehler gesamt: %1 (Ø %2 pro Spiel)   Prüffehler: %3"
 
-#: sudoku.koplugin/ui/statsview.lua:155
+#: sudoku.koplugin/ui/statsview.lua:153
 msgid "Average moves per game: %1"
 msgstr "Durchschnittliche Züge pro Spiel: %1"
 
-#: sudoku.koplugin/ui/statsview.lua:158
+#: sudoku.koplugin/ui/statsview.lua:156
 msgid "By difficulty"
 msgstr "Nach Schwierigkeitsgrad"
 
-#: sudoku.koplugin/ui/statsview.lua:162
+#: sudoku.koplugin/ui/statsview.lua:160
 msgid "Most missed strategies"
 msgstr "Häufigste übersehene Strategien"
 
-#: sudoku.koplugin/ui/statsview.lua:166
+#: sudoku.koplugin/ui/statsview.lua:164
 msgid "Game history (%1)"
 msgstr "Spielverlauf (%1)"
 
-#: sudoku.koplugin/ui/statsview.lua:173
+#: sudoku.koplugin/ui/statsview.lua:171
 msgid "Sudoku statistics"
 msgstr "Sudoku-Statistiken"
 
@@ -277,41 +278,41 @@ msgstr "Aufgegeben"
 msgid "Abandoned"
 msgstr "Abgebrochen"
 
-#: sudoku.koplugin/ui/sudokuview.lua:536
+#: sudoku.koplugin/ui/sudokuview.lua:533
 msgid "%1 — tap Hint for the pattern"
 msgstr "%1 — Tipp antippen für das Muster"
 
-#: sudoku.koplugin/ui/sudokuview.lua:538
+#: sudoku.koplugin/ui/sudokuview.lua:535
 msgid "%1 — tap Hint to apply"
 msgstr "%1 — Tipp antippen zum Anwenden"
 
-#: sudoku.koplugin/ui/sudokuview.lua:748
+#: sudoku.koplugin/ui/sudokuview.lua:745
 msgid "No mistakes found."
 msgstr "Keine Fehler gefunden."
 
-#: sudoku.koplugin/ui/sudokuview.lua:749
+#: sudoku.koplugin/ui/sudokuview.lua:746
 msgid "1 wrong cell found."
 msgid_plural "%1 wrong cells found."
 msgstr[0] "1 falsche Zelle gefunden."
 msgstr[1] "%1 falsche Zellen gefunden."
 
-#: sudoku.koplugin/ui/sudokuview.lua:816
+#: sudoku.koplugin/ui/sudokuview.lua:813
 msgid "Some notes are inconsistent with the board. Fix them first."
 msgstr "Einige Notizen widersprechen dem Spielfeld. Bitte zuerst korrigieren."
 
-#: sudoku.koplugin/ui/sudokuview.lua:829
+#: sudoku.koplugin/ui/sudokuview.lua:826
 msgid "No hint available. Re-add notes to: %1"
 msgstr "Kein Tipp verfügbar. Notizen wieder hinzufügen bei: %1"
 
-#: sudoku.koplugin/ui/sudokuview.lua:832
+#: sudoku.koplugin/ui/sudokuview.lua:829
 msgid "The puzzle is solved."
 msgstr "Das Rätsel ist gelöst."
 
-#: sudoku.koplugin/ui/sudokuview.lua:834
+#: sudoku.koplugin/ui/sudokuview.lua:831
 msgid "No hint available."
 msgstr "Kein Tipp verfügbar."
 
-#: sudoku.koplugin/ui/sudokuview.lua:897
+#: sudoku.koplugin/ui/sudokuview.lua:918
 msgid ""
 "Puzzle solved!\n"
 "\n"
@@ -325,55 +326,55 @@ msgstr ""
 "Fehler: %2\n"
 "Tipps: %3"
 
-#: sudoku.koplugin/ui/sudokuview.lua:902
+#: sudoku.koplugin/ui/sudokuview.lua:949
 msgid "Close"
 msgstr "Schließen"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1011
-#: sudoku.koplugin/ui/sudokuview.lua:1066
-#: sudoku.koplugin/ui/sudokuview.lua:1085
+#: sudoku.koplugin/ui/sudokuview.lua:1043
+#: sudoku.koplugin/ui/sudokuview.lua:1098
+#: sudoku.koplugin/ui/sudokuview.lua:1117
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1021
+#: sudoku.koplugin/ui/sudokuview.lua:1053
 msgid "New game — Choose difficulty"
 msgstr "Neues Spiel — Schwierigkeit wählen"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1035
+#: sudoku.koplugin/ui/sudokuview.lua:1067
 msgid "Reset this puzzle from the beginning? All progress will be lost."
 msgstr ""
 "Dieses Rätsel von vorne beginnen? Der gesamte Fortschritt geht verloren."
 
-#: sudoku.koplugin/ui/sudokuview.lua:1036
+#: sudoku.koplugin/ui/sudokuview.lua:1068
 msgid "Reset"
 msgstr "Zurücksetzen"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1079
+#: sudoku.koplugin/ui/sudokuview.lua:1111
 msgid "Are you sure you want to give up?"
 msgstr "Möchtest du wirklich aufgeben?"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1080
-#: sudoku.koplugin/ui/sudokuview.lua:1166
+#: sudoku.koplugin/ui/sudokuview.lua:1112
+#: sudoku.koplugin/ui/sudokuview.lua:1204
 msgid "Give up"
 msgstr "Aufgeben"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1109
+#: sudoku.koplugin/ui/sudokuview.lua:1145
 msgid "%1 — Time: %2    Mistakes: %3    Hints: %4"
 msgstr "%1 — Zeit: %2    Fehler: %3    Tipps: %4"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1118
+#: sudoku.koplugin/ui/sudokuview.lua:1154
 msgid "Resume"
 msgstr "Fortsetzen"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1141
+#: sudoku.koplugin/ui/sudokuview.lua:1179
 msgid "Reset puzzle"
 msgstr "Rätsel zurücksetzen"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1152
+#: sudoku.koplugin/ui/sudokuview.lua:1190
 msgid "Fill all notes"
 msgstr "Alle Notizen ausfüllen"
 
-#: sudoku.koplugin/ui/sudokuview.lua:1177
+#: sudoku.koplugin/ui/sudokuview.lua:1215
 msgid "Quit"
 msgstr "Beenden"
 
@@ -444,3 +445,6 @@ msgstr "XYZ-Wing"
 #: sudoku.koplugin/ui/techniques.lua:57
 msgid "Alternating Inference Chain"
 msgstr "Alternierende Inferenzkette"
+
+#~ msgid "Failed to restore the saved game."
+#~ msgstr "Gespeichertes Spiel konnte nicht wiederhergestellt werden."

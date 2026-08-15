@@ -4,6 +4,7 @@ local Notification = require("ui/widget/notification")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
+local T = require("ffi/util").template
 local _ = require("gettext")
 local time = require("ui/time")
 
@@ -177,18 +178,27 @@ function Sudoku:replayGame(seed, difficulty)
 end
 
 function Sudoku:continueGame()
-    local data, load_err = storage.load(SAVE_PATH)
-    if not data then
-        UIManager:show(InfoMessage:new {
-            text = _("No saved game found.") .. "\n" .. tostring(load_err),
-        })
-        return
-    end
-    local g, err = game.restore(data, { now = os.time })
+    -- Any restore failure (JSON parse error, schema validation failure, unsupported
+    -- future version, or 7-day timer-drift guard) backs up and removes the save to prevent
+    -- a permanent dead end on "Continue", while preserving the data in <path>.<ts>.bak.
+    local g, err, backed_up, bak_path = storage.load_or_backup(SAVE_PATH, function(data)
+        return game.restore(data, { now = os.time })
+    end)
     if not g then
-        UIManager:show(InfoMessage:new {
-            text = _("Failed to restore the saved game.") .. "\n" .. tostring(err),
-        })
+        if backed_up then
+            local reason = err and ("\n" .. tostring(err)) or ""
+            UIManager:show(InfoMessage:new {
+                text = T(_("The save was corrupted; a backup was kept at %1"), tostring(bak_path)) .. reason,
+            })
+        elseif storage.exists(SAVE_PATH) then
+            UIManager:show(InfoMessage:new {
+                text = _("Failed to restore the saved game.") .. "\n" .. tostring(err),
+            })
+        else
+            UIManager:show(InfoMessage:new {
+                text = _("No saved game found.") .. "\n" .. tostring(err),
+            })
+        end
         return
     end
     -- A save written before the game-log identity existed gets a fresh id.

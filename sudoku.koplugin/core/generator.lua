@@ -444,7 +444,7 @@ function generator.generate(options)
         end
     end
 
-    return nil, err or ("failed to generate a " .. normalized.difficulty .. " puzzle")
+    return nil, "failed to generate a " .. normalized.difficulty .. " puzzle"
 end
 
 function generator.generate_game(options)
@@ -454,6 +454,7 @@ function generator.generate_game(options)
     end
 
     if not normalized.difficulty then
+        local last_err
         for _ = 1, normalized.max_attempts do
             local payload, generate_err = generate_single(normalized, normalized.clues)
             if payload then
@@ -464,10 +465,10 @@ function generator.generate_game(options)
                     return game_payload(payload, classification, normalized)
                 end
             elseif generate_err then
-                err = generate_err
+                last_err = generate_err
             end
         end
-        return nil, err or "failed to generate a non-guessing game"
+        return nil, last_err or "failed to generate a non-guessing game"
     end
 
     -- Best-effort difficulty targeting: prefer an exact match, but never
@@ -509,7 +510,7 @@ function generator.generate_game(options)
     if best then
         return game_payload(best.payload, best.classification, normalized)
     end
-    return nil, err or ("failed to generate a " .. normalized.difficulty .. " game")
+    return nil, "failed to generate a " .. normalized.difficulty .. " game"
 end
 
 return generator

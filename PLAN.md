@@ -34,6 +34,7 @@ A Sudoku puzzle game for e-ink readers (KOReader plugin, target: Kobo).
 2. **Divergences from rustoku**:
    - Solve steps additionally record *pattern metadata* (the cells forming a naked pair, skyscraper base/roof, etc.) so hints can name and highlight patterns.
    - Propagator technique execution order is structured strictly by ascending difficulty tier (Locked Candidates before Naked Pairs, and Wings/Skyscrapers before Swordfish/Hidden Quads/Jellyfish) so human hints and full solves prioritize simpler techniques over complex subsets/fish.
+   - W-Wing parity with rustoku: requires 4 distinct cells ($P_1, P_2, S_1, S_2$) with $P_1 \ne S_1$ and $P_2 \ne S_2$ so that $P_1 = X \implies S_1 \ne X \implies S_2 = X \implies P_2 = Y$ (if a pincer were a bridge end, $P_1 = X \implies S_1 = X$, breaking the conjugate pair deduction).
    Keep these documented here.
 3. **Difficulty model**: 6-tier progression (Beginner, Easy, Medium, Hard, Master,
    Expert) determined by peak human technique tier, clue-count thresholding
@@ -913,3 +914,112 @@ Changes:
 
 - [x] `ui/sudokuview.lua`: Replaced `MultiConfirmBox` with `ButtonDialog` in `_showWinDialog` / `onWin`, wired difficulty picker to victory "New game", preserved view on `showStats`, handled parent dialog cleanup on replay, and routed finished game menu clicks to `_showWinDialog`.
 - [x] `tests/unit/sudoku_view_spec.lua`: Expanded specs to verify victory dialog options, difficulty picker launch and cancellation, stats dashboard navigation without view exit, replay cleanup, and finished board menu tap behavior.
+
+### M11 — Code review fixes
+
+Planned (2026-08-15 full-codebase review; existing review md-files ignored as
+outdated — all 47 plugin files read, core specs green headless (67/67),
+luacheck clean, port parity spot-checked against the pinned rustoku clone):
+one confirmed undo/redo data-loss bug (B1), one corrupt-save dead end (B2),
+one unvalidated stats field (R4), one W-Wing soundness verification (R1), and dead
+code / smell cleanup (S1, S3, S4, S5, S7). Out of scope (future M12): paint
+micro-opts (P1–P5), `game.lua`/`sudokuview.lua` module splits (A1/A2),
+restore-history semantic validation (R2), ENOENT string matching (R3), AIC
+module-level state (R5). Step metrics (`difficulty_point`,
+`candidates_eliminated`, `related_cell_count`) stay — they are the
+diagnostic metadata of design decision #3.
+
+Findings reference (the review itself is not a repo document; these anchors
+are the hand-off for the implementer):
+
+| Code | Symptom | Where |
+|------|---------|-------|
+| B1 | redo of a replace loses the notes the replace had restored | `game.lua` `redo_entry` place branch (~:788-792); undo mirror `undo_entry` (~:756-762); `place` captures `restored` (~:628-633) |
+| B2 | corrupt/edited save makes Continue fail forever, file stays | `main.lua` `continueGame` (:179-202); `storage.load_or_backup` (:83-139) already does backup-on-corruption |
+| R1 | W-Wing bridge ends vs pincers (soundness & rustoku parity verification) | `w_wing.lua` `check_pincer_pair` exclusion (:32-34) |
+| R4 | `abandon` stores any `ended_at` | `stats.lua` `abandon` (:261-276) |
+| S1 | unused ink colors after the dither change | `theme.lua` `hint_fill`/`match_fill` (:14-15); spec asserts at `sudoku_theme_spec.lua` (:16-17, :42-54) |
+| S3 | unused APIs | `board.iter_empty_cells` (`board.lua`:121-131); `candidates.restore` (`candidates.lua`:42-48); `candidates.update_affected_cells` wrapper (:100-102), used only by `sudoku_candidates_spec.lua`:159 |
+| S4 | `BEGINNER == EASY` mask `0xFF`, split is implicit | `flags.lua` (:26-27); classification splits by clue count in `solve_path.classify` |
+| S5 | dead `err or (...)` error paths, reassigned `err` | `generator.lua` (:447, :467, :512) |
+| S7 | "solution preserves givens" validated three times | `game.lua` `game.new` (:291-298) and `game.restore` (:1360-1369); `hints.validate_solution` (`hints.lua`:156-176) |
+
+Resolved decisions:
+
+- **B1 fix**: `redo_entry` (`game.lua`) place branch re-adds `entry.restored`
+  notes through the same guards `restored_cleaned` uses (empty cell, not
+  manually removed, still safe, not already present — i.e. reuse the
+  `add_note_digit` checks at `game.lua`:153-159 plus `is_safe_board`),
+  mirroring `undo_entry`'s removal — undo→redo must reproduce the exact
+  post-place note state. Reproduced today: place 2 (auto-cleans note 2
+  from a peer) → place 5 over it (restores that note) → undo → redo loses
+  the restored note.
+- **B2 behavior**: `continueGame` (`main.lua`) loads the save through
+  `storage.load_or_backup` with `game.restore` as the deserializer, so JSON
+  corruption *and* semantic validation failure both rename the file to
+  `<save>.<ts>.bak` and remove the save. The user sees an InfoMessage
+  ("The save was corrupted; a backup was kept at %1") and Continue stays
+  disabled until a new game is saved. `load_or_backup` runs the
+  deserializer under `pcall` and backs up whenever it returns nil, so
+  `game.restore` needs no changes; pass it as
+  `function(data) return game.restore(data, { now = os.time }) end`.
+  Note: Any restore failure backs up and removes the save (including the
+  7-day timer-drift guard and unsupported future save versions), preserving
+  the data safely in `.bak` without leaving the UI locked on Continue.
+- **R1 resolution (parity with rustoku & mathematical soundness)**:
+  W-Wing mathematically requires 4 distinct cells ($P_1, P_2, S_1, S_2$) with
+  $P_1 \ne S_1$ and $P_2 \ne S_2$. Proof of unsoundness when $S_1 = P_1$:
+  For pincers $P_1 = \{X, Y\}$, $P_2 = \{X, Y\}$ and bridge strong link on $X$
+  between $S_1$ and $S_2$, if $P_1 = X$, then $S_1 = X$, forcing $S_2 \ne X$.
+  Because $S_2 \ne X$, $P_2$ is NOT forced to $Y$ (it could be $X$ or $Y$).
+  In the branch where $P_1 = X$ and $P_2 = X$, *neither* pincer is $Y$, so
+  eliminating candidate $Y$ from common peers of $P_1$ and $P_2$ is mathematically
+  unsound (and empirically breaks valid solver deduction passes). The exclusion
+  `if not p1_is_end and not p2_is_end` is therefore mathematically necessary and
+  retained.
+
+- [x] `tests/unit/sudoku_game_spec.lua`: place → replace over it
+      (restored note) → undo → redo → notes identical to the post-replace
+      state; regression for the current loss (B1). Pattern the test on the
+      existing redo spec at `sudoku_game_spec.lua`:488
+- [x] `game.lua`: `redo_entry` place branch restores `entry.restored`
+      through the `add_note_digit` + `is_safe_board` guards (B1)
+- [x] `tests/unit/sudoku_technique_w_wing_spec.lua`: non-vacuous unit test
+      verifying W-Wing requires 4 distinct cells ($P_1 \ne S_1, P_2 \ne S_2$)
+      to prevent false eliminations, plus HoDoKu w101 metadata checks (R1)
+- [x] `core/techniques/w_wing.lua`: preserve sound 4-cell requirement (R1)
+- [x] `tests/unit/sudoku_stats_spec.lua`: `stats.abandon` rejects
+      nil / negative / non-finite / non-number `ended_at` (R4)
+- [x] `stats.lua`: validate `ended_at` in `abandon` — required, number,
+      finite, ≥ 0 (mirror `is_optional_finite` at :26-28 but required) (R4)
+- [x] `tests/unit/sudoku_menu_spec.lua`: corrupt JSON save → backed up, save gone,
+      Continue disabled; semantically invalid save (e.g. invalid board length) → same (B2).
+      (`sudoku_storage_spec.lua`:293-326 already verifies `load_or_backup` deserializer handling)
+- [x] `main.lua`: `continueGame` via `load_or_backup(game.restore)` +
+      corruption InfoMessage formatted with `T(_("... %1"), bak_path)`;
+      Continue stays disabled because the save no longer exists (B2)
+- [x] Dead code removal (S1, S3): delete `theme.hint_fill`/`match_fill`
+      and their `sudoku_theme_spec.lua` assertions (:16-17, :42-54);
+      delete `board.iter_empty_cells`, `candidates.restore`, the
+      `candidates.update_affected_cells` wrapper; switch
+      `sudoku_candidates_spec.lua`:159 to `update_affected_cells_for(c, r,
+      col, m, b, nil, trail)`
+- [x] `core/board.lua`: shared `solution_preserves_givens(puzzle, solution)`
+      used by `game.new` (:291-298), `game.restore` (:1360-1369),
+      `hints.validate_solution` (:156-176) (S7) + board spec
+- [x] `generator.lua`: replace dead `err or (...)` paths with explicit
+      error tracking (:447, :467, :512) (S5); `flags.lua`: comment that
+      `BEGINNER` and `EASY` share the same mask with the classification
+      split by clue count (:26-27) (S4)
+
+Implementation notes:
+
+- Test-first loop: `./dev.sh test -f <busted-pattern> <spec>` runs one spec
+  (or a filtered subset) headless; the full gate is `./dev.sh test`.
+- Follow AGENTS.md: one milestone commit, `./dev.sh fmt` before it,
+  `./dev.sh lint` gates.
+
+**Exit criteria**: all sudoku specs green via `./dev.sh test`,
+`./dev.sh lint` clean, emulator boot smoke on `kobo-aura-one` with no
+errors (touches game/main/UI code), PLAN.md updated (M11 + W-Wing
+soundness note in design decision #2), commit.

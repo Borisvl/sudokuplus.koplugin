@@ -3,6 +3,7 @@ package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 local board = require("core.board")
 
 local UNIQUE_PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+local UNIQUE_SOLUTION = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
 
 describe("core.board", function()
     it("parses a valid 81-char string", function()
@@ -109,13 +110,15 @@ describe("core.board", function()
         assert.are.equal(0, board.count_clues(board.new()))
     end)
 
-    it("iterates empty cells", function()
-        local b = board.new()
-        board.set(b, 0, 0, 1)
-        local cells = board.iter_empty_cells(b)
-        assert.are.equal(80, #cells)
-        assert.are.same({ 0, 1 }, cells[1])
-        assert.are.same({ 8, 8 }, cells[#cells])
+    it("validates that a solution preserves puzzle givens (S7)", function()
+        local puzzle = board.from_string(UNIQUE_PUZZLE)
+        local solution = board.from_string(UNIQUE_SOLUTION)
+        assert.is_true(board.solution_preserves_givens(puzzle, solution))
+
+        -- Mutating a given cell makes it return false
+        local corrupted = board.clone(solution)
+        board.set(corrupted, 0, 0, 9) -- given was 5
+        assert.is_false(board.solution_preserves_givens(puzzle, corrupted))
     end)
 
     it("raw accessors mirror the validated ones for in-range coordinates", function()
