@@ -242,26 +242,30 @@ describe("sudoku stats view", function()
         bb:free()
     end)
 
-    it("paints the detail page of a v1-migrated game without a board snapshot", function()
+    it("paints the detail page of a game without a board snapshot", function()
         local GameDetail = require("ui.gamedetail")
-        local v1 = {
-            version = 1,
-            finished = {
+        local data = {
+            version = 2,
+            streak = 1,
+            best_streak = 1,
+            next_id = 2,
+            games = {
                 {
-                    kind = "finished",
+                    id = 1,
+                    status = "finished",
                     difficulty = "easy",
                     duration = 60,
                     hints = {},
                     mistakes = 0,
                     check_errors = 0,
-                    timestamp = 100,
+                    started_at = 100,
+                    ended_at = 160,
                 },
             },
-            given_up = {},
         }
-        local migrated = assert(stats.from_table(v1))
-        local entry = stats.list(migrated)[1]
-        assert.is_nil(entry.board, "migrated entries carry no board snapshot")
+        local loaded = assert(stats.from_table(data))
+        local entry = stats.list(loaded)[1]
+        assert.is_nil(entry.board, "entries without board carry no board snapshot")
         local detail = GameDetail:new {
             entry = entry,
             width = 758,

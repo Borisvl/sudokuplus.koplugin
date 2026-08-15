@@ -236,6 +236,10 @@ storage):
 - [x] M8a: complete localization & i18n (gettext wrappers across UI, dynamic
       difficulty & status labels, all 17 technique names localized, message
       mapping, `N_` pluralization, `l10n/sudoku.pot` extraction tooling)
+- [x] M11: code review remediation & correctness hardening (soundness checks,
+      timer/seed sanity, storage backup-on-corruption, cleanup)
+- [x] M12: architecture modularization & code quality refinements
+      (game_serialize.lua, ui/dialogs.lua, core.util shared helpers, v1 format cleanup)
 - [ ] M8b: polish, deployment, on-device testing
 
 See PLAN.md for milestone details and the project rules in AGENTS.md.

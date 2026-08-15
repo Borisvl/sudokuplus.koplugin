@@ -193,7 +193,7 @@ describe("sudoku plugin menu", function()
 
     it("backs up semantically invalid save on continue, shows info and disables continue (B2)", function()
         local file = io.open(save_path, "wb")
-        file:write('{"version": 1, "board": "invalid_length"}')
+        file:write('{"version": 2, "board": "invalid_length"}')
         file:close()
 
         local continue = item_with("Continue")

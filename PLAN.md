@@ -1023,3 +1023,54 @@ Implementation notes:
 `./dev.sh lint` clean, emulator boot smoke on `kobo-aura-one` with no
 errors (touches game/main/UI code), PLAN.md updated (M11 + W-Wing
 soundness note in design decision #2), commit.
+
+---
+
+## M12: Architecture modularization & code quality refinements ✅
+
+Splits monolithic core and UI files into focused single-responsibility modules,
+removes legacy version 1 save/stats compatibility code (pre-public deployment cleanup),
+deduplicates shared pure helpers into `core/util.lua`, and completes l10n catalog translations.
+
+### Scope & Architectural Decisions
+
+1. **A1 extraction (`game_serialize.lua`)**:
+   - Save serialization (`mt:serialize()`) and strict restoration/history validation
+     extracted into `sudoku.koplugin/game_serialize.lua` (pure Lua, zero KOReader deps).
+   - Mirrors test structure in `tests/unit/sudoku_game_serialize_spec.lua`.
+   - `game.lua` focuses solely on runtime game state transitions and undo/redo stack (~390 lines removed).
+2. **A2 extraction (`ui/dialogs.lua`)**:
+   - Modal dialogs (win dialog, 2-column difficulty picker, reset/give-up confirmations,
+     in-game pause menu) extracted into `sudoku.koplugin/ui/dialogs.lua` (~280 lines removed from `sudokuview.lua`).
+   - Note on architectural boundary: `dialogs.lua` is a modal presentation extraction that declutters
+     `SudokuView`'s canvas painting and touch/key input loop; it remains coupled to `SudokuView`'s state machine
+     rather than an independent headless widget.
+3. **Legacy Version 1 Save Format & Stats Cleanup**:
+   - Removed `version = 1` save format support (strictly enforcing `version == 2`).
+   - Removed `migrate_from_v1` and `recompute_streaks` in `stats.lua`.
+   - Cleaned up obsolete v1 migration test cases across test specs.
+4. **Helper Deduplication (`core/util.lua`)**:
+   - Centralized shared pure helpers (`cell_index`, `validate_cell`, `validate_value`,
+     `validate_non_negative`, `new_mask_grid`, `deep_copy`, `constraint_masks_for`, `FULL_CANDIDATE_MASK`)
+     into `core/util.lua`, eliminating ~70 lines of duplicate code between `game.lua` and `game_serialize.lua`.
+   - Removed dead exports from `game.lua` (`game.serialize`, `game.VERSION`) and fixed tautological test in spec.
+5. **Localization & Translation Catalog**:
+   - Translated remaining dialog strings in `de/sudoku.po` and compiled to `.mo`.
+
+### Task Checklist
+
+- [x] `sudoku.koplugin/game_serialize.lua`: pure Lua save serialization and restore validation module
+- [x] `sudoku.koplugin/game.lua`: delegate `mt:serialize()` and `game.restore()` to `game_serialize`
+- [x] `sudoku.koplugin/ui/dialogs.lua`: modal dialog builders and presenters
+- [x] `sudoku.koplugin/ui/sudokuview.lua`: delegate dialog presentation to `dialogs.*`
+- [x] `sudoku.koplugin/stats.lua`: remove `migrate_from_v1` and `recompute_streaks`
+- [x] `sudoku.koplugin/core/util.lua`: shared cell indexing, validation, mask grid, and constraint mask helpers
+- [x] `tests/unit/sudoku_util_spec.lua`: comprehensive tests for new `core/util.lua` helpers
+- [x] `tests/unit/sudoku_game_serialize_spec.lua`: test `game_serialize` directly, verify v1 rejection, remove tautology
+- [x] `tests/unit/sudoku_stats_spec.lua`: verify rejection of v1 stats
+- [x] `tests/unit/sudoku_statsview_spec.lua` & `tests/unit/sudoku_menu_spec.lua`: updated test fixtures
+- [x] `sudoku.koplugin/l10n/`: extract gettext catalog and compile German translations
+
+**Exit criteria**: all 46 test suites green via `./dev.sh test`, `./dev.sh lint` clean (0 warnings / 0 errors),
+`./dev.sh fmt` clean, `./dev.sh pot` up to date, PLAN.md and README.md updated.
+

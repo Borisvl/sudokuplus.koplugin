@@ -426,81 +426,9 @@ function stats.to_table(s)
     return s
 end
 
--- Recomputes streak and best_streak from the log order (oldest first): the
--- data may have been trimmed or hand-edited, and v1 stored only the streak.
-local function recompute_streaks(result)
-    local streak = 0
-    for _, entry in ipairs(result.games) do
-        if entry.status == "finished" then
-            if #entry.hints == 0 then
-                streak = streak + 1
-                if streak > result.best_streak then
-                    result.best_streak = streak
-                end
-            else
-                streak = 0
-            end
-        else
-            streak = 0
-        end
-    end
-    result.streak = streak
-    return result
-end
-
-local function migrate_from_v1(t)
-    local result = {
-        version = VERSION,
-        streak = 0,
-        best_streak = 0,
-        next_id = 1,
-        games = {},
-    }
-    for _, mapping in ipairs({ { "finished", "finished" }, { "given_up", "give_up" } }) do
-        local list = t[mapping[1]]
-        if type(list) ~= "table" then
-            return nil, "record lists must be tables"
-        end
-        for _, rec in ipairs(list) do
-            local normalized, err = validate_record({
-                status = mapping[2],
-                difficulty = rec.difficulty,
-                duration = rec.duration,
-                hints = rec.hints,
-                mistakes = rec.mistakes,
-                check_errors = rec.check_errors,
-                -- v1 recorded only the end timestamp; reuse it for both.
-                started_at = rec.timestamp,
-                ended_at = rec.timestamp,
-            })
-            if not normalized then
-                return nil, err
-            end
-            result.games[#result.games + 1] = normalized
-        end
-    end
-    -- v1 kept finished and given-up as separate chronological lists; merge
-    -- them into one time-ordered log (the v1 timestamp is the end time) so
-    -- the newest-200 trim and the streak recompute see a consistent order.
-    table.sort(result.games, function(a, b)
-        return a.ended_at < b.ended_at
-    end)
-    if #result.games > MAX_GAMES then
-        local trimmed = {}
-        for i = #result.games - MAX_GAMES + 1, #result.games do
-            trimmed[#trimmed + 1] = result.games[i]
-        end
-        result.games = trimmed
-    end
-    return recompute_streaks(result)
-end
-
 function stats.from_table(t)
     if type(t) ~= "table" then
         return nil, "stats data must be a table"
-    end
-    if t.version == 1 then
-        return migrate_from_v1(t)
     end
     if t.version ~= VERSION then
         return nil, "unsupported stats version: " .. tostring(t.version)

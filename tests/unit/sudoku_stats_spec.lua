@@ -426,78 +426,17 @@ describe("stats", function()
         assert.is_not_nil(find_by_id(s.games, 300), "the newest entry is kept")
     end)
 
-    it("migrates v1 stats into the game log", function()
+    it("rejects unsupported save versions including legacy v1", function()
         local v1 = {
             version = 1,
             streak = 2,
-            finished = {
-                {
-                    kind = "finished",
-                    difficulty = "easy",
-                    duration = 60,
-                    hints = {},
-                    mistakes = 0,
-                    check_errors = 0,
-                    timestamp = 100,
-                },
-                {
-                    kind = "finished",
-                    difficulty = "easy",
-                    duration = 90,
-                    hints = { "x_wing" },
-                    mistakes = 1,
-                    check_errors = 0,
-                    timestamp = 200,
-                },
-            },
-            given_up = {
-                {
-                    kind = "give_up",
-                    difficulty = "hard",
-                    duration = 30,
-                    hints = {},
-                    mistakes = 2,
-                    check_errors = 1,
-                    timestamp = 300,
-                },
-            },
+            finished = {},
+            given_up = {},
         }
-
         local restored, err = stats.from_table(v1)
-        assert.is_nil(err)
-        assert.is_not_nil(restored)
-        assert.are.equal(2, restored.version)
-        assert.are.equal(3, #restored.games)
-        assert.are.equal("finished", restored.games[1].status)
-        assert.are.equal("give_up", restored.games[3].status)
-        assert.are.equal(100, restored.games[1].started_at, "v1 timestamp becomes started_at")
-        assert.are.equal(100, restored.games[1].ended_at, "v1 timestamp becomes ended_at")
-        assert.is_nil(restored.games[1].seed, "v1 entries have no seed")
-        assert.are.equal("x_wing", restored.games[2].hints[1])
-        -- streak: hint-free win (1) -> hint win (0) -> give_up (0)
-        assert.are.equal(0, restored.streak)
-        assert.are.equal(1, restored.best_streak)
-    end)
-
-    it("caps migrated v1 data to the newest 200 games", function()
-        local finished = {}
-        for i = 1, 250 do
-            finished[i] = {
-                kind = "finished",
-                difficulty = "easy",
-                duration = i,
-                hints = {},
-                mistakes = 0,
-                check_errors = 0,
-                timestamp = i,
-            }
-        end
-
-        local restored, err = stats.from_table({ version = 1, streak = 0, finished = finished, given_up = {} })
-        assert.is_nil(err)
-        assert.are.equal(200, #restored.games)
-        assert.are.equal(51, restored.games[1].duration, "the oldest entries are dropped")
-        assert.are.equal(250, restored.games[200].duration, "the newest entries are kept")
+        assert.is_nil(restored)
+        assert.is_string(err)
+        assert.is_true(string.find(err, "unsupported stats version: 1") ~= nil)
     end)
 
     it("round-trips through to_table and from_table", function()
@@ -597,51 +536,5 @@ describe("stats", function()
         })
         assert.is_not_nil(nil_ids, "nil ids are not duplicates")
         assert.is_nil(nil_ids_err)
-    end)
-
-    it("migrates v1 games in chronological order for the streak", function()
-        -- A give-up (timestamp 150) that happened between two hint-free wins
-        -- must reset the streak mid-sequence, not at the end.
-        local v1 = {
-            version = 1,
-            finished = {
-                {
-                    kind = "finished",
-                    difficulty = "easy",
-                    duration = 60,
-                    hints = {},
-                    mistakes = 0,
-                    check_errors = 0,
-                    timestamp = 100,
-                },
-                {
-                    kind = "finished",
-                    difficulty = "easy",
-                    duration = 60,
-                    hints = {},
-                    mistakes = 0,
-                    check_errors = 0,
-                    timestamp = 200,
-                },
-            },
-            given_up = {
-                {
-                    kind = "give_up",
-                    difficulty = "easy",
-                    duration = 10,
-                    hints = {},
-                    mistakes = 0,
-                    check_errors = 0,
-                    timestamp = 150,
-                },
-            },
-        }
-
-        local restored = assert(stats.from_table(v1))
-        -- chronologically: win(100), give-up(150), win(200)
-        assert.are.equal(100, restored.games[1].ended_at)
-        assert.are.equal("give_up", restored.games[2].status)
-        assert.are.equal(200, restored.games[3].ended_at)
-        assert.are.equal(1, restored.streak, "the streak is computed across the give-up, not at the list boundary")
     end)
 end)

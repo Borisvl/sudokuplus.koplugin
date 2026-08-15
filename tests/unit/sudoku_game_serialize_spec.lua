@@ -3,6 +3,7 @@ package.path = "plugins/sudoku.koplugin/?.lua;" .. package.path
 local bit = require("bit")
 local board = require("core.board")
 local game = require("game")
+local game_serialize = require("game_serialize")
 local json = require("json")
 
 local PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
@@ -334,7 +335,8 @@ describe("game serialization", function()
         local cases = {
             { name = "not a table", data = "garbage" },
             { name = "bad version", data = { version = 99 } },
-            { name = "short board", data = { version = 1, board = "12" } },
+            { name = "legacy v1 version", data = { version = 1 } },
+            { name = "short board", data = { version = 2, board = "12" } },
         }
         for _, case in ipairs(cases) do
             local restored, err = game.restore(case.data, { now = now })
@@ -457,5 +459,21 @@ describe("game serialization", function()
         assert.are.equal(0, restored:get_notes(0, 5))
         assert.is_true(restored:redo()) -- redo fill_all_notes
         assert.is_true(restored:get_notes(0, 5) > 0)
+    end)
+
+    it("exports serialize and restore directly from game_serialize module", function()
+        local instance = new_game()
+        assert.are.equal(2, game_serialize.VERSION)
+        local serialized = game_serialize.serialize(instance)
+        assert.are.equal(2, serialized.version)
+
+        local raw_restored, err = game_serialize.restore(serialized, {
+            now = function()
+                return 1000
+            end,
+        })
+        assert.is_nil(err)
+        assert.is_not_nil(raw_restored)
+        assert.are.equal("hard", raw_restored._difficulty)
     end)
 end)
