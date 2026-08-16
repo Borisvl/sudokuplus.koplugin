@@ -24,6 +24,7 @@ describe("core.generator game payload", function()
         assert.is_not_nil(payload.solution)
         assert.are.equal("medium", payload.difficulty)
         assert.are.equal(board.count_clues(payload.board), payload.clues)
+        assert.is_table(payload.techniques)
 
         assert.are.equal(81, board.count_clues(payload.solution))
         assert.is_not_nil(solver.validate(payload.solution))
@@ -36,6 +37,19 @@ describe("core.generator game payload", function()
         local solutions = solver.new(payload.board):solve_until(2)
         assert.are.equal(1, #solutions)
         assert.are.equal(board.to_string(payload.solution), board.to_string(solutions[1].board))
+    end)
+
+    it("returns techniques list matching classification for generated puzzles", function()
+        local payload, err = generator.generate_game({
+            difficulty = "medium",
+            seed = 3,
+            rng = prng.new(3),
+        })
+
+        assert.is_nil(err)
+        assert.is_not_nil(payload)
+        assert.is_table(payload.techniques)
+        assert.is_true(#payload.techniques > 0)
     end)
 
     it("keeps difficulty-targeted clue counts above the documented range floors", function()

@@ -1506,3 +1506,27 @@ classic composites stay untouched):
 `tools/bench_generation.lua` killer gate passes, emulator boot smoke on
 `kobo-aura-one` with no errors, calibration numbers recorded in PLAN.md,
 PLAN.md + README updated, commit.
+
+### M17 — Seed-ID & Required Techniques in Stats & Victory Dialog (v1.1.0) (done)
+
+Display the puzzle generation seed and the canonical list of required human solving techniques across game statistics views and solved puzzle menus.
+
+- [x] `core/techniques/flags.lua`: single source of truth for canonical 17 techniques catalog (`flags.TECHNIQUES`, `flags.TECHNIQUE_BY_ID`, `flags.TECHNIQUE_BY_FLAG`).
+- [x] `core/solve_path.lua`: extract and canonically order all unique technique IDs used in solve steps (`result.techniques`).
+- [x] `core/generator.lua`: forward `techniques = classification.techniques` into game payload with documented tier-restricted equivalence.
+- [x] `game.lua`: accept, store, serialize, and report `techniques` in records and getters (preserves `nil` when unset; forward-compatible string validation).
+- [x] `game_serialize.lua`: serialize and restore `techniques` list with forward-compatible validation.
+- [x] `stats.lua`: validate and persist optional `techniques` on game log entries with forward-compatible validation and `merge_entry` preservation.
+- [x] `ui/techniques.lua`: `techniques.format_required(list, max_items)` helper suppressing basic singles (`naked_singles`, `hidden_singles`) when advanced techniques are required, or returning `"Singles only"` (localized in German as `"Nur Einer"`), supporting `max_items` truncation (`"+%1 more"`).
+- [x] `ui/techniques.lua`: bounded LRU memoization (`DERIVE_CACHE`) and search budget cap (`search_budget = 200`) in `techniques.derive(puzzle_str)`.
+- [x] `stats.lua`: `stats.summary()` aggregates `hints_per_technique` exclusively from completed games (`finished`, `give_up`, `abandoned`), avoiding mid-game spoiler ranking.
+- [x] `ui/gamedetail.lua`: display `Seed: <seed>` and `Techniques: <techniques>` with solver fallback and memoization for legacy records; suppress techniques on `in_progress` puzzles.
+- [x] `ui/gamedetail.lua`: compact layout with adaptive MiniGrid sizing (`min(w * 0.5, h * 0.36)`) and two-column inline stat pairing.
+- [x] `ui/dialogs.lua`: display `Seed: <seed>` and `Techniques: <techniques>` in win dialog with paired compact stats and `max_items = 4` capping.
+- [x] `_meta.lua`: bump version to `"1.1.0"`.
+- [x] Automated catalog drift integrity specs and comprehensive 17-technique ordering tests.
+- [x] `core/util.lua`: `util.format_seed(seed)` formatting seeds into space-separated 4-digit groups (e.g. `4354 5433 6455 32`).
+- [x] `ui/gamedetail.lua`: seamless previous/next game navigation via `◀` / `▶` buttons, hardware paging/arrow keys, and swipe gestures; suppress "Correct placements" on finished games.
+- [x] `CHANGELOG.md` updated for v1.1.0.
+
+**Exit criteria**: all unit and integration specs green, `./dev.sh lint` clean, `./dev.sh fmt` clean, emulator boot smoke on `kobo-aura-one` and `kobo-clara` (6") with no errors.

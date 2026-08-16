@@ -32,6 +32,19 @@ function util.format_time(seconds)
     return string.format("%02d:%02d:%02d", hours, minutes, seconds % 60)
 end
 
+-- Formats a seed into space-separated 4-digit groups (e.g. 4354 5433 6455 32).
+function util.format_seed(seed)
+    if seed == nil then
+        return nil
+    end
+    local s = tostring(seed)
+    local chunks = {}
+    for i = 1, #s, 4 do
+        chunks[#chunks + 1] = s:sub(i, i + 3)
+    end
+    return table.concat(chunks, " ")
+end
+
 function util.cell_index(r, c)
     return r * 9 + c + 1
 end

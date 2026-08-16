@@ -49,6 +49,19 @@ describe("sudoku localization", function()
             assert.are.equal("custom_technique", techniques.label("custom_technique"))
             assert.is_nil(techniques.label(nil))
         end)
+
+        it("formats required techniques list suppressing basic singles", function()
+            assert.is_nil(techniques.format_required(nil))
+            assert.is_nil(techniques.format_required({}))
+            assert.are.equal("Singles only", techniques.format_required({ "naked_singles" }))
+            assert.are.equal("Singles only", techniques.format_required({ "naked_singles", "hidden_singles" }))
+            assert.are.equal("Locked Candidates", techniques.format_required({ "naked_singles", "locked_candidates" }))
+            assert.are.equal(
+                "Locked Candidates, Naked Pairs",
+                techniques.format_required({ "naked_singles", "locked_candidates", "naked_pairs" })
+            )
+            assert.are.equal("custom_technique", techniques.format_required({ "custom_technique" }))
+        end)
     end)
 
     describe("messages localization", function()
@@ -200,6 +213,9 @@ describe("sudoku localization", function()
             assert.are.equal("Versteckte Einer", techniques.label("hidden_singles"))
             assert.are.equal("Gesperrte Kandidaten", techniques.label("locked_candidates"))
             assert.are.equal("Alternierende Inferenzkette", techniques.label("aic"))
+            assert.are.equal("Nur Einer", techniques.format_required({ "naked_singles" }))
+            assert.are.equal("Seed: 123", T(_("Seed: %1"), 123))
+            assert.are.equal("Techniken: Gesperrte Kandidaten", T(_("Techniques: %1"), "Gesperrte Kandidaten"))
 
             -- Difficulties
             assert.are.equal("Anfänger", difficulties.label("beginner"))

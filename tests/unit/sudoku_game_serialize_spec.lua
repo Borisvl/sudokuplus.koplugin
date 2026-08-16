@@ -218,6 +218,7 @@ describe("game serialization", function()
             solution = board.from_string(SOLUTION),
             difficulty = "easy",
             seed = 424242,
+            techniques = { "locked_candidates", "naked_pairs" },
             now = function()
                 return clock.t
             end,
@@ -225,9 +226,47 @@ describe("game serialization", function()
 
         local data = seeded:serialize()
         assert.are.equal(424242, data.seed, "the save must carry the reproduction seed")
+        assert.are.same({ "locked_candidates", "naked_pairs" }, data.techniques)
 
         local restored = restore(data, { t = 1000 })
         assert.are.equal(424242, restored.seed, "restore must keep the reproduction seed")
+        assert.are.same({ "locked_candidates", "naked_pairs" }, restored:techniques())
+    end)
+
+    it("rejects invalid techniques in save data", function()
+        local instance = new_game()
+        local data = instance:serialize()
+        data.techniques = "naked_pairs"
+        local now = function()
+            return 0
+        end
+        local restored, err = game.restore(data, { now = now })
+        assert.is_nil(restored)
+        assert.is_string(err)
+
+        data.techniques = { 123 }
+        restored, err = game.restore(data, { now = now })
+        assert.is_nil(restored)
+        assert.is_string(err)
+
+        data.techniques = { "" }
+        restored, err = game.restore(data, { now = now })
+        assert.is_nil(restored)
+        assert.is_string(err)
+    end)
+
+    it("restores save data with forward-compatible technique string ids", function()
+        local instance = new_game()
+        local data = instance:serialize()
+        data.techniques = { "future_killer_technique" }
+        local restored, err = game.restore(data, {
+            now = function()
+                return 0
+            end,
+        })
+        assert.is_nil(err)
+        assert.is_not_nil(restored)
+        assert.are.same({ "future_killer_technique" }, restored:techniques())
     end)
 
     it("rejects a non-integer seed in save data", function()

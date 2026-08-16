@@ -252,6 +252,20 @@ function game.new(options)
         return nil, "id must be a non-negative integer"
     end
 
+    local techniques_list = nil
+    if options.techniques ~= nil then
+        if type(options.techniques) ~= "table" then
+            return nil, "techniques must be a list of technique ids"
+        end
+        techniques_list = {}
+        for i, t in ipairs(options.techniques) do
+            if type(t) ~= "string" or #t == 0 then
+                return nil, "techniques must be a list of technique ids"
+            end
+            techniques_list[i] = t
+        end
+    end
+
     local notes = build_notes_grid(puzzle, constraint_masks, autofill_notes)
 
     local instance = {
@@ -276,8 +290,20 @@ function game.new(options)
         finished = false,
         seed = seed,
         id = id,
+        _techniques = techniques_list,
     }
     return setmetatable(instance, mt)
+end
+
+function mt:techniques()
+    if self._techniques == nil then
+        return nil
+    end
+    local copy = {}
+    for i, t in ipairs(self._techniques) do
+        copy[i] = t
+    end
+    return copy
 end
 
 function mt:get(r, c)
@@ -864,8 +890,15 @@ end
 
 local function make_record(self, status, ended_at)
     local hint_ids = {}
-    for i, entry in ipairs(self._hints) do
-        hint_ids[i] = entry.technique
+    for _, entry in ipairs(self._hints) do
+        hint_ids[#hint_ids + 1] = entry.technique
+    end
+    local techniques_copy = nil
+    if self._techniques ~= nil then
+        techniques_copy = {}
+        for i, t in ipairs(self._techniques) do
+            techniques_copy[i] = t
+        end
     end
     local progress = self:progress()
     return {
@@ -885,6 +918,7 @@ local function make_record(self, status, ended_at)
         puzzle = board.to_string(self.puzzle),
         solution = board.to_string(self.solution),
         board = board.to_string(self.board),
+        techniques = techniques_copy,
     }
 end
 

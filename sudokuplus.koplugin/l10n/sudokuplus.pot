@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sudokuplus\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 18:42+0200\n"
+"POT-Creation-Date: 2026-08-16 18:15+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -58,17 +58,17 @@ msgstr ""
 msgid "Continue"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:253 sudokuplus.koplugin/ui/dialogs.lua:68
-#: sudokuplus.koplugin/ui/dialogs.lua:250
+#: sudokuplus.koplugin/main.lua:253 sudokuplus.koplugin/ui/dialogs.lua:89
+#: sudokuplus.koplugin/ui/dialogs.lua:271
 msgid "New game"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:257 sudokuplus.koplugin/ui/dialogs.lua:78
-#: sudokuplus.koplugin/ui/dialogs.lua:240
+#: sudokuplus.koplugin/main.lua:257 sudokuplus.koplugin/ui/dialogs.lua:99
+#: sudokuplus.koplugin/ui/dialogs.lua:261
 msgid "Statistics"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:264 sudokuplus.koplugin/ui/dialogs.lua:284
+#: sudokuplus.koplugin/main.lua:264 sudokuplus.koplugin/ui/dialogs.lua:305
 msgid "Help"
 msgstr ""
 
@@ -76,63 +76,81 @@ msgstr ""
 msgid "Auto-fill notes"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:60
-msgid ""
-"Puzzle solved!\n"
-"\n"
-"Time: %1\n"
-"Mistakes: %2\n"
-"Hints: %3"
+#: sudokuplus.koplugin/ui/dialogs.lua:62
+msgid "Puzzle solved!"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:91
+#: sudokuplus.koplugin/ui/dialogs.lua:64
+#: sudokuplus.koplugin/ui/gamedetail.lua:151
+msgid "Time: %1"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/dialogs.lua:66
+msgid "Mistakes: %1"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/dialogs.lua:68
+msgid "Hints: %1"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/dialogs.lua:70
+#: sudokuplus.koplugin/ui/gamedetail.lua:164
+msgid "Seed: %1"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/dialogs.lua:80
+#: sudokuplus.koplugin/ui/gamedetail.lua:185
+msgid "Techniques: %1"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/dialogs.lua:112
 msgid "Close"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:128
-#: sudokuplus.koplugin/ui/dialogs.lua:183
-#: sudokuplus.koplugin/ui/dialogs.lua:202
+#: sudokuplus.koplugin/ui/dialogs.lua:149
+#: sudokuplus.koplugin/ui/dialogs.lua:204
+#: sudokuplus.koplugin/ui/dialogs.lua:223
 msgid "Cancel"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:138
+#: sudokuplus.koplugin/ui/dialogs.lua:159
 msgid "New game — Choose difficulty"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:152
+#: sudokuplus.koplugin/ui/dialogs.lua:173
 msgid "Reset this puzzle from the beginning? All progress will be lost."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:153
+#: sudokuplus.koplugin/ui/dialogs.lua:174
 msgid "Reset"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:196
+#: sudokuplus.koplugin/ui/dialogs.lua:217
 msgid "Are you sure you want to give up?"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:197
-#: sudokuplus.koplugin/ui/dialogs.lua:292
+#: sudokuplus.koplugin/ui/dialogs.lua:218
+#: sudokuplus.koplugin/ui/dialogs.lua:313
 msgid "Give up"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:225
+#: sudokuplus.koplugin/ui/dialogs.lua:246
 msgid "%1 — Time: %2    Mistakes: %3    Hints: %4"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:234
+#: sudokuplus.koplugin/ui/dialogs.lua:255
 msgid "Resume"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:259
+#: sudokuplus.koplugin/ui/dialogs.lua:280
 msgid "Reset puzzle"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:270
+#: sudokuplus.koplugin/ui/dialogs.lua:291
 msgid "Fill all notes"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/dialogs.lua:301
+#: sudokuplus.koplugin/ui/dialogs.lua:322
 msgid "Quit"
 msgstr ""
 
@@ -160,35 +178,31 @@ msgstr ""
 msgid "Expert"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/gamedetail.lua:136
+#: sudokuplus.koplugin/ui/gamedetail.lua:150
 msgid "#%1 · %2 · %3"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/gamedetail.lua:138
+#: sudokuplus.koplugin/ui/gamedetail.lua:153
 msgid "Started: %1"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/gamedetail.lua:140
-msgid "Time: %1"
-msgstr ""
-
-#: sudokuplus.koplugin/ui/gamedetail.lua:141
+#: sudokuplus.koplugin/ui/gamedetail.lua:156
 msgid "Mistakes: %1   Check errors: %2"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/gamedetail.lua:142
+#: sudokuplus.koplugin/ui/gamedetail.lua:157
 msgid "Hints: %1   Moves: %2"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/gamedetail.lua:145
+#: sudokuplus.koplugin/ui/gamedetail.lua:162
 msgid "Correct placements: %1 of %2"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/gamedetail.lua:157
+#: sudokuplus.koplugin/ui/gamedetail.lua:207
 msgid "Back"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/gamedetail.lua:166
+#: sudokuplus.koplugin/ui/gamedetail.lua:214
 msgid "Play again"
 msgstr ""
 
@@ -532,55 +546,55 @@ msgstr ""
 msgid "%1 — %2 finished, avg %3, best %4, given up %5"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:108
+#: sudokuplus.koplugin/ui/statsview.lua:111
 msgid "Game history"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:132
+#: sudokuplus.koplugin/ui/statsview.lua:135
 msgid "Started: %1   Finished: %2   Given up: %3"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:138
+#: sudokuplus.koplugin/ui/statsview.lua:141
 msgid "Abandoned: %1   In progress: %2"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:139
+#: sudokuplus.koplugin/ui/statsview.lua:142
 msgid "Completion rate: %1   Win rate: %2"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:140
+#: sudokuplus.koplugin/ui/statsview.lua:143
 msgid "Total playtime: %1"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:142
+#: sudokuplus.koplugin/ui/statsview.lua:145
 msgid "Best time: %1   Average: %2"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:144
+#: sudokuplus.koplugin/ui/statsview.lua:147
 msgid "Current streak: %1   Best streak: %2"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:147
+#: sudokuplus.koplugin/ui/statsview.lua:150
 msgid "Total mistakes: %1 (avg %2 per game)   Check errors: %3"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:153
+#: sudokuplus.koplugin/ui/statsview.lua:156
 msgid "Average moves per game: %1"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:156
+#: sudokuplus.koplugin/ui/statsview.lua:159
 msgid "By difficulty"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:160
+#: sudokuplus.koplugin/ui/statsview.lua:163
 msgid "Most missed strategies"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:164
+#: sudokuplus.koplugin/ui/statsview.lua:167
 msgid "Game history (%1)"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/statsview.lua:171
+#: sudokuplus.koplugin/ui/statsview.lua:174
 msgid "Sudoku statistics"
 msgstr ""
 
@@ -634,70 +648,78 @@ msgstr ""
 msgid "No hint available."
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:9
+#: sudokuplus.koplugin/ui/techniques.lua:59
 msgid "Naked Singles"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:12
+#: sudokuplus.koplugin/ui/techniques.lua:62
 msgid "Hidden Singles"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:15
+#: sudokuplus.koplugin/ui/techniques.lua:65
 msgid "Naked Pairs"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:18
+#: sudokuplus.koplugin/ui/techniques.lua:68
 msgid "Hidden Pairs"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:21
+#: sudokuplus.koplugin/ui/techniques.lua:71
 msgid "Locked Candidates"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:24
+#: sudokuplus.koplugin/ui/techniques.lua:74
 msgid "Naked Triples"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:27
+#: sudokuplus.koplugin/ui/techniques.lua:77
 msgid "Hidden Triples"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:30
+#: sudokuplus.koplugin/ui/techniques.lua:80
 msgid "X-Wing"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:33
+#: sudokuplus.koplugin/ui/techniques.lua:83
 msgid "Naked Quads"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:36
+#: sudokuplus.koplugin/ui/techniques.lua:86
 msgid "Hidden Quads"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:39
+#: sudokuplus.koplugin/ui/techniques.lua:89
 msgid "Swordfish"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:42
+#: sudokuplus.koplugin/ui/techniques.lua:92
 msgid "Jellyfish"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:45
+#: sudokuplus.koplugin/ui/techniques.lua:95
 msgid "Skyscraper"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:48
+#: sudokuplus.koplugin/ui/techniques.lua:98
 msgid "W-Wing"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:51
+#: sudokuplus.koplugin/ui/techniques.lua:101
 msgid "XY-Wing"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:54
+#: sudokuplus.koplugin/ui/techniques.lua:104
 msgid "XYZ-Wing"
 msgstr ""
 
-#: sudokuplus.koplugin/ui/techniques.lua:57
+#: sudokuplus.koplugin/ui/techniques.lua:107
 msgid "Alternating Inference Chain"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/techniques.lua:135
+msgid "Singles only"
+msgstr ""
+
+#: sudokuplus.koplugin/ui/techniques.lua:143
+msgid "+%1 more"
 msgstr ""

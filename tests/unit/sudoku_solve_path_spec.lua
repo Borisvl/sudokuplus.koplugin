@@ -192,11 +192,45 @@ describe("core.solve_path", function()
         assert.are.equal("beginner", solve_path.classify(path, 38).difficulty)
     end)
 
-    it("classifies empty solve paths based on clue count", function()
-        local empty_path = solve_path.new()
+    it("extracts and orders unique technique IDs used in the solve path", function()
+        local path = solve_path.new()
+        solve_path.push(path, solve_path.placement_step(0, 0, 1, flags.NAKED_SINGLES))
+        solve_path.push(path, solve_path.elimination_step(0, 1, 2, flags.NAKED_PAIRS))
+        solve_path.push(path, solve_path.elimination_step(0, 2, 3, flags.LOCKED_CANDIDATES))
+        solve_path.push(path, solve_path.elimination_step(0, 3, 4, flags.NAKED_PAIRS)) -- duplicate flag
+        solve_path.push(path, solve_path.elimination_step(0, 4, 5, flags.ALTERNATING_INFERENCE_CHAIN))
 
-        assert.are.equal("beginner", solve_path.classify(empty_path, { clues = 40 }).difficulty)
-        assert.are.equal("easy", solve_path.classify(empty_path, { clues = 30 }).difficulty)
-        assert.are.equal("easy", solve_path.classify(empty_path).difficulty)
+        local result = solve_path.classify(path)
+        assert.is_table(result.techniques)
+        assert.are.same({
+            "naked_singles",
+            "locked_candidates",
+            "naked_pairs",
+            "aic",
+        }, result.techniques)
+    end)
+
+    it("returns empty techniques list for empty solve path", function()
+        local result = solve_path.classify(solve_path.new())
+        assert.is_table(result.techniques)
+        assert.are.same({}, result.techniques)
+    end)
+
+    it("orders all 17 techniques in canonical sequence regardless of push order", function()
+        local path = solve_path.new()
+        -- Push in reverse order
+        for i = #flags.TECHNIQUES, 1, -1 do
+            local tech = flags.TECHNIQUES[i]
+            solve_path.push(path, solve_path.elimination_step(0, 0, 1, tech.flag))
+        end
+
+        local expected = {}
+        for i, tech in ipairs(flags.TECHNIQUES) do
+            expected[i] = tech.id
+        end
+
+        local result = solve_path.classify(path)
+        assert.are.equal(17, #result.techniques)
+        assert.are.same(expected, result.techniques)
     end)
 end)

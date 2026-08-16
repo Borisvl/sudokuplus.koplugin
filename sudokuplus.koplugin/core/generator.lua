@@ -325,6 +325,10 @@ end
 -- without an error when it is not (a failed attempt, not a failure).
 -- `difficulty` selects the classification technique tier (P2); nil means
 -- the full technique set (used when the actual difficulty is unknown).
+-- Note: Because the propagator runs techniques in strict difficulty order
+-- (singles -> medium -> hard -> master -> expert), an ALL-techniques solve
+-- of a tier-solvable puzzle produces the exact same deduction path and technique
+-- set as a tier-restricted solve.
 local function classify_puzzle(puzzle, options, difficulty)
     local techniques = ALL_TECHNIQUES
     if difficulty ~= nil then
@@ -364,6 +368,7 @@ local function game_payload(payload, classification, options)
         difficulty = classification.difficulty,
         clues = board.count_clues(payload.board),
         seed = options.seed,
+        techniques = classification.techniques,
     }
 end
 

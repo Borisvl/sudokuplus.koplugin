@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-08-16
+
+### Added
+- **Seed-ID Display**: Show the puzzle generation seed in both the Game Detail view and the victory dialog to facilitate sharing, replaying, and debugging puzzles.
+- **Required Solving Techniques**: Display the logical deduction techniques used by the canonical solver pass in Game Details and the victory dialog (with basic singles suppressed when advanced techniques are needed).
+- **Previous / Next Navigation in Game Details**: Browse seamlessly across games in the game history view using navigation buttons, hardware paging/arrow keys, or swipe gestures without closing the view.
+- **In-Progress Spoiler Prevention**: Suppress required technique disclosure for active in-progress games and exclude them from the "Most missed strategies" statistics until completed.
+- **Backward-Compatible Technique Classification**: Analyze legacy saves on demand to classify their required techniques without requiring schema migrations.
+
 ## [1.0.0] - 2026-08-15
 
 Initial release of **Sudoku+** (`sudokuplus.koplugin`), a full-featured, logical Sudoku puzzle game and tutor for KOReader.

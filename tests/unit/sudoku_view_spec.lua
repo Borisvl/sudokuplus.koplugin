@@ -549,7 +549,9 @@ describe("sudoku view", function()
 
     it("offers a new game, statistics, and close on win", function()
         local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
-        local view = new_view(new_game(puzzle, SOLUTION))
+        local g = new_game(puzzle, SOLUTION)
+        g.seed = 98765
+        local view = new_view(g)
         local dialog, picker_dialog, stats_menu
         local UIManager = require("ui/uimanager")
         local original_show = UIManager.show
@@ -580,6 +582,8 @@ describe("sudoku view", function()
 
         assert.is_not_nil(dialog, "win must show a ButtonDialog")
         assert.is_true(dialog.title:find("Puzzle solved", 1, true) ~= nil)
+        assert.is_true(dialog.title:find("Seed: 9876 5", 1, true) ~= nil, "win dialog title contains formatted seed")
+        assert.is_true(dialog.title:find("Techniques: Singles only", 1, true) ~= nil)
         assert.are.equal("New game", dialog.buttons[1][1].text)
         assert.are.equal("Statistics", dialog.buttons[1][2].text)
         assert.are.equal("Close", dialog.buttons[2][1].text)

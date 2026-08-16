@@ -1,3 +1,4 @@
+local bit = require("bit")
 local solve_path = {}
 local technique_flags = require("core.techniques.flags")
 
@@ -9,6 +10,8 @@ local DIFFICULTY_RANK = {
     master = 4,
     expert = 5,
 }
+
+local ORDERED_TECHNIQUES = technique_flags.TECHNIQUES
 
 -- Step metrics describe direct effects of a step, not all cells in its pattern.
 -- Elimination steps remove one candidate value; placement steps count all peer
@@ -96,6 +99,7 @@ function solve_path.classify(path, options)
     local hardest_rank = -1
     local has_hardest_step = false
     local peak_difficulty = nil
+    local used_flags = 0
 
     for index, step in ipairs((path or {}).steps or {}) do
         local step_flags = step.flags or 0
@@ -104,6 +108,7 @@ function solve_path.classify(path, options)
         end
 
         if step_flags ~= 0 then
+            used_flags = bit.bor(used_flags, step_flags)
             local step_score = technique_flags.score(step_flags)
             result.score = result.score + step_score
 
@@ -122,6 +127,14 @@ function solve_path.classify(path, options)
             end
         end
     end
+
+    local techniques = {}
+    for _, entry in ipairs(ORDERED_TECHNIQUES) do
+        if bit.band(used_flags, entry.flag) ~= 0 then
+            techniques[#techniques + 1] = entry.id
+        end
+    end
+    result.techniques = techniques
 
     if peak_difficulty == nil or peak_difficulty == "easy" then
         if clue_count and clue_count >= 38 then

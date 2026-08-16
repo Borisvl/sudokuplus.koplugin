@@ -177,6 +177,13 @@ function game_serialize.serialize(self)
     for i, entry in ipairs(self._hints) do
         hints_copy[i] = { id = entry.id, technique = entry.technique, flag = entry.flag }
     end
+    local techniques_copy = nil
+    if self._techniques ~= nil then
+        techniques_copy = {}
+        for i, t in ipairs(self._techniques) do
+            techniques_copy[i] = t
+        end
+    end
     return {
         version = VERSION,
         difficulty = self._difficulty,
@@ -198,6 +205,7 @@ function game_serialize.serialize(self)
         id = self.id,
         started_at = self._started_at,
         autofill_notes = self.autofill_notes,
+        techniques = techniques_copy,
     }
 end
 
@@ -372,6 +380,20 @@ function game_serialize.restore(data, opts, mt)
     if started_at ~= nil and (type(started_at) ~= "number" or not util.is_finite(started_at)) then
         return nil, "invalid started_at"
     end
+    -- Optional required techniques list (accepts any non-empty string id for forward compatibility).
+    local techniques_copy = nil
+    if data.techniques ~= nil then
+        if type(data.techniques) ~= "table" then
+            return nil, "invalid techniques"
+        end
+        techniques_copy = {}
+        for i, t in ipairs(data.techniques) do
+            if type(t) ~= "string" or #t == 0 then
+                return nil, "invalid techniques"
+            end
+            techniques_copy[i] = t
+        end
+    end
 
     local now = opts.now
     local instance = {
@@ -396,6 +418,7 @@ function game_serialize.restore(data, opts, mt)
         seed = seed,
         id = id,
         autofill_notes = not not data.autofill_notes,
+        _techniques = techniques_copy,
     }
     if data.timer.running then
         if data.timer.started == nil then

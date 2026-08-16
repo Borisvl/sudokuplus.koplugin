@@ -10,6 +10,7 @@ local difficulties = require("ui.difficulties")
 local help = require("ui.help")
 local messages = require("ui.messages")
 local stats = require("stats")
+local techniques = require("ui.techniques")
 local util = require("core.util")
 
 local format_time = util.format_time
@@ -47,6 +48,8 @@ function dialogs.show_win_dialog(view)
             duration = view.game:elapsed(),
             mistakes = view.game:mistakes(),
             hints = view.game:hints(),
+            seed = view.game.seed,
+            techniques = view.game:techniques(),
         }
     end
     local dialog
@@ -55,13 +58,31 @@ function dialogs.show_win_dialog(view)
         UIManager:close(dialog)
         UIManager:close(view, "flashui")
     end
+    local title_lines = {
+        _("Puzzle solved!"),
+        "",
+        T(_("Time: %1"), format_time(record.duration or 0))
+            .. "   "
+            .. T(_("Mistakes: %1"), tostring(record.mistakes or 0)),
+    }
+    local hints_text = T(_("Hints: %1"), tostring(#(record.hints or {})))
+    if record.seed ~= nil then
+        hints_text = hints_text .. "   " .. T(_("Seed: %1"), util.format_seed(record.seed))
+    end
+    title_lines[#title_lines + 1] = hints_text
+    local req_tech = record.techniques
+    if not req_tech and view.game and view.game.puzzle then
+        req_tech = techniques.derive(view.game.puzzle)
+    end
+    if req_tech then
+        local formatted = techniques.format_required(req_tech, 4)
+        if formatted then
+            title_lines[#title_lines + 1] = T(_("Techniques: %1"), formatted)
+        end
+    end
+
     dialog = ButtonDialog:new {
-        title = T(
-            _("Puzzle solved!\n\nTime: %1\nMistakes: %2\nHints: %3"),
-            format_time(record.duration or 0),
-            tostring(record.mistakes or 0),
-            tostring(#(record.hints or {}))
-        ),
+        title = table.concat(title_lines, "\n"),
         buttons = {
             {
                 {

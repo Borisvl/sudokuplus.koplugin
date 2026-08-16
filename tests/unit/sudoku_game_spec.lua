@@ -117,11 +117,32 @@ describe("game", function()
         })
         assert.is_nil(bad_seed)
         assert.is_string(bad_seed_err)
+
+        local bad_tech, bad_tech_err = game.new({
+            puzzle = puzzle,
+            solution = solution,
+            difficulty = "easy",
+            techniques = "naked_pairs",
+            now = now,
+        })
+        assert.is_nil(bad_tech)
+        assert.is_string(bad_tech_err)
+
+        local bad_tech_item, bad_tech_item_err = game.new({
+            puzzle = puzzle,
+            solution = solution,
+            difficulty = "easy",
+            techniques = { 123 },
+            now = now,
+        })
+        assert.is_nil(bad_tech_item)
+        assert.is_string(bad_tech_item_err)
     end)
 
-    it("stores an optional reproduction seed", function()
+    it("stores an optional reproduction seed and techniques", function()
         local instance = new_game()
         assert.is_nil(instance.seed, "no seed by default")
+        assert.is_nil(instance:techniques(), "nil techniques by default")
 
         local clock = { t = 1000 }
         local seeded = assert(game.new({
@@ -129,11 +150,13 @@ describe("game", function()
             solution = board.from_string(SOLUTION),
             difficulty = "easy",
             seed = 987654,
+            techniques = { "locked_candidates", "naked_pairs" },
             now = function()
                 return clock.t
             end,
         }))
         assert.are.equal(987654, seeded.seed, "the reproduction seed must be stored on the game")
+        assert.are.same({ "locked_candidates", "naked_pairs" }, seeded:techniques())
     end)
 
     it("tracks which digits are fully placed on the board", function()

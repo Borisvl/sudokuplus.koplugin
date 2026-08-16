@@ -7,7 +7,7 @@ local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local Size = require("ui/size")
-local TextWidget = require("ui/widget/textwidget")
+local TextBoxWidget = require("ui/widget/textboxwidget")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
@@ -18,6 +18,7 @@ local _ = require("gettext")
 local difficulties = require("ui.difficulties")
 local numberbar = require("ui.numberbar")
 local status_helper = require("ui.status")
+local techniques_helper = require("ui.techniques")
 local theme = require("ui.theme")
 local util = require("core.util")
 
@@ -113,6 +114,8 @@ local GameDetail = InputContainer:extend {
     covers_fullscreen = true,
     width = nil,
     height = nil,
+    entries = nil,
+    index = nil,
     entry = nil,
     replay_cb = nil,
 }
@@ -121,28 +124,67 @@ function GameDetail:init()
     self.width = self.width or Screen:getWidth()
     self.height = self.height or Screen:getHeight()
     self.dimen = Geom:new { x = 0, y = 0, w = self.width, h = self.height }
+
+    if not self.entries then
+        self.entries = self.entry and { self.entry } or {}
+        self.index = 1
+    elseif not self.index then
+        self.index = 1
+    end
+    self.entry = self.entries[self.index] or self.entry
+
     self.key_events.Close = { { Device.input.group.Back } }
+    self.key_events.PrevGame = { { Device.input.group.PgBack, Device.input.group.Left } }
+    self.key_events.NextGame = { { Device.input.group.PgFwd, Device.input.group.Right } }
 
     local entry = self.entry
     local difficulty = difficulties.label(entry.difficulty) or entry.difficulty
-    local grid_size = math.floor(math.min(self.width, self.height) * 0.52)
+    local grid_size = math.floor(math.min(self.width * 0.50, self.height * 0.36))
     local text_width = math.floor(math.min(self.width, self.height) * 0.8)
-    local body_face = Font:getFace("cfont", 16)
+    local body_face = Font:getFace("cfont", 18)
 
     local lines = {}
     local function add(text)
-        lines[#lines + 1] = TextWidget:new { text = text, width = text_width, face = body_face }
+        lines[#lines + 1] = TextBoxWidget:new { text = text, width = text_width, face = body_face }
     end
     add(T(_("#%1 · %2 · %3"), tostring(entry.id or "?"), difficulty, status_helper.label(entry.status)))
+    local time_text = T(_("Time: %1"), util.format_time(entry.duration or 0))
     if entry.started_at then
-        add(T(_("Started: %1"), os.date("%Y-%m-%d %H:%M", entry.started_at)))
+        time_text = time_text .. "   " .. T(_("Started: %1"), os.date("%Y-%m-%d %H:%M", entry.started_at))
     end
-    add(T(_("Time: %1"), util.format_time(entry.duration or 0)))
+    add(time_text)
     add(T(_("Mistakes: %1   Check errors: %2"), entry.mistakes or 0, entry.check_errors or 0))
     add(T(_("Hints: %1   Moves: %2"), #(entry.hints or {}), entry.moves or 0))
-    if entry.puzzle then
+
+    local placement_text = nil
+    if entry.status ~= "finished" and entry.puzzle then
         local empty = 81 - count_clues(entry.puzzle)
-        add(T(_("Correct placements: %1 of %2"), entry.correct or 0, empty))
+        placement_text = T(_("Correct placements: %1 of %2"), entry.correct or 0, empty)
+    end
+    local seed_text = entry.seed ~= nil and T(_("Seed: %1"), util.format_seed(entry.seed)) or nil
+    if placement_text and seed_text then
+        add(placement_text .. "   " .. seed_text)
+    elseif placement_text then
+        add(placement_text)
+    elseif seed_text then
+        add(seed_text)
+    end
+
+    -- Do not reveal required techniques for in-progress puzzles to avoid spoilers.
+    if entry.status ~= "in_progress" then
+        local req_tech = entry.techniques
+        if not req_tech then
+            req_tech = techniques_helper.derive(entry.puzzle)
+            if req_tech then
+                entry.techniques = req_tech
+            end
+        end
+        if req_tech then
+            local formatted = techniques_helper.format_required(req_tech)
+            if formatted then
+                add(T(_("Techniques: %1"), formatted))
+            end
+        end
     end
 
     local grid = MiniGrid:new {
@@ -151,18 +193,24 @@ function GameDetail:init()
         board = entry.board,
     }
 
-    local buttons = {
-        {
-            {
-                text = _("Back"),
-                callback = function()
-                    UIManager:close(self, "flashui")
-                end,
-            },
-        },
+    local button_row = {}
+    if #self.entries > 1 then
+        button_row[#button_row + 1] = {
+            text = "◀",
+            enabled = self.index > 1,
+            callback = function()
+                self:onPrevGame()
+            end,
+        }
+    end
+    button_row[#button_row + 1] = {
+        text = _("Back"),
+        callback = function()
+            UIManager:close(self, "flashui")
+        end,
     }
     if self.replay_cb and entry.seed ~= nil then
-        buttons[1][#buttons[1] + 1] = {
+        button_row[#button_row + 1] = {
             text = _("Play again"),
             callback = function()
                 UIManager:close(self, "flashui")
@@ -170,19 +218,28 @@ function GameDetail:init()
             end,
         }
     end
+    if #self.entries > 1 then
+        button_row[#button_row + 1] = {
+            text = "▶",
+            enabled = self.index < #self.entries,
+            callback = function()
+                self:onNextGame()
+            end,
+        }
+    end
 
     local content = VerticalGroup:new {
         align = "center",
         grid,
-        VerticalSpan:new { width = Size.span.horizontal_large },
+        VerticalSpan:new { width = Size.padding.default },
         VerticalGroup:new {
             align = "left",
             unpack(lines),
         },
-        VerticalSpan:new { width = Size.span.horizontal_large },
+        VerticalSpan:new { width = Size.padding.default },
         ButtonTable:new {
             width = text_width,
-            buttons = buttons,
+            buttons = { button_row },
             show_parent = self,
         },
     }
@@ -196,6 +253,41 @@ function GameDetail:init()
             content,
         },
     }
+end
+
+function GameDetail:setIndex(index)
+    if not self.entries or not self.entries[index] then
+        return
+    end
+    self.index = index
+    self.entry = self.entries[index]
+    self:init()
+    UIManager:setDirty(self, "ui")
+end
+
+function GameDetail:onPrevGame()
+    if self.entries and self.index and self.index > 1 then
+        self:setIndex(self.index - 1)
+        return true
+    end
+end
+
+function GameDetail:onNextGame()
+    if self.entries and self.index and self.index < #self.entries then
+        self:setIndex(self.index + 1)
+        return true
+    end
+end
+
+function GameDetail:onSwipe(arg, ges)
+    if not ges then
+        return
+    end
+    if ges.direction == "east" or ges.direction == "right" then
+        return self:onPrevGame()
+    elseif ges.direction == "west" or ges.direction == "left" then
+        return self:onNextGame()
+    end
 end
 
 function GameDetail:onClose()

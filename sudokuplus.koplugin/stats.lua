@@ -1,5 +1,4 @@
 local board = require("core.board")
-local hints = require("core.hints")
 local util = require("core.util")
 
 local stats = {}
@@ -13,11 +12,6 @@ local STATUSES = {
     give_up = true,
     abandoned = true,
 }
-
-local TECHNIQUES = {}
-for _, technique in ipairs(hints.techniques() or {}) do
-    TECHNIQUES[technique.id] = true
-end
 
 local function is_optional_integer(value)
     return value == nil or (type(value) == "number" and value % 1 == 0 and value >= 0)
@@ -64,8 +58,8 @@ local function validate_record(record)
     end
     local technique_list = {}
     for i, technique in ipairs(record.hints) do
-        if type(technique) ~= "string" or not TECHNIQUES[technique] then
-            return nil, "record hints must list known technique ids"
+        if type(technique) ~= "string" or #technique == 0 then
+            return nil, "record hints must list valid technique id strings"
         end
         technique_list[i] = technique
     end
@@ -89,6 +83,19 @@ local function validate_record(record)
     end
     if not is_optional_integer(record.correct) then
         return nil, "record correct must be a non-negative integer"
+    end
+    local required_techniques = nil
+    if record.techniques ~= nil then
+        if type(record.techniques) ~= "table" then
+            return nil, "record techniques must be a list of technique ids"
+        end
+        required_techniques = {}
+        for i, technique in ipairs(record.techniques) do
+            if type(technique) ~= "string" or #technique == 0 then
+                return nil, "record techniques must list valid technique id strings"
+            end
+            required_techniques[i] = technique
+        end
     end
     local puzzle, puzzle_err = validate_board_string(record.puzzle, "record puzzle")
     if puzzle_err then
@@ -119,6 +126,7 @@ local function validate_record(record)
         puzzle = puzzle,
         solution = solution,
         board = board_string,
+        techniques = required_techniques,
     }
 end
 
@@ -180,6 +188,7 @@ local function merge_entry(entry, record)
     entry.correct = record.correct
     entry.board = record.board
     entry.seed = record.seed
+    entry.techniques = record.techniques or entry.techniques
     entry.started_at = entry.started_at or record.started_at
 end
 
@@ -331,8 +340,10 @@ function stats.summary(s)
     for _, entry in ipairs(s.games) do
         total_playtime = total_playtime + (entry.duration or 0)
         moves_sum = moves_sum + (entry.moves or 0)
-        for _, technique in ipairs(entry.hints) do
-            hints_per_technique[technique] = (hints_per_technique[technique] or 0) + 1
+        if entry.status ~= "in_progress" then
+            for _, technique in ipairs(entry.hints) do
+                hints_per_technique[technique] = (hints_per_technique[technique] or 0) + 1
+            end
         end
 
         if entry.status == "finished" then

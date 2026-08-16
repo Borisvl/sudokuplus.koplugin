@@ -206,6 +206,61 @@ describe("stats", function()
         assert.are.equal(0, s.streak, "a hint-used give-up resets the streak")
     end)
 
+    it("stores and preserves required techniques in records", function()
+        local s = stats.new()
+        local r = record({
+            id = 1,
+            techniques = { "locked_candidates", "naked_pairs" },
+        })
+        assert.is_not_nil(stats.add(s, r))
+        assert.are.same({ "locked_candidates", "naked_pairs" }, s.games[1].techniques)
+
+        local restored, err = stats.from_table(stats.to_table(s))
+        assert.is_nil(err)
+        assert.are.same({ "locked_candidates", "naked_pairs" }, restored.games[1].techniques)
+    end)
+
+    it("preserves existing techniques during merge_entry when incoming record has nil techniques", function()
+        local s = stats.new()
+        local initial = in_progress_record({
+            id = 1,
+            techniques = { "locked_candidates" },
+        })
+        assert.is_not_nil(stats.track(s, initial))
+        assert.are.same({ "locked_candidates" }, s.games[1].techniques)
+
+        local update = in_progress_record({
+            id = 1,
+            moves = 5,
+        })
+        update.techniques = nil
+        assert.is_not_nil(stats.track(s, update))
+        assert.are.same({ "locked_candidates" }, s.games[1].techniques, "techniques are preserved across updates")
+    end)
+
+    it("rejects invalid techniques in records", function()
+        local s = stats.new()
+        local bad_tech, tech_err = stats.add(s, record({ techniques = "naked_pairs" }))
+        assert.is_nil(bad_tech)
+        assert.is_string(tech_err)
+
+        local bad_entry, bad_entry_err = stats.add(s, record({ techniques = { 123 } }))
+        assert.is_nil(bad_entry)
+        assert.is_string(bad_entry_err)
+    end)
+
+    it("accepts forward-compatible technique string ids in records", function()
+        local s = stats.new()
+        local r = record({
+            id = 1,
+            techniques = { "future_killer_cage" },
+            hints = { "future_killer_cage" },
+        })
+        assert.is_not_nil(stats.add(s, r))
+        assert.are.same({ "future_killer_cage" }, s.games[1].techniques)
+        assert.are.same({ "future_killer_cage" }, s.games[1].hints)
+    end)
+
     it("rejects malformed records", function()
         local s = stats.new()
 
@@ -225,9 +280,13 @@ describe("stats", function()
         assert.is_nil(bad_hints)
         assert.is_string(hints_err)
 
-        local bad_technique, technique_err = stats.add(s, record({ hints = { "not_a_technique" } }))
+        local bad_technique, technique_err = stats.add(s, record({ hints = { 123 } }))
         assert.is_nil(bad_technique)
         assert.is_string(technique_err)
+
+        local bad_empty_hint, empty_hint_err = stats.add(s, record({ hints = { "" } }))
+        assert.is_nil(bad_empty_hint)
+        assert.is_string(empty_hint_err)
 
         local bad_mistakes, mistakes_err = stats.add(s, record({ mistakes = -1 }))
         assert.is_nil(bad_mistakes)
@@ -357,6 +416,17 @@ describe("stats", function()
         assert.are.equal(2, summary.hints_per_technique.skyscraper)
         assert.are.equal(2, summary.hints_per_technique.w_wing)
         assert.are.same({ technique = "skyscraper", count = 2 }, summary.most_missed)
+    end)
+
+    it("does not count hints from in-progress games in the missed-strategy summary", function()
+        local s = stats.new()
+        stats.add(s, record({ id = 1, hints = { "skyscraper" } }))
+        assert.is_not_nil(stats.track(s, in_progress_record({ id = 2, hints = { "w_wing" } })))
+
+        local summary = stats.summary(s)
+        assert.are.equal(1, summary.hints_per_technique.skyscraper)
+        assert.is_nil(summary.hints_per_technique.w_wing)
+        assert.are.same({ technique = "skyscraper", count = 1 }, summary.most_missed)
     end)
 
     it("breaks most-missed ties deterministically", function()

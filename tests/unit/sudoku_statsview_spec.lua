@@ -242,6 +242,119 @@ describe("sudoku stats view", function()
         bb:free()
     end)
 
+    it("displays seed and explicit or derived techniques in GameDetail", function()
+        local GameDetail = require("ui.gamedetail")
+        local entry = record({
+            seed = 123456,
+            techniques = { "locked_candidates", "naked_pairs" },
+        })
+        local detail = GameDetail:new {
+            entry = entry,
+            width = 758,
+            height = 1024,
+        }
+        local function collect_text(widget, out)
+            out = out or {}
+            if widget.text then
+                out[#out + 1] = widget.text
+            end
+            for _, child in ipairs(widget) do
+                if type(child) == "table" then
+                    collect_text(child, out)
+                end
+            end
+            return out
+        end
+        local texts = collect_text(detail)
+        local found_seed = false
+        local found_tech = false
+        local found_placements = false
+        for _, t in ipairs(texts) do
+            if t:find("Seed: 1234 56", 1, true) then
+                found_seed = true
+            end
+            if t:find("Techniques: Locked Candidates, Naked Pairs", 1, true) then
+                found_tech = true
+            end
+            if t:find("Correct placements:", 1, true) then
+                found_placements = true
+            end
+        end
+        assert.is_true(found_seed, "Formatted Seed line must be present")
+        assert.is_true(found_tech, "Techniques line must be present")
+        assert.is_false(found_placements, "Finished game must suppress correct placements output")
+    end)
+
+    it("derives techniques on-the-fly for legacy records with an 81-char puzzle string", function()
+        local GameDetail = require("ui.gamedetail")
+        local entry = record({
+            seed = 777,
+            puzzle = "530070000600195000098000060800060003400803001700020006060000280000419005000080079",
+        })
+        entry.techniques = nil -- simulate legacy entry
+        local detail = GameDetail:new {
+            entry = entry,
+            width = 758,
+            height = 1024,
+        }
+        local function collect_text(widget, out)
+            out = out or {}
+            if widget.text then
+                out[#out + 1] = widget.text
+            end
+            for _, child in ipairs(widget) do
+                if type(child) == "table" then
+                    collect_text(child, out)
+                end
+            end
+            return out
+        end
+        local texts = collect_text(detail)
+        local found_tech = false
+        for _, t in ipairs(texts) do
+            if t:find("Techniques: ", 1, true) then
+                found_tech = true
+            end
+        end
+        assert.is_true(found_tech, "Derived Techniques line must be present for legacy entry")
+        assert.is_not_nil(entry.techniques, "entry.techniques is memoized on the record")
+    end)
+
+    it("does not display or derive techniques for in-progress games", function()
+        local GameDetail = require("ui.gamedetail")
+        local entry = in_progress({
+            seed = 777,
+            puzzle = "530070000600195000098000060800060003400803001700020006060000280000419005000080079",
+            techniques = { "locked_candidates" },
+        })
+        local detail = GameDetail:new {
+            entry = entry,
+            width = 758,
+            height = 1024,
+        }
+        local function collect_text(widget, out)
+            out = out or {}
+            if widget.text then
+                out[#out + 1] = widget.text
+            end
+            for _, child in ipairs(widget) do
+                if type(child) == "table" then
+                    collect_text(child, out)
+                end
+            end
+            return out
+        end
+        local texts = collect_text(detail)
+        local found_placements = false
+        for _, t in ipairs(texts) do
+            assert.is_nil(t:find("Techniques:", 1, true), "Techniques must be hidden for in-progress games")
+            if t:find("Correct placements:", 1, true) then
+                found_placements = true
+            end
+        end
+        assert.is_true(found_placements, "In-progress games must show correct placements")
+    end)
+
     it("paints the detail page of a game without a board snapshot", function()
         local GameDetail = require("ui.gamedetail")
         local data = {
@@ -312,5 +425,106 @@ describe("sudoku stats view", function()
         assert.is_not_nil(replayed)
         assert.are.equal(987654, replayed.seed)
         assert.are.equal("hard", replayed.difficulty)
+    end)
+
+    it("navigates between previous and next games without closing GameDetail", function()
+        local GameDetail = require("ui.gamedetail")
+        local entry1 = record({ id = 1, seed = 111111, difficulty = "easy" })
+        local entry2 = record({ id = 2, seed = 222222, difficulty = "medium" })
+        local entry3 = record({ id = 3, seed = 333333, difficulty = "hard" })
+        local games = { entry3, entry2, entry1 } -- newest first
+
+        local replayed
+        local detail = GameDetail:new {
+            entries = games,
+            index = 1,
+            replay_cb = function(seed, difficulty)
+                replayed = { seed = seed, difficulty = difficulty }
+            end,
+        }
+
+        assert.are.equal(1, detail.index)
+        assert.are.equal(3, detail.entry.id)
+
+        -- Navigate next (older game in newest-first list)
+        assert.is_true(detail:onNextGame())
+        assert.are.equal(2, detail.index)
+        assert.are.equal(2, detail.entry.id)
+
+        -- Swipe left navigates to next game (index 3)
+        assert.is_true(detail:onSwipe(nil, { direction = "left" }))
+        assert.are.equal(3, detail.index)
+        assert.are.equal(1, detail.entry.id)
+
+        -- Past the end: onNextGame returns nil
+        assert.is_nil(detail:onNextGame())
+        assert.are.equal(3, detail.index)
+
+        -- Navigate prev (newer game)
+        assert.is_true(detail:onPrevGame())
+        assert.are.equal(2, detail.index)
+        assert.are.equal(2, detail.entry.id)
+
+        -- Swipe right navigates to prev game (index 1)
+        assert.is_true(detail:onSwipe(nil, { direction = "right" }))
+        assert.are.equal(1, detail.index)
+        assert.are.equal(3, detail.entry.id)
+
+        -- Before the start: onPrevGame returns nil
+        assert.is_nil(detail:onPrevGame())
+        assert.are.equal(1, detail.index)
+
+        -- Replay currently active game (#3)
+        local function find_button(widget, text)
+            for _, child in ipairs(widget) do
+                if type(child) == "table" and child.text == text and child.callback then
+                    return child
+                end
+                local found = find_button(child, text)
+                if found then
+                    return found
+                end
+            end
+            return nil
+        end
+
+        local play_btn = find_button(detail, "Play again")
+        assert.is_not_nil(play_btn)
+        play_btn.callback()
+        assert.is_not_nil(replayed)
+        assert.are.equal(333333, replayed.seed)
+        assert.are.equal("hard", replayed.difficulty)
+    end)
+
+    it("wraps long technique lists into multiple lines via TextBoxWidget", function()
+        local GameDetail = require("ui.gamedetail")
+        local entry = record({
+            seed = 999999,
+            techniques = {
+                "locked_candidates",
+                "naked_pairs",
+                "naked_triples",
+                "hidden_pairs",
+                "hidden_triples",
+                "skyscraper",
+                "w_wing",
+                "xy_wing",
+                "xyz_wing",
+            },
+        })
+        local detail = GameDetail:new {
+            entry = entry,
+            width = 600,
+            height = 800,
+        }
+        local bb = Blitbuffer.new(600, 800)
+        bb:fill(Blitbuffer.COLOR_WHITE)
+        local ok = xpcall(function()
+            detail:paintTo(bb, 0, 0)
+        end, function(err)
+            print("PAINT FAILED:\n" .. debug.traceback(err, 2))
+        end)
+        bb:free()
+        assert.is_true(ok, "painting with long wrapped technique list succeeds")
     end)
 end)

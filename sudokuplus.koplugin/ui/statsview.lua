@@ -85,12 +85,15 @@ end
 function statsview.games_list(s, opts)
     opts = opts or {}
     opts.widgets = opts.widgets or {}
+    local games = stats.list(s)
     local items = {}
-    for _, entry in ipairs(stats.list(s)) do
+    for i, entry in ipairs(games) do
         items[#items + 1] = {
             text = game_row_text(entry),
             callback = function()
                 local detail = GameDetail:new {
+                    entries = games,
+                    index = i,
                     entry = entry,
                     replay_cb = function(seed, difficulty)
                         close_session(opts.widgets)
