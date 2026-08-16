@@ -50,7 +50,7 @@ describe("sudoku localization", function()
             assert.is_nil(techniques.label(nil))
         end)
 
-        it("formats required techniques list suppressing basic singles", function()
+        it("formats required techniques list suppressing basic singles and truncates with max_items", function()
             assert.is_nil(techniques.format_required(nil))
             assert.is_nil(techniques.format_required({}))
             assert.are.equal("Singles only", techniques.format_required({ "naked_singles" }))
@@ -61,6 +61,16 @@ describe("sudoku localization", function()
                 techniques.format_required({ "naked_singles", "locked_candidates", "naked_pairs" })
             )
             assert.are.equal("custom_technique", techniques.format_required({ "custom_technique" }))
+
+            local list = { "locked_candidates", "naked_pairs", "skyscraper", "w_wing", "x_wing", "jellyfish" }
+            assert.are.equal(
+                "Locked Candidates, Naked Pairs, Skyscraper, W-Wing, X-Wing, Jellyfish",
+                techniques.format_required(list)
+            )
+            assert.are.equal(
+                "Locked Candidates, Naked Pairs, Skyscraper, W-Wing +2 more",
+                techniques.format_required(list, 4)
+            )
         end)
     end)
 

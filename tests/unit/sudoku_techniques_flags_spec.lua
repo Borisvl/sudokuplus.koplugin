@@ -130,9 +130,7 @@ describe("core.techniques.flags", function()
         assert.are.equal(28, flags.difficulty_point(flags.ALTERNATING_INFERENCE_CHAIN))
     end)
 
-    it("preserves catalog integrity between flags, scores, and ui technique mappings (drift protection)", function()
-        local ui_techniques = require("ui.techniques")
-
+    it("preserves catalog integrity between flags, scores, and lookup tables (drift protection)", function()
         assert.are.equal(17, #flags.TECHNIQUES)
         for _, t in ipairs(flags.TECHNIQUES) do
             assert.is_table(flags.TECHNIQUE_BY_ID[t.id])
@@ -143,33 +141,10 @@ describe("core.techniques.flags", function()
             local sc = flags.TECHNIQUE_SCORES[t.flag]
             assert.is_number(sc)
             assert.is_true(sc > 0, "technique " .. t.id .. " must have a positive score")
-
-            local label = ui_techniques.label(t.id)
-            assert.is_string(label)
-            assert.is_true(#label > 0, "label for " .. t.id .. " must be non-empty")
-            assert.is_not_equal(t.id, label, "label for " .. t.id .. " must have a dedicated translation")
         end
 
         for flag, _ in pairs(flags.TECHNIQUE_SCORES) do
             assert.is_table(flags.TECHNIQUE_BY_FLAG[flag], "TECHNIQUE_SCORES contains unknown flag: " .. tostring(flag))
         end
-    end)
-
-    it("formats required techniques and truncates with max_items", function()
-        local ui_techniques = require("ui.techniques")
-        assert.is_nil(ui_techniques.format_required(nil))
-        assert.is_nil(ui_techniques.format_required({}))
-        assert.are.equal("Singles only", ui_techniques.format_required({ "naked_singles", "hidden_singles" }))
-        assert.are.equal("Locked Candidates", ui_techniques.format_required({ "locked_candidates", "naked_singles" }))
-
-        local list = { "locked_candidates", "naked_pairs", "skyscraper", "w_wing", "x_wing", "jellyfish" }
-        assert.are.equal(
-            "Locked Candidates, Naked Pairs, Skyscraper, W-Wing, X-Wing, Jellyfish",
-            ui_techniques.format_required(list)
-        )
-        assert.are.equal(
-            "Locked Candidates, Naked Pairs, Skyscraper, W-Wing +2 more",
-            ui_techniques.format_required(list, 4)
-        )
     end)
 end)

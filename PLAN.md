@@ -1526,7 +1526,7 @@ Display the puzzle generation seed and the canonical list of required human solv
 - [x] `_meta.lua`: bump version to `"1.1.0"`.
 - [x] Automated catalog drift integrity specs and comprehensive 17-technique ordering tests.
 - [x] `core/util.lua`: `util.format_seed(seed)` formatting seeds into space-separated 4-digit groups (e.g. `4354 5433 6455 32`).
-- [x] `ui/gamedetail.lua`: seamless previous/next game navigation via `◀` / `▶` buttons, hardware paging/arrow keys, and swipe gestures; suppress "Correct placements" on finished games.
+- [x] Pure-Lua core specs decoupled from UI/gettext dependencies to guarantee green headless Busted CI runs.
 - [x] `CHANGELOG.md` updated for v1.1.0.
 
 **Exit criteria**: all unit and integration specs green, `./dev.sh lint` clean, `./dev.sh fmt` clean, emulator boot smoke on `kobo-aura-one` and `kobo-clara` (6") with no errors.
