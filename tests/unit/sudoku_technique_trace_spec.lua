@@ -107,7 +107,7 @@ local CASES = {
                 col = 5,
                 value = 6,
                 pattern = {
-                    kind = "aic",
+                    kind = "x_chain",
                     values = { 6 },
                     nodes = {
                         { r = 0, c = 5, val = 6 },

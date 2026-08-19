@@ -1,3 +1,4 @@
+local flags = require("core.techniques.flags")
 local masks = require("core.masks")
 
 local util = {}
@@ -9,7 +10,48 @@ local DIFFICULTIES = {
     hard = true,
     master = true,
     expert = true,
+    custom = true,
 }
+
+local CUSTOM_TIERS = {
+    medium = true,
+    hard = true,
+    master = true,
+    expert = true,
+}
+
+function util.validate_custom_tier_and_techniques(tier, techniques, prefix)
+    prefix = prefix or ""
+    if type(tier) ~= "string" or not CUSTOM_TIERS[tier] then
+        return nil, prefix .. "custom_tier must be one of medium, hard, master, expert"
+    end
+    if type(techniques) ~= "table" or #techniques == 0 then
+        return nil, prefix .. "custom_techniques must be a non-empty list of technique ids"
+    end
+    local count = 0
+    for k, _ in pairs(techniques) do
+        if type(k) ~= "number" or k % 1 ~= 0 or k < 1 then
+            return nil, prefix .. "custom_techniques must be a non-empty list of technique ids"
+        end
+        count = count + 1
+    end
+    if count ~= #techniques then
+        return nil, prefix .. "custom_techniques must be a non-empty list of technique ids"
+    end
+    local valid_techs = flags.TECHNIQUES_BY_TIER[tier] or {}
+    local valid_map = {}
+    for _, t in ipairs(valid_techs) do
+        valid_map[t.id] = true
+    end
+    local validated_techs = {}
+    for i, t in ipairs(techniques) do
+        if type(t) ~= "string" or not valid_map[t] then
+            return nil, prefix .. "custom_techniques contains invalid technique id for tier"
+        end
+        validated_techs[i] = t
+    end
+    return tier, validated_techs
+end
 
 util.FULL_CANDIDATE_MASK = 0x1FF
 

@@ -79,14 +79,14 @@ describe("sudoku plugin menu", function()
         assert.is_not_nil(shown_widget)
     end)
 
-    it("offers all six difficulties under New game", function()
+    it("offers all six difficulties and custom option under New game", function()
         local new_game = item_with("New game")
         assert.is_table(new_game.sub_item_table)
         local labels = {}
         for _, entry in ipairs(new_game.sub_item_table) do
             labels[#labels + 1] = entry.text
         end
-        assert.are.same({ "Beginner", "Easy", "Medium", "Hard", "Master", "Expert" }, labels)
+        assert.are.same({ "Beginner", "Easy", "Medium", "Hard", "Master", "Expert", "Custom…" }, labels)
     end)
 
     it("starts a game of the chosen difficulty", function()
@@ -463,5 +463,199 @@ describe("sudoku plugin menu", function()
         assert.is_true(G_reader_settings:isTrue("sudokuplus_autofill_notes"))
         toggle.callback()
         assert.is_false(G_reader_settings:isTrue("sudokuplus_autofill_notes"))
+    end)
+
+    it("starts a custom game from the Custom… menu item", function()
+        local custom_item = item_with("Custom…")
+        assert.is_not_nil(custom_item)
+
+        local tier_dialog, strat_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons and widget.title and widget.title:find("Strategy tier", 1, true) then
+                tier_dialog = widget
+            elseif widget and widget.buttons and widget.title and widget.title:find("Strategies", 1, true) then
+                strat_dialog = widget
+            end
+        end
+        UIManager.close = function() end
+
+        local started_opts
+        local original_start = Sudoku.startGame
+        Sudoku.startGame = function(_, diff, opts)
+            started_opts = { diff = diff, opts = opts }
+        end
+
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+            Sudoku.startGame = original_start
+        end)
+
+        custom_item.callback()
+        assert.is_not_nil(tier_dialog, "tapping Custom… opens tier picker")
+
+        -- Select Master tier (row 2, button 1)
+        local master_btn
+        for _, row in ipairs(tier_dialog.buttons) do
+            for _, btn in ipairs(row) do
+                if btn.text == "Master" then
+                    master_btn = btn
+                end
+            end
+        end
+        assert.is_not_nil(master_btn)
+        master_btn.callback()
+
+        assert.is_not_nil(strat_dialog, "selecting tier opens strategy picker")
+
+        -- Find Generate button in strat_dialog
+        local generate_btn
+        for _, row in ipairs(strat_dialog.buttons) do
+            for _, btn in ipairs(row) do
+                if btn.text == "Generate" then
+                    generate_btn = btn
+                end
+            end
+        end
+        assert.is_not_nil(generate_btn)
+        generate_btn.callback()
+
+        assert.is_not_nil(started_opts)
+        assert.are.equal("custom", started_opts.diff)
+        assert.are.equal("master", started_opts.opts.target_tier)
+        assert.is_true(#started_opts.opts.required_techniques > 0)
+    end)
+
+    it("offers to continue custom generation with +50% budget when generation fails", function()
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        local generated_opts = {}
+        generator.generate_game = function(opts)
+            generated_opts[#generated_opts + 1] = opts
+            return nil, "forced custom generation failure"
+        end
+
+        local confirm_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text and widget.ok_text:find("Continue", 1, true) then
+                confirm_dialog = widget
+            end
+        end
+        UIManager.close = function() end
+
+        finally(function()
+            generator.generate_game = original_generate
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        Sudoku:startGame("custom", {
+            target_tier = "master",
+            required_techniques = { "swordfish" },
+            attempts = 100,
+        })
+
+        assert.are.equal(1, #generated_opts)
+        assert.are.equal(100, generated_opts[1].max_attempts)
+        assert.is_not_nil(confirm_dialog, "retry confirmation dialog is shown on failure")
+        assert.is_true(confirm_dialog.ok_text:find("150", 1, true) ~= nil)
+
+        -- Tap continue: starts next attempt round with 150 attempts and fresh seed
+        confirm_dialog.ok_callback()
+        assert.are.equal(2, #generated_opts)
+        assert.are.equal(150, generated_opts[2].max_attempts)
+        assert.is_not_nil(generated_opts[2].seed)
+    end)
+
+    it("preserves exact reproduction seed when retrying custom replay", function()
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        local replay_opts = {}
+        generator.generate_game = function(opts)
+            replay_opts[#replay_opts + 1] = opts
+            return nil, "forced replay generation failure"
+        end
+
+        local confirm_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text and widget.ok_text:find("Continue", 1, true) then
+                confirm_dialog = widget
+            end
+        end
+        UIManager.close = function() end
+
+        finally(function()
+            generator.generate_game = original_generate
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        local target_seed = 987654321
+        Sudoku:replayGame(target_seed, "custom", "master", { "swordfish" })
+
+        assert.are.equal(1, #replay_opts)
+        assert.are.equal(target_seed, replay_opts[1].seed)
+        assert.are.equal(100, replay_opts[1].max_attempts)
+
+        confirm_dialog.ok_callback()
+        assert.are.equal(2, #replay_opts)
+        assert.are.equal(target_seed, replay_opts[2].seed, "must preserve reproduction seed across replay retries")
+        assert.are.equal(150, replay_opts[2].max_attempts)
+    end)
+
+    it("restores active saved game when cancelling custom generation retry", function()
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function()
+            return nil, "forced failure"
+        end
+
+        local confirm_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text and widget.ok_text:find("Continue", 1, true) then
+                confirm_dialog = widget
+            end
+        end
+        UIManager.close = function() end
+
+        local continued = false
+        local original_continue = Sudoku.continueGame
+        Sudoku.continueGame = function()
+            continued = true
+        end
+
+        local original_exists = storage.exists
+        storage.exists = function()
+            return true
+        end
+
+        finally(function()
+            generator.generate_game = original_generate
+            UIManager.show = original_show
+            UIManager.close = original_close
+            Sudoku.continueGame = original_continue
+            storage.exists = original_exists
+        end)
+
+        Sudoku:startGame("custom", {
+            target_tier = "master",
+            required_techniques = { "swordfish" },
+        })
+
+        assert.is_not_nil(confirm_dialog)
+        confirm_dialog.cancel_callback()
+        assert.is_true(continued, "cancelling custom retry must restore active game if one exists")
     end)
 end)

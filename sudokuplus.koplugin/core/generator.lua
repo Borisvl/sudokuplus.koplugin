@@ -31,14 +31,7 @@ local SEARCH_BUDGET = 50000
 -- rejected just the same, but far more cheaply. Easy/medium/hard verdicts
 -- are identical to an all-techniques solve (the propagator runs the tiers in
 -- fixed order, so a puzzle that solves within the tier follows the same path).
-local TIER_TECHNIQUES = {
-    beginner = flags.BEGINNER,
-    easy = flags.EASY,
-    medium = bit.bor(flags.EASY, flags.MEDIUM),
-    hard = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, flags.HARD)),
-    master = bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.MASTER))),
-    expert = ALL_TECHNIQUES,
-}
+local TIER_TECHNIQUES = flags.CUMULATIVE_TIER_FLAGS
 
 local DIFFICULTY_RANGES = {
     beginner = { min = 38, max = 44 },
@@ -47,6 +40,8 @@ local DIFFICULTY_RANGES = {
     hard = { min = 24, max = 28 },
     master = { min = 22, max = 26 },
     expert = { min = 17, max = 22 },
+    custom_master = { min = 22, max = 26 },
+    custom_expert = { min = 21, max = 26 },
 }
 
 -- Rank used to pick the closest usable fallback when an exact difficulty
@@ -67,6 +62,8 @@ local DIFFICULTY_WEIGHTS = {
     medium = { 100, 80, 60, 50, 40, 30 },
     hard = { 100, 80, 60, 50, 30 },
     master = { 100, 80, 60, 40, 30 },
+    custom_master = { 100, 80, 60, 40, 30 },
+    custom_expert = { 100, 80, 60, 40, 30, 20 },
 }
 
 local SYMMETRIES = {
@@ -167,6 +164,42 @@ local function validate_options(options)
         return nil, "unknown difficulty: " .. tostring(difficulty)
     end
 
+    local target_tier = options.target_tier
+    local required_techniques = options.required_techniques
+    local allowed_techniques = options.allowed_techniques
+
+    if difficulty == "custom" then
+        local valid_tier, valid_techs =
+            util.validate_custom_tier_and_techniques(target_tier, required_techniques, "custom difficulty requires ")
+        if not valid_tier then
+            return nil, valid_techs
+        end
+        target_tier = valid_tier
+        required_techniques = valid_techs
+
+        local required_flags = 0
+        for _, id in ipairs(required_techniques) do
+            local t = flags.TECHNIQUE_BY_ID[id]
+            required_flags = bit.bor(required_flags, t.flag)
+        end
+
+        local floor_mask = 0
+        if target_tier == "medium" then
+            floor_mask = flags.CUMULATIVE_TIER_FLAGS.easy
+        elseif target_tier == "hard" then
+            floor_mask = flags.CUMULATIVE_TIER_FLAGS.medium
+        elseif target_tier == "master" then
+            floor_mask = flags.CUMULATIVE_TIER_FLAGS.hard
+        elseif target_tier == "expert" then
+            floor_mask = flags.CUMULATIVE_TIER_FLAGS.master
+        end
+        allowed_techniques = bit.bor(floor_mask, required_flags)
+    else
+        if target_tier ~= nil or required_techniques ~= nil or allowed_techniques ~= nil then
+            return nil, "non-custom difficulty must not specify target_tier, required_techniques, or allowed_techniques"
+        end
+    end
+
     local max_attempts_value = options.max_attempts
     if max_attempts_value == nil then
         max_attempts_value = DEFAULT_MAX_ATTEMPTS
@@ -205,6 +238,9 @@ local function validate_options(options)
         clues = clues,
         symmetry = symmetry,
         difficulty = difficulty,
+        target_tier = target_tier,
+        required_techniques = required_techniques,
+        allowed_techniques = allowed_techniques,
         max_attempts = max_attempts,
         rng = rng,
         seed = seed,
@@ -329,9 +365,11 @@ end
 -- (singles -> medium -> hard -> master -> expert), an ALL-techniques solve
 -- of a tier-solvable puzzle produces the exact same deduction path and technique
 -- set as a tier-restricted solve.
-local function classify_puzzle(puzzle, options, difficulty)
+local function classify_puzzle(puzzle, options, difficulty, custom_techniques_mask)
     local techniques = ALL_TECHNIQUES
-    if difficulty ~= nil then
+    if custom_techniques_mask ~= nil then
+        techniques = custom_techniques_mask
+    elseif difficulty ~= nil then
         techniques = TIER_TECHNIQUES[difficulty]
     end
 
@@ -361,11 +399,27 @@ local function meets_density_criteria(classification, target_difficulty)
     return true
 end
 
+local function contains_any_required(classification_techniques, required_techniques)
+    local req_set = {}
+    for _, id in ipairs(required_techniques or {}) do
+        req_set[id] = true
+    end
+    for _, id in ipairs(classification_techniques or {}) do
+        if req_set[id] then
+            return true
+        end
+    end
+    return false
+end
+
 local function game_payload(payload, classification, options)
     return {
         board = payload.board,
         solution = payload.solution,
-        difficulty = classification.difficulty,
+        difficulty = options.difficulty == "custom" and "custom" or classification.difficulty,
+        custom_tier = options.target_tier,
+        custom_techniques = options.required_techniques,
+        allowed_techniques = options.allowed_techniques,
         clues = board.count_clues(payload.board),
         seed = options.seed,
         techniques = classification.techniques,
@@ -374,8 +428,9 @@ end
 
 -- Picks the clue-count target for one attempt: weighted for difficulties with
 -- a measured yield curve (P3), uniform otherwise.
-local function pick_target_clues(options, range)
-    local weights = DIFFICULTY_WEIGHTS[options.difficulty]
+local function pick_target_clues(options, range, weights_key)
+    local key = weights_key or options.difficulty
+    local weights = DIFFICULTY_WEIGHTS[key]
     if not weights then
         return range.min + options.rng:int(range.max - range.min + 1) - 1
     end
@@ -416,10 +471,51 @@ local function attempt_puzzle(options, range)
     return payload, nil, classification
 end
 
+local function attempt_custom_puzzle(options, range, weights_key)
+    local target = pick_target_clues(options, range, weights_key)
+    local payload, generate_err = generate_single(options, target)
+    if not payload then
+        return nil, generate_err
+    end
+
+    -- Classify strictly using the allowed techniques mask (lower tiers | selected techniques).
+    -- This guarantees the puzzle is 100% solvable without guessing using only the allowed
+    -- techniques and prevents play-time hints from dead-ending on unselected strategies.
+    local classification, classify_err = classify_puzzle(payload.board, options, nil, options.allowed_techniques)
+    if classify_err then
+        return nil, classify_err
+    end
+    if not classification then
+        return nil
+    end
+
+    return payload, nil, classification
+end
+
 function generator.generate(options)
     local normalized, err = validate_options(options)
     if not normalized then
         return nil, err
+    end
+
+    if normalized.difficulty == "custom" then
+        local range_key = "custom_" .. normalized.target_tier
+        local range = DIFFICULTY_RANGES[range_key] or DIFFICULTY_RANGES[normalized.target_tier]
+        local weights_key = DIFFICULTY_WEIGHTS[range_key] and range_key or normalized.target_tier
+        for _ = 1, normalized.max_attempts do
+            local payload, attempt_err, classification = attempt_custom_puzzle(normalized, range, weights_key)
+            if attempt_err then
+                return nil, attempt_err
+            end
+            if
+                payload
+                and not classification.requires_guessing
+                and contains_any_required(classification.techniques, normalized.required_techniques)
+            then
+                return payload.board
+            end
+        end
+        return nil, "failed to generate a custom " .. normalized.target_tier .. " puzzle"
     end
 
     if not normalized.difficulty then
@@ -456,6 +552,26 @@ function generator.generate_game(options)
     local normalized, err = validate_options(options)
     if not normalized then
         return nil, err
+    end
+
+    if normalized.difficulty == "custom" then
+        local range_key = "custom_" .. normalized.target_tier
+        local range = DIFFICULTY_RANGES[range_key] or DIFFICULTY_RANGES[normalized.target_tier]
+        local weights_key = DIFFICULTY_WEIGHTS[range_key] and range_key or normalized.target_tier
+        for _ = 1, normalized.max_attempts do
+            local payload, attempt_err, classification = attempt_custom_puzzle(normalized, range, weights_key)
+            if attempt_err then
+                return nil, attempt_err
+            end
+            if
+                payload
+                and not classification.requires_guessing
+                and contains_any_required(classification.techniques, normalized.required_techniques)
+            then
+                return game_payload(payload, classification, normalized)
+            end
+        end
+        return nil, "failed to generate a custom " .. normalized.target_tier .. " game with the requested techniques"
     end
 
     if not normalized.difficulty then

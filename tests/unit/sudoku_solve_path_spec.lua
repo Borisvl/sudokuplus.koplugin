@@ -216,7 +216,7 @@ describe("core.solve_path", function()
         assert.are.same({}, result.techniques)
     end)
 
-    it("orders all 17 techniques in canonical sequence regardless of push order", function()
+    it("orders all 19 techniques in canonical sequence regardless of push order", function()
         local path = solve_path.new()
         -- Push in reverse order
         for i = #flags.TECHNIQUES, 1, -1 do
@@ -230,7 +230,7 @@ describe("core.solve_path", function()
         end
 
         local result = solve_path.classify(path)
-        assert.are.equal(17, #result.techniques)
+        assert.are.equal(19, #result.techniques)
         assert.are.same(expected, result.techniques)
     end)
 end)

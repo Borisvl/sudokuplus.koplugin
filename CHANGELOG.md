@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Previous / Next Navigation in Game Details**: Browse seamlessly across games in the game history view using navigation buttons, hardware paging/arrow keys, or swipe gestures without closing the view.
 - **In-Progress Spoiler Prevention**: Suppress required technique disclosure for active in-progress games and exclude them from the "Most missed strategies" statistics until completed.
 - **Backward-Compatible Technique Classification**: Analyze legacy saves on demand to classify their required techniques without requiring schema migrations.
+- **Custom Difficulty & Targeted Strategy Practice Mode**:
+  - Practice specific advanced techniques on demand across Medium, Hard, Master, and Expert strategy tiers.
+  - Multi-select strategy picker dialog allows choosing any combination of target strategies.
+  - Practice constraint enforcement: hints only propose allowed strategies and lower-tier basics.
+  - Interactive continue generation dialog with $+50\%$ budget escalation ($100 \to 150 \to 225 \dots$) for rare higher-order techniques.
+- **Disjoint Chain Sub-Classification**:
+  - Split Alternating Inference Chains into three pedagogical categories: **X-Chain** (single-digit conjugate chains), **XY-Chain** (bivalue cell chains with weak inter-cell links), and general **AIC** (mixed links).
+  - Dedicated hint explanations, visual highlights, and localized naming for X-Chain and XY-Chain.
+
+### Changed
+- **Difficulty Model Realignment**:
+  - Reclassified **Swordfish** from Hard tier to **Master tier** to balance 3x3 fish complexity alongside X-Wing and Skyscraper.
 
 ## [1.0.0] - 2026-08-15
 

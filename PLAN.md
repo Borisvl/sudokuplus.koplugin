@@ -34,6 +34,8 @@ A Sudoku puzzle game for e-ink readers (KOReader plugin, target: Kobo).
 2. **Divergences from rustoku**:
    - Solve steps additionally record *pattern metadata* (the cells forming a naked pair, skyscraper base/roof, etc.) so hints can name and highlight patterns.
    - Propagator technique execution order is structured strictly by ascending difficulty tier (Locked Candidates before Naked Pairs, and Wings/Skyscrapers before Swordfish/Hidden Quads/Jellyfish) so human hints and full solves prioritize simpler techniques over complex subsets/fish.
+   - Swordfish is grouped into Master tier alongside 2-line fish and wings, reflecting standard community consensus (HoDoKu, Sudoku Swami, Enjoy Sudoku) for geometric patterns of equivalent cognitive tier.
+   - Alternating Inference Chains (AIC) are sub-classified into disjoint pedagogical types (X-Chain for pure single-digit chains, XY-Chain for pure bivalue cell chains, and General AIC for mixed conjugate/bivalue links) with independent technique flags and gating so players can practice specific chain logic.
    - W-Wing parity with rustoku: requires 4 distinct cells ($P_1, P_2, S_1, S_2$) with $P_1 \ne S_1$ and $P_2 \ne S_2$ so that $P_1 = X \implies S_1 \ne X \implies S_2 = X \implies P_2 = Y$ (if a pincer were a bridge end, $P_1 = X \implies S_1 = X$, breaking the conjugate pair deduction).
    Keep these documented here.
 3. **Difficulty model**: 6-tier progression (Beginner, Easy, Medium, Hard, Master,
@@ -1530,3 +1532,25 @@ Display the puzzle generation seed and the canonical list of required human solv
 - [x] `CHANGELOG.md` updated for v1.1.0.
 
 **Exit criteria**: all unit and integration specs green, `./dev.sh lint` clean, `./dev.sh fmt` clean, emulator boot smoke on `kobo-aura-one` and `kobo-clara` (6") with no errors.
+
+### M18 — Custom Difficulty & Targeted Strategy Practice Mode (done)
+
+Enable players to practice specific advanced techniques on demand via a custom difficulty workflow.
+
+- [x] `core/techniques/flags.lua`: Add `flags.X_CHAIN` (bit 28) and `flags.XY_CHAIN` (bit 29), move `flags.SWORDFISH` to Master tier, define `flags.TIER_FLAGS`, `flags.CUMULATIVE_TIER_FLAGS`, `flags.TECHNIQUES_BY_TIER`, register in canonical 19-technique catalog with re-tuned scores.
+- [x] `core/techniques/aic.lua`: Sub-classify chains in disjoint order (`x_chain` -> `xy_chain` -> `aic`), gate eliminations lazily per sub-type (`bit.band(prop.techniques, chain_flag) ~= 0`), pass `chain_flag` and `kind` to elimination steps.
+- [x] `core/solve_path.lua`: Inherits `x_chain` and `xy_chain` tracking in solve path classification, metrics, and canonical techniques list via `flags.TECHNIQUES`/`used_flags` without separate modification.
+- [x] `core/util.lua`: Add `"custom"` to `util.DIFFICULTIES` and `util.is_difficulty`.
+- [x] `core/hints.lua`: Inherits `x_chain` and `xy_chain` hint resolution automatically via `flags.TECHNIQUE_BY_FLAG` and `step.pattern.kind` without separate modification.
+- [x] `core/generator.lua`: Custom puzzle generator with target tier clue sampling (`custom_expert` range 21..26), `allowed_mask` enforcement, strict "any-of" `required_techniques` verification (requiring at least one of the selected techniques, allowing all lower-tier techniques, and forbidding unselected same-tier and higher-tier techniques), and clean failure without fallback.
+- [x] `game.lua` & `game_serialize.lua`: Pass `self.allowed_techniques` to `hints.next` so hints never violate practice constraints; serialize/restore `custom_tier`, `custom_techniques`, `allowed_techniques` with strict schema validation.
+- [x] `stats.lua`: Validate `"custom"` records with strict schema checks on `custom_tier` and `custom_techniques`; persist custom metadata in log; aggregate into `per_difficulty["custom"]`.
+- [x] `ui/difficulties.lua` & `ui/techniques.lua`: Localized labels for `custom`, `x_chain`, `xy_chain`, display formatting `Custom (Master)`, and `techniques.by_tier(tier_id)` helper.
+- [x] `ui/dialogs.lua`: `[ Custom… ]` button in difficulty picker and 2-step custom dialog (Tier select -> Strategy multi-select checkboxes -> Generate).
+- [x] `main.lua`: Main menu integration, callback wiring (`new_game_cb`, `startGame`, `_startWithSeed`), and replay support.
+- [x] `ui/statsview.lua` & `ui/gamedetail.lua`: History display and replay callback propagation for custom games.
+- [x] `ui/help.lua`: Help section updates for Custom mode, Swordfish realignment (Master tier), and X-Chain / XY-Chain.
+- [x] Automated headless and frontend specs covering all new functionality.
+
+**Exit criteria**: all specs green (`./dev.sh test`), `./dev.sh lint` and `./dev.sh fmt` clean, emulator smoke test.
+

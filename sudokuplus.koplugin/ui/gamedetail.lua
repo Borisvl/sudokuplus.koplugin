@@ -138,7 +138,7 @@ function GameDetail:init()
     self.key_events.NextGame = { { Device.input.group.PgFwd, Device.input.group.Right } }
 
     local entry = self.entry
-    local difficulty = difficulties.label(entry.difficulty) or entry.difficulty
+    local difficulty = difficulties.format_display(entry.difficulty, entry.custom_tier) or entry.difficulty
     local grid_size = math.floor(math.min(self.width * 0.50, self.height * 0.36))
     local text_width = math.floor(math.min(self.width, self.height) * 0.8)
     local body_face = Font:getFace("cfont", 18)
@@ -214,7 +214,7 @@ function GameDetail:init()
             text = _("Play again"),
             callback = function()
                 UIManager:close(self, "flashui")
-                self.replay_cb(entry.seed, entry.difficulty)
+                self.replay_cb(entry.seed, entry.difficulty, entry.custom_tier, entry.custom_techniques)
             end,
         }
     end

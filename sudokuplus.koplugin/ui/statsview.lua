@@ -23,7 +23,7 @@ end
 local status_helper = require("ui.status")
 
 local function game_row_text(entry)
-    local difficulty = difficulties.label(entry.difficulty) or entry.difficulty
+    local difficulty = difficulties.format_display(entry.difficulty, entry.custom_tier) or entry.difficulty
     return T(
         _("#%1 · %2 · %3 · %4"),
         tostring(entry.id or "?"),
@@ -52,13 +52,13 @@ end
 -- Per-difficulty rows for the "By difficulty" section.
 local function difficulty_rows(summary)
     local rows = {}
-    for i, entry in ipairs(difficulties.list()) do
-        local bucket = summary.per_difficulty[entry.id]
+    for diff_idx, id in ipairs(difficulties.ALL_DIFFICULTIES) do
+        local bucket = summary.per_difficulty[id]
         if bucket and bucket.count > 0 then
             rows[#rows + 1] = {
                 text = T(
                     _("%1 — %2 finished, avg %3, best %4, given up %5"),
-                    entry.label,
+                    difficulties.label(id) or id,
                     tostring(bucket.count),
                     format_time(bucket.avg_duration),
                     format_time(bucket.best_duration),
@@ -95,10 +95,10 @@ function statsview.games_list(s, opts)
                     entries = games,
                     index = i,
                     entry = entry,
-                    replay_cb = function(seed, difficulty)
+                    replay_cb = function(seed, difficulty, custom_tier, custom_techs)
                         close_session(opts.widgets)
                         if opts.replay_cb then
-                            opts.replay_cb(seed, difficulty)
+                            opts.replay_cb(seed, difficulty, custom_tier, custom_techs)
                         end
                     end,
                 }

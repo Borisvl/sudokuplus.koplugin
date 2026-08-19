@@ -29,7 +29,7 @@ describe("sudoku localization", function()
     describe("techniques localization", function()
         it("maps every technique in core hints to a localized non-empty label", function()
             local core_techniques = hints.techniques()
-            assert.are.equal(17, #core_techniques)
+            assert.are.equal(19, #core_techniques)
             for _, t in ipairs(core_techniques) do
                 local label = techniques.label(t.id)
                 assert.is_string(label)
@@ -263,6 +263,15 @@ describe("sudoku localization", function()
             -- Plural forms
             assert.are.equal("1 falsche Zelle gefunden.", T(N_("1 wrong cell found.", "%1 wrong cells found.", 1), 1))
             assert.are.equal("3 falsche Zellen gefunden.", T(N_("1 wrong cell found.", "%1 wrong cells found.", 3), 3))
+
+            -- Custom generation continue dialog
+            assert.are.equal("Fortsetzen (150)", T(_("Continue (%1)"), 150))
+            assert.is_not_nil(
+                _(
+                    "Could not generate a %1 puzzle requiring %2 in %3 attempts.\n\n"
+                        .. "Continue searching with +50% budget (%4 attempts)?"
+                ):find("Suche mit +50% Budget", 1, true)
+            )
         end)
 
         it("loads German MO via main.lua when KOReader language setting is de_DE and current_lang is C", function()

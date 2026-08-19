@@ -1305,4 +1305,98 @@ describe("game", function()
             assert.are.equal("game is finished", err)
         end)
     end)
+
+    describe("custom difficulty game properties", function()
+        it("initializes custom difficulty games and passes allowed_techniques to hints.next", function()
+            local clock = { t = 1000 }
+            local instance = assert(game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "custom",
+                custom_tier = "master",
+                custom_techniques = { "swordfish" },
+                allowed_techniques = 0, -- no techniques allowed
+                now = function()
+                    return clock.t
+                end,
+            }))
+
+            assert.are.equal("custom", instance:difficulty())
+            assert.are.equal("master", instance.custom_tier)
+            assert.are.same({ "swordfish" }, instance.custom_techniques)
+
+            -- With allowed_techniques = 0, hint() should find none
+            local hint_res = instance:hint()
+            assert.is_not_nil(hint_res)
+            assert.are.equal("none", hint_res.status)
+
+            local rec = instance:started_record()
+            assert.are.equal("custom", rec.difficulty)
+            assert.are.equal("master", rec.custom_tier)
+            assert.are.same({ "swordfish" }, rec.custom_techniques)
+        end)
+
+        it("strictly validates custom_tier and custom_techniques on game.new", function()
+            local now = function()
+                return 1000
+            end
+            -- Non-custom with custom fields
+            local bad1, err1 = game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "easy",
+                custom_tier = "master",
+                now = now,
+            })
+            assert.is_nil(bad1)
+            assert.is_string(err1)
+
+            -- Custom without custom_tier
+            local bad2, err2 = game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "custom",
+                custom_techniques = { "swordfish" },
+                now = now,
+            })
+            assert.is_nil(bad2)
+            assert.is_string(err2)
+
+            -- Custom without custom_techniques
+            local bad3, err3 = game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "custom",
+                custom_tier = "master",
+                now = now,
+            })
+            assert.is_nil(bad3)
+            assert.is_string(err3)
+
+            -- Custom with invalid technique for tier
+            local bad4, err4 = game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "custom",
+                custom_tier = "hard",
+                custom_techniques = { "swordfish" }, -- swordfish is master, not hard
+                allowed_techniques = 0,
+                now = now,
+            })
+            assert.is_nil(bad4)
+            assert.is_string(err4)
+
+            -- Custom without allowed_techniques
+            local bad5, err5 = game.new({
+                puzzle = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = "custom",
+                custom_tier = "master",
+                custom_techniques = { "swordfish" },
+                now = now,
+            })
+            assert.is_nil(bad5)
+            assert.is_string(err5)
+        end)
+    end)
 end)

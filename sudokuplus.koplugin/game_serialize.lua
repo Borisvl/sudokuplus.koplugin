@@ -206,6 +206,9 @@ function game_serialize.serialize(self)
         started_at = self._started_at,
         autofill_notes = self.autofill_notes,
         techniques = techniques_copy,
+        custom_tier = self.custom_tier,
+        custom_techniques = self.custom_techniques and deep_copy(self.custom_techniques) or nil,
+        allowed_techniques = self._allowed_techniques,
     }
 end
 
@@ -395,6 +398,26 @@ function game_serialize.restore(data, opts, mt)
         end
     end
 
+    local custom_tier = nil
+    local custom_techniques = nil
+    local allowed_techniques = data.allowed_techniques
+    if data.difficulty == "custom" then
+        local valid_tier, valid_techs =
+            util.validate_custom_tier_and_techniques(data.custom_tier, data.custom_techniques)
+        if not valid_tier then
+            return nil, "invalid custom fields"
+        end
+        custom_tier = valid_tier
+        custom_techniques = valid_techs
+        if allowed_techniques == nil or type(allowed_techniques) ~= "number" or allowed_techniques % 1 ~= 0 then
+            return nil, "invalid allowed_techniques"
+        end
+    else
+        if data.custom_tier ~= nil or data.custom_techniques ~= nil or data.allowed_techniques ~= nil then
+            return nil, "invalid custom fields on non-custom save"
+        end
+    end
+
     local now = opts.now
     local instance = {
         puzzle = puzzle,
@@ -403,6 +426,9 @@ function game_serialize.restore(data, opts, mt)
         notes = notes,
         manual_removed = manual_removed,
         _difficulty = data.difficulty,
+        custom_tier = custom_tier,
+        custom_techniques = custom_techniques,
+        _allowed_techniques = allowed_techniques,
         now = now,
         timer = { running = false, started = now(), elapsed = data.timer.elapsed },
         _revision = data.revision,

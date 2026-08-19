@@ -3,6 +3,10 @@ local _ = require("gettext")
 local difficulties = {}
 
 local ORDERED_IDS = { "beginner", "easy", "medium", "hard", "master", "expert" }
+local ALL_DIFFICULTIES = { "beginner", "easy", "medium", "hard", "master", "expert", "custom" }
+
+difficulties.ORDERED_IDS = ORDERED_IDS
+difficulties.ALL_DIFFICULTIES = ALL_DIFFICULTIES
 
 -- Ordered difficulty definitions for the picker and the stats screen.
 -- Evaluated dynamically through static getters so language changes immediately update all labels
@@ -26,7 +30,12 @@ local GETTERS = {
     expert = function()
         return _("Expert")
     end,
+    custom = function()
+        return _("Custom")
+    end,
 }
+
+local T = require("ffi/util").template
 
 function difficulties.list()
     local list = {}
@@ -43,6 +52,20 @@ function difficulties.label(id)
     end
     local getter = GETTERS[id]
     return getter and getter() or nil
+end
+
+function difficulties.format_display(difficulty, custom_tier)
+    if not difficulty then
+        return nil
+    end
+    if difficulty == "custom" then
+        if custom_tier then
+            local tier_label = difficulties.label(custom_tier) or custom_tier
+            return T(_("Custom (%1)"), tier_label)
+        end
+        return difficulties.label("custom")
+    end
+    return difficulties.label(difficulty) or difficulty
 end
 
 return difficulties

@@ -5,6 +5,7 @@ local board = require("core.board")
 local game = require("game")
 local game_serialize = require("game_serialize")
 local json = require("json")
+local util = require("core.util")
 
 local PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
 local SOLUTION = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
@@ -514,5 +515,81 @@ describe("game serialization", function()
         assert.is_nil(err)
         assert.is_not_nil(raw_restored)
         assert.are.equal("hard", raw_restored._difficulty)
+    end)
+
+    it("round-trips custom difficulty fields (custom_tier, custom_techniques, allowed_techniques)", function()
+        local clock = { t = 1000 }
+        local instance = assert(game.new({
+            puzzle = board.from_string(PUZZLE),
+            solution = board.from_string(SOLUTION),
+            difficulty = "custom",
+            custom_tier = "master",
+            custom_techniques = { "swordfish", "x_wing" },
+            allowed_techniques = 0x1234,
+            now = function()
+                return clock.t
+            end,
+        }))
+
+        local serialized = instance:serialize()
+        assert.are.equal("custom", serialized.difficulty)
+        assert.are.equal("master", serialized.custom_tier)
+        assert.are.same({ "swordfish", "x_wing" }, serialized.custom_techniques)
+        assert.are.equal(0x1234, serialized.allowed_techniques)
+
+        local restored = restore(serialized, clock)
+        assert.are.equal("custom", restored:difficulty())
+        assert.are.equal("master", restored.custom_tier)
+        assert.are.same({ "swordfish", "x_wing" }, restored.custom_techniques)
+        assert.are.equal(0x1234, restored._allowed_techniques)
+    end)
+
+    it("rejects invalid custom fields during restore", function()
+        local clock = { t = 1000 }
+        local instance = assert(game.new({
+            puzzle = board.from_string(PUZZLE),
+            solution = board.from_string(SOLUTION),
+            difficulty = "custom",
+            custom_tier = "master",
+            custom_techniques = { "swordfish" },
+            allowed_techniques = 0x1234,
+            now = function()
+                return clock.t
+            end,
+        }))
+        local valid_data = instance:serialize()
+
+        -- Custom save with invalid technique for tier
+        local bad_tech_data = util.deep_copy(valid_data)
+        bad_tech_data.custom_techniques = { "jellyfish" } -- jellyfish is expert, not master
+        local bad1, err1 = game.restore(bad_tech_data, {
+            now = function()
+                return 1000
+            end,
+        })
+        assert.is_nil(bad1)
+        assert.is_string(err1)
+
+        -- Custom save missing allowed_techniques
+        local bad_no_allowed = util.deep_copy(valid_data)
+        bad_no_allowed.allowed_techniques = nil
+        local bad2, err2 = game.restore(bad_no_allowed, {
+            now = function()
+                return 1000
+            end,
+        })
+        assert.is_nil(bad2)
+        assert.is_string(err2)
+
+        -- Non-custom save with custom fields
+        local bad_non_custom = util.deep_copy(valid_data)
+        bad_non_custom.difficulty = "easy"
+        local bad3, err3 = game.restore(bad_non_custom, {
+            now = function()
+                return 1000
+            end,
+        })
+        assert.is_nil(bad3)
+        assert.is_string(err3)
     end)
 end)

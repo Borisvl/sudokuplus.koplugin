@@ -3,8 +3,8 @@ package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 local util = require("core.util")
 
 describe("core.util", function()
-    it("accepts the six supported difficulties", function()
-        for _, name in ipairs({ "beginner", "easy", "medium", "hard", "master", "expert" }) do
+    it("accepts the seven supported difficulties", function()
+        for _, name in ipairs({ "beginner", "easy", "medium", "hard", "master", "expert", "custom" }) do
             assert.is_true(util.is_difficulty(name), name .. " must be a difficulty")
         end
     end)
@@ -124,5 +124,30 @@ describe("core.util", function()
         assert.are.equal(16, m.row[1]) -- 1 << (5 - 1) == 16
         assert.are.equal(16, m.col[1])
         assert.are.equal(16, m.box[1])
+    end)
+
+    it("validates custom tier and techniques lists correctly", function()
+        local tier, techs = util.validate_custom_tier_and_techniques("master", { "swordfish", "x_wing" })
+        assert.are.equal("master", tier)
+        assert.are.same({ "swordfish", "x_wing" }, techs)
+
+        -- Invalid tier
+        local bad_tier, err1 = util.validate_custom_tier_and_techniques("easy", { "naked_pairs" })
+        assert.is_nil(bad_tier)
+        assert.is_true(err1:find("custom_tier must be one of", 1, true) ~= nil)
+
+        -- Empty techniques
+        local bad_empty, err2 = util.validate_custom_tier_and_techniques("master", {})
+        assert.is_nil(bad_empty)
+        assert.is_true(err2:find("custom_techniques must be a non-empty list", 1, true) ~= nil)
+
+        -- Invalid technique for tier
+        local bad_tech, err3 = util.validate_custom_tier_and_techniques("hard", { "swordfish" })
+        assert.is_nil(bad_tech)
+        assert.is_true(err3:find("invalid technique id for tier", 1, true) ~= nil)
+
+        -- Prefix support
+        local _, err_prefixed = util.validate_custom_tier_and_techniques("invalid", {}, "record ")
+        assert.is_true(err_prefixed:find("record custom_tier", 1, true) ~= nil)
     end)
 end)

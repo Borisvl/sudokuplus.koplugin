@@ -230,7 +230,7 @@ function game.new(options)
     end
 
     if type(difficulty) ~= "string" or not util.is_difficulty(difficulty) then
-        return nil, "difficulty must be one of beginner, easy, medium, hard, master, expert"
+        return nil, "difficulty must be one of beginner, easy, medium, hard, master, expert, custom"
     end
     if type(now) ~= "function" then
         return nil, "now must be a function returning the current time in seconds"
@@ -250,6 +250,26 @@ function game.new(options)
     local id = options.id
     if id ~= nil and (type(id) ~= "number" or id % 1 ~= 0 or id < 0) then
         return nil, "id must be a non-negative integer"
+    end
+
+    local custom_tier = nil
+    local custom_techniques = nil
+    local allowed_techniques = options.allowed_techniques
+    if difficulty == "custom" then
+        local valid_tier, valid_techs =
+            util.validate_custom_tier_and_techniques(options.custom_tier, options.custom_techniques)
+        if not valid_tier then
+            return nil, valid_techs
+        end
+        custom_tier = valid_tier
+        custom_techniques = valid_techs
+        if allowed_techniques == nil or type(allowed_techniques) ~= "number" or allowed_techniques % 1 ~= 0 then
+            return nil, "allowed_techniques must be an integer bitmask"
+        end
+    else
+        if options.custom_tier ~= nil or options.custom_techniques ~= nil or options.allowed_techniques ~= nil then
+            return nil, "non-custom difficulty must not specify custom_tier, custom_techniques, or allowed_techniques"
+        end
     end
 
     local techniques_list = nil
@@ -275,6 +295,9 @@ function game.new(options)
         notes = notes,
         manual_removed = new_mask_grid(),
         _difficulty = difficulty,
+        custom_tier = custom_tier,
+        custom_techniques = custom_techniques,
+        _allowed_techniques = allowed_techniques,
         now = now,
         autofill_notes = not not autofill_notes,
         timer = { running = true, started = now(), elapsed = 0 },
@@ -900,12 +923,21 @@ local function make_record(self, status, ended_at)
             techniques_copy[i] = t
         end
     end
+    local custom_techniques_copy = nil
+    if self.custom_techniques ~= nil then
+        custom_techniques_copy = {}
+        for i, t in ipairs(self.custom_techniques) do
+            custom_techniques_copy[i] = t
+        end
+    end
     local progress = self:progress()
     return {
         status = status,
         id = self.id,
         seed = self.seed,
         difficulty = self._difficulty,
+        custom_tier = self.custom_tier,
+        custom_techniques = custom_techniques_copy,
         duration = self:elapsed(),
         hints = hint_ids,
         mistakes = self._mistakes,
@@ -969,7 +1001,7 @@ function mt:hint()
             return nil, "board does not match the solution"
         end
     end
-    -- Notes are ground truth once the user has started them; untouched
+    -- The game layer permits sparse/lazy candidate notes: completely unannotated
     -- empty cells are substituted with their board-legal candidates so the
     -- hint engine can assume fully filled notes.
     local constraint_masks = constraint_masks_for(self.board)
@@ -989,6 +1021,8 @@ function mt:hint()
         notes = derived,
         solution = self.solution,
         revision = self._revision,
+    }, {
+        techniques = self._allowed_techniques,
     })
     if not result then
         return nil, err

@@ -399,4 +399,134 @@ describe("core.generator game payload", function()
             assert.is_not_nil(payload.seed, entry[1] .. " must record a reproduction seed")
         end
     end)
+
+    describe("custom difficulty generation", function()
+        it("generates a custom puzzle requiring selected techniques", function()
+            local payload, err = generator.generate_game({
+                difficulty = "custom",
+                target_tier = "medium",
+                required_techniques = { "naked_pairs" },
+                seed = 1,
+                rng = prng.new(1),
+            })
+
+            assert.is_nil(err)
+            assert.is_not_nil(payload)
+            assert.are.equal("custom", payload.difficulty)
+            assert.are.equal("medium", payload.custom_tier)
+            assert.are.same({ "naked_pairs" }, payload.custom_techniques)
+            assert.is_number(payload.allowed_techniques)
+            assert.are.equal(bit.bor(flags.EASY, flags.NAKED_PAIRS), payload.allowed_techniques)
+
+            -- Verify that the puzzle contains naked_pairs
+            local has_naked_pair = false
+            for _, id in ipairs(payload.techniques) do
+                if id == "naked_pairs" then
+                    has_naked_pair = true
+                    break
+                end
+            end
+            assert.is_true(has_naked_pair)
+
+            -- Verify it solves completely via pure propagation (no guessing) under allowed_techniques
+            local s = solver.new(payload.board, { techniques = payload.allowed_techniques })
+            local path = solve_path.new()
+            assert.is_true(s:propagate(path))
+            assert.is_true(s:is_solved(), "must solve to completion under allowed_techniques without guessing")
+        end)
+
+        it("generates custom puzzles across all strategy tiers", function()
+            local test_tiers = {
+                { tier = "hard", techs = { "hidden_pairs", "naked_triples" }, seed = 456 },
+                { tier = "master", techs = { "swordfish", "x_wing" }, seed = 789 },
+                { tier = "expert", techs = { "x_chain", "aic" }, seed = 1011 },
+            }
+            for _, cfg in ipairs(test_tiers) do
+                local payload, err = generator.generate_game({
+                    difficulty = "custom",
+                    target_tier = cfg.tier,
+                    required_techniques = cfg.techs,
+                    seed = cfg.seed,
+                    rng = prng.new(cfg.seed),
+                })
+                assert.is_nil(err, "generation error for " .. cfg.tier)
+                assert.is_not_nil(payload, "payload for " .. cfg.tier)
+                assert.are.equal("custom", payload.difficulty)
+                assert.are.equal(cfg.tier, payload.custom_tier)
+                assert.are.same(cfg.techs, payload.custom_techniques)
+
+                -- Verify at least one of the required techniques is present
+                local has_required = false
+                local req_set = {}
+                for _, id in ipairs(cfg.techs) do
+                    req_set[id] = true
+                end
+                for _, id in ipairs(payload.techniques) do
+                    if req_set[id] then
+                        has_required = true
+                        break
+                    end
+                end
+                assert.is_true(has_required, cfg.tier .. " puzzle must contain at least one required technique")
+
+                -- Verify it solves completely via pure propagation under payload.allowed_techniques
+                local s = solver.new(payload.board, { techniques = payload.allowed_techniques })
+                local path = solve_path.new()
+                assert.is_true(s:propagate(path))
+                assert.is_true(s:is_solved(), cfg.tier .. " must solve completely under allowed techniques")
+            end
+        end)
+
+        it("accepts a puzzle containing any one of the selected techniques (any-of contract)", function()
+            -- Player selects both x_wing and swordfish
+            local payload, err = generator.generate_game({
+                difficulty = "custom",
+                target_tier = "master",
+                required_techniques = { "x_wing", "swordfish" },
+                seed = 789,
+                rng = prng.new(789),
+            })
+            assert.is_nil(err)
+            assert.is_not_nil(payload)
+            local tech_set = {}
+            for _, t in ipairs(payload.techniques) do
+                tech_set[t] = true
+            end
+            -- It has at least one of them, without necessarily requiring both
+            assert.is_true(tech_set["x_wing"] or tech_set["swordfish"])
+        end)
+
+        it("validates custom options strictly", function()
+            local bad_tier, err1 = generator.generate_game({
+                difficulty = "custom",
+                target_tier = "invalid",
+                required_techniques = { "naked_pairs" },
+            })
+            assert.is_nil(bad_tier)
+            assert.is_string(err1)
+
+            local empty_req, err2 = generator.generate_game({
+                difficulty = "custom",
+                target_tier = "medium",
+                required_techniques = {},
+            })
+            assert.is_nil(empty_req)
+            assert.is_string(err2)
+
+            local wrong_tier_tech, err3 = generator.generate_game({
+                difficulty = "custom",
+                target_tier = "medium",
+                required_techniques = { "x_wing" },
+            })
+            assert.is_nil(wrong_tier_tech)
+            assert.is_string(err3)
+
+            local non_custom_allowed, err4 = generator.generate_game({
+                difficulty = "easy",
+                allowed_techniques = flags.ALL,
+            })
+            assert.is_nil(non_custom_allowed)
+            assert.is_string(err4)
+        end)
+    end)
 end)

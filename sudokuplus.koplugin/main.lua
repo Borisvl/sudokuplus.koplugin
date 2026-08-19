@@ -9,6 +9,7 @@ local _ = require("gettext")
 local time = require("ui/time")
 
 local difficulties = require("ui.difficulties")
+local dialogs = require("ui.dialogs")
 local generator = require("core.generator")
 local game = require("game")
 local prng = require("core.prng")
@@ -38,21 +39,27 @@ local function seed_from_wall_clock()
     return math.floor(time.to_ms(time.realtime()))
 end
 
-local function load_plugin_translations(plugin_path)
-    local lang = _.current_lang
-    if not lang or lang == "C" then
-        lang = G_reader_settings and G_reader_settings:readSetting("language")
+local function load_plugin_translations(base_path)
+    if not _.loadMO then
+        return
     end
-    if lang and lang ~= "C" and not lang:match("^en") then
-        local base_path = plugin_path or "plugins/sudokuplus.koplugin"
-        local candidates = { lang, lang:match("^([a-z]+)") }
-        for idx = 1, #candidates do
-            local l = candidates[idx]
-            if l then
-                local mo = base_path .. "/l10n/" .. l .. "/sudokuplus.mo"
-                if _.loadMO and _.loadMO(mo) then
-                    break
-                end
+    local lang = _.current_lang
+    if not lang or lang == "" or lang == "C" then
+        lang = G_reader_settings and G_reader_settings:readSetting("language") or "C"
+    end
+    if not lang or lang == "" or lang == "C" then
+        return
+    end
+    local candidates = {
+        lang,
+        lang:gsub("[-_].*", ""),
+    }
+    for idx = 1, #candidates do
+        local l = candidates[idx]
+        if l and l ~= "" and l ~= "C" then
+            local mo = base_path .. "/l10n/" .. l .. "/sudokuplus.mo"
+            if _.loadMO(mo) then
+                break
             end
         end
     end
@@ -85,11 +92,11 @@ function Sudoku:_viewForGame(g, stats_data)
             stats = stats_data,
             save_path = SAVE_PATH,
             stats_path = STATS_PATH,
-            new_game_cb = function(new_difficulty)
-                self:startGame(new_difficulty)
+            new_game_cb = function(new_difficulty, custom_options)
+                self:startGame(new_difficulty, custom_options)
             end,
-            replay_cb = function(replay_seed, replay_difficulty)
-                self:replayGame(replay_seed, replay_difficulty)
+            replay_cb = function(replay_seed, replay_difficulty, replay_custom_tier, replay_custom_techs)
+                self:replayGame(replay_seed, replay_difficulty, replay_custom_tier, replay_custom_techs)
             end,
         },
         "full"
@@ -99,7 +106,7 @@ end
 -- Generates a puzzle (wall-clock or reproduction seed), abandons the
 -- currently saved game, and starts a fresh one. Shared by startGame and
 -- replayGame so the replace/abandon/bookkeeping flow stays in one place.
-function Sudoku:_startWithSeed(difficulty, seed)
+function Sudoku:_startWithSeed(difficulty, seed, custom_options)
     local stats_data = self:loadStats()
     -- Generation (expert especially) can take a few seconds; the emulator
     -- and the device are single-threaded, so explain the wait up front.
@@ -109,13 +116,41 @@ function Sudoku:_startWithSeed(difficulty, seed)
     local generating = Notification:new { text = _("Generating…") }
     UIManager:show(generating)
     UIManager:forceRePaint()
-    local payload, gen_err = generator.generate_game {
+    local attempts = custom_options and custom_options.attempts or 100
+    local gen_opts = {
         difficulty = difficulty,
         seed = seed,
         rng = prng.new(seed),
+        max_attempts = attempts,
     }
+    if difficulty == "custom" and custom_options then
+        gen_opts.target_tier = custom_options.target_tier
+        gen_opts.required_techniques = custom_options.required_techniques
+    end
+    local payload, gen_err = generator.generate_game(gen_opts)
     UIManager:close(generating)
     if not payload then
+        if difficulty == "custom" and custom_options then
+            local next_attempts = math.floor(attempts * 1.5)
+            dialogs.confirm_continue_custom_generation(self, custom_options, attempts, next_attempts, function()
+                local next_opts = {
+                    target_tier = custom_options.target_tier,
+                    required_techniques = custom_options.required_techniques,
+                    attempts = next_attempts,
+                    is_replay = custom_options.is_replay,
+                    on_cancel = custom_options.on_cancel,
+                }
+                local next_seed = custom_options.is_replay and seed or seed_from_wall_clock()
+                self:_startWithSeed("custom", next_seed, next_opts)
+            end, function()
+                if custom_options.on_cancel then
+                    custom_options.on_cancel()
+                elseif storage.exists(SAVE_PATH) then
+                    self:continueGame()
+                end
+            end)
+            return
+        end
         UIManager:show(InfoMessage:new {
             text = _("Failed to generate a Sudoku puzzle.") .. "\n" .. tostring(gen_err),
         })
@@ -144,6 +179,10 @@ function Sudoku:_startWithSeed(difficulty, seed)
         puzzle = payload.board,
         solution = payload.solution,
         difficulty = payload.difficulty,
+        custom_tier = payload.custom_tier,
+        custom_techniques = payload.custom_techniques,
+        allowed_techniques = payload.allowed_techniques,
+        techniques = payload.techniques,
         seed = payload.seed,
         id = game_id,
         now = os.time,
@@ -158,16 +197,16 @@ function Sudoku:_startWithSeed(difficulty, seed)
     self:_viewForGame(g, stats_data)
 end
 
-function Sudoku:startGame(difficulty)
+function Sudoku:startGame(difficulty, custom_options)
     -- core/ is deterministic: seed the PRNG from the wall clock (ms) in the
     -- plugin layer. A fresh game abandons any previous save, but only once a
     -- new puzzle exists: a failed generation must not destroy the saved game.
     difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
-    self:_startWithSeed(difficulty, seed_from_wall_clock())
+    self:_startWithSeed(difficulty, seed_from_wall_clock(), custom_options)
 end
 
 -- Restarts an exact puzzle from the game log by its reproduction seed.
-function Sudoku:replayGame(seed, difficulty)
+function Sudoku:replayGame(seed, difficulty, custom_tier, custom_techniques)
     difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
     if type(seed) ~= "number" or seed % 1 ~= 0 then
         UIManager:show(InfoMessage:new {
@@ -175,7 +214,15 @@ function Sudoku:replayGame(seed, difficulty)
         })
         return
     end
-    self:_startWithSeed(difficulty, seed)
+    local custom_options = nil
+    if difficulty == "custom" then
+        custom_options = {
+            target_tier = custom_tier,
+            required_techniques = custom_techniques,
+            is_replay = true,
+        }
+    end
+    self:_startWithSeed(difficulty, seed, custom_options)
 end
 
 function Sudoku:continueGame()
@@ -218,8 +265,8 @@ function Sudoku:showStatistics()
     -- new fullscreen page must refresh the whole screen itself.
     UIManager:show(
         statsview.dashboard(s, {
-            replay_cb = function(seed, difficulty)
-                self:replayGame(seed, difficulty)
+            replay_cb = function(seed, difficulty, custom_tier, custom_techniques)
+                self:replayGame(seed, difficulty, custom_tier, custom_techniques)
             end,
         }),
         "full"
@@ -236,6 +283,14 @@ function Sudoku:addToMainMenu(menu_items)
             end,
         }
     end
+    new_game_items[#new_game_items + 1] = {
+        text = _("Custom…"),
+        callback = function()
+            dialogs.open_custom_difficulty_dialog(self, function(difficulty, custom_opts)
+                self:startGame(difficulty, custom_opts)
+            end)
+        end,
+    }
     menu_items.sudokuplus = {
         text = _("Sudoku+"),
         sorting_hint = "more_tools",

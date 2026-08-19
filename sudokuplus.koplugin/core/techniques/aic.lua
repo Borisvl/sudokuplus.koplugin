@@ -203,14 +203,61 @@ local function decode_chain(chain)
     return result
 end
 
+local function classify_chain(nodes)
+    local first_val = nodes[1].val
+    local is_x_chain = true
+    for i = 2, #nodes do
+        if nodes[i].val ~= first_val then
+            is_x_chain = false
+            break
+        end
+    end
+    if is_x_chain then
+        return flags.X_CHAIN, "x_chain"
+    end
+
+    local is_xy_chain = true
+    for k = 1, #nodes - 1, 2 do
+        local n_from = nodes[k]
+        local n_to = nodes[k + 1]
+        if n_from.r ~= n_to.r or n_from.c ~= n_to.c then
+            is_xy_chain = false
+            break
+        end
+    end
+    if is_xy_chain then
+        return flags.XY_CHAIN, "xy_chain"
+    end
+
+    return flags.ALTERNATING_INFERENCE_CHAIN, "aic"
+end
+
 local function find_eliminations(prop, path, chain)
     if chain.depth < 4 or chain.depth % 2 ~= 0 then
         return false
     end
+
     local start, last = chain.start, chain.node
     local sr, sc, sv = decode(start)
     local lr, lc, lv = decode(last)
     local progress = false
+
+    local decoded, chain_flag, kind
+    local function ensure_chain_meta()
+        if not decoded then
+            decoded = decode_chain(chain)
+            chain_flag, kind = classify_chain(decoded)
+        end
+        local allowed = bit.band(prop.techniques, aic.flags())
+        if allowed == 0 then
+            allowed = aic.flags()
+        end
+        if bit.band(allowed, chain_flag) == 0 then
+            return nil
+        end
+        return chain_flag, kind, decoded
+    end
+
     if sv == lv then
         local val_bit = bit.lshift(1, sv - 1)
         local pattern
@@ -223,13 +270,17 @@ local function find_eliminations(prop, path, chain)
                         and is_weak_link(start, target)
                         and is_weak_link(last, target)
                     then
+                        local cflag, ckind, cdecoded = ensure_chain_meta()
+                        if not cflag then
+                            return false
+                        end
                         pattern = pattern
                             or {
-                                kind = "aic",
-                                nodes = decode_chain(chain),
+                                kind = ckind,
+                                nodes = cdecoded,
                                 values = { sv },
                             }
-                        progress = prop:eliminate_candidate(r, c, val_bit, aic.flags(), path, pattern) or progress
+                        progress = prop:eliminate_candidate(r, c, val_bit, cflag, path, pattern) or progress
                     end
                 end
             end
@@ -239,12 +290,16 @@ local function find_eliminations(prop, path, chain)
         local keep = bit.bor(bit.lshift(1, sv - 1), bit.lshift(1, lv - 1))
         local remove = bit.band(mask, bit.bnot(keep))
         if remove ~= 0 then
+            local cflag, ckind, cdecoded = ensure_chain_meta()
+            if not cflag then
+                return false
+            end
             local pattern = {
-                kind = "aic",
-                nodes = decode_chain(chain),
+                kind = ckind,
+                nodes = cdecoded,
                 values = candidates.from_mask(remove),
             }
-            progress = prop:eliminate_multiple_candidates(sr, sc, remove, aic.flags(), path, pattern)
+            progress = prop:eliminate_multiple_candidates(sr, sc, remove, cflag, path, pattern)
         end
     end
     return progress
@@ -339,7 +394,7 @@ function aic.apply(prop, path)
 end
 
 function aic.flags()
-    return flags.ALTERNATING_INFERENCE_CHAIN
+    return bit.bor(flags.ALTERNATING_INFERENCE_CHAIN, bit.bor(flags.X_CHAIN, flags.XY_CHAIN))
 end
 
 return aic

@@ -103,6 +103,12 @@ local GETTERS = {
     xyz_wing = function()
         return _("XYZ-Wing")
     end,
+    x_chain = function()
+        return _("X-Chain")
+    end,
+    xy_chain = function()
+        return _("XY-Chain")
+    end,
     aic = function()
         return _("Alternating Inference Chain")
     end,
@@ -114,6 +120,21 @@ function techniques.label(id)
     end
     local getter = GETTERS[id]
     return getter and getter() or id
+end
+
+function techniques.by_tier(tier_id)
+    local tier_techs = flags.TECHNIQUES_BY_TIER[tier_id]
+    if not tier_techs then
+        return {}
+    end
+    local result = {}
+    for i, t in ipairs(tier_techs) do
+        result[i] = {
+            id = t.id,
+            label = techniques.label(t.id),
+        }
+    end
+    return result
 end
 
 local T = require("ffi/util").template

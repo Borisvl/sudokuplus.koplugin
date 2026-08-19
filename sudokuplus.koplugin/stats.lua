@@ -48,7 +48,22 @@ local function validate_record(record)
         return nil, "record seed must be a non-negative integer"
     end
     if type(record.difficulty) ~= "string" or not util.is_difficulty(record.difficulty) then
-        return nil, "record difficulty must be one of beginner, easy, medium, hard, master, expert"
+        return nil, "record difficulty must be one of beginner, easy, medium, hard, master, expert, custom"
+    end
+    local custom_tier = nil
+    local custom_techniques = nil
+    if record.difficulty == "custom" then
+        local valid_tier, valid_techs =
+            util.validate_custom_tier_and_techniques(record.custom_tier, record.custom_techniques, "record ")
+        if not valid_tier then
+            return nil, valid_techs
+        end
+        custom_tier = valid_tier
+        custom_techniques = valid_techs
+    else
+        if record.custom_tier ~= nil or record.custom_techniques ~= nil then
+            return nil, "non-custom record must not specify custom_tier or custom_techniques"
+        end
     end
     if type(record.duration) ~= "number" or not util.is_finite(record.duration) or record.duration < 0 then
         return nil, "record duration must be a non-negative number"
@@ -114,6 +129,8 @@ local function validate_record(record)
         id = record.id,
         seed = record.seed,
         difficulty = record.difficulty,
+        custom_tier = custom_tier,
+        custom_techniques = custom_techniques,
         duration = record.duration,
         hints = technique_list,
         mistakes = record.mistakes,
@@ -188,7 +205,13 @@ local function merge_entry(entry, record)
     entry.correct = record.correct
     entry.board = record.board
     entry.seed = record.seed
-    entry.techniques = record.techniques or entry.techniques
+    entry.custom_tier = record.custom_tier or entry.custom_tier
+    if record.custom_techniques then
+        entry.custom_techniques = util.deep_copy(record.custom_techniques)
+    end
+    if record.techniques then
+        entry.techniques = util.deep_copy(record.techniques)
+    end
     entry.started_at = entry.started_at or record.started_at
 end
 

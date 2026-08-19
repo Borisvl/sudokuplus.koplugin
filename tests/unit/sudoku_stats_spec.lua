@@ -607,4 +607,82 @@ describe("stats", function()
         assert.is_not_nil(nil_ids, "nil ids are not duplicates")
         assert.is_nil(nil_ids_err)
     end)
+
+    it("tracks and summaries custom difficulty games with custom_tier and custom_techniques", function()
+        local s = stats.new()
+        local id = assert(stats.reserve_id(s))
+        local custom_rec = in_progress_record({
+            id = id,
+            difficulty = "custom",
+            custom_tier = "master",
+            custom_techniques = { "swordfish", "x_wing" },
+        })
+        assert.is_not_nil(stats.track(s, custom_rec))
+        assert.are.equal(1, #s.games)
+        assert.are.equal("custom", s.games[1].difficulty)
+        assert.are.equal("master", s.games[1].custom_tier)
+        assert.are.same({ "swordfish", "x_wing" }, s.games[1].custom_techniques)
+
+        local finish_rec = record({
+            id = id,
+            difficulty = "custom",
+            custom_tier = "master",
+            custom_techniques = { "swordfish", "x_wing" },
+            duration = 150,
+        })
+        assert.is_not_nil(stats.add(s, finish_rec))
+        local summary = stats.summary(s)
+        assert.are.equal(1, summary.finished_count)
+        assert.is_not_nil(summary.per_difficulty.custom)
+        assert.are.equal(1, summary.per_difficulty.custom.count)
+        assert.are.equal(150, summary.per_difficulty.custom.avg_duration)
+    end)
+
+    it("strictly validates custom_tier and custom_techniques on records", function()
+        local s = stats.new()
+        -- Reject non-custom with custom fields
+        local bad_non_custom, err1 = stats.add(
+            s,
+            record({
+                difficulty = "easy",
+                custom_tier = "master",
+            })
+        )
+        assert.is_nil(bad_non_custom)
+        assert.is_string(err1)
+
+        -- Reject custom without custom_tier
+        local bad_custom_no_tier, err2 = stats.add(
+            s,
+            record({
+                difficulty = "custom",
+                custom_techniques = { "swordfish" },
+            })
+        )
+        assert.is_nil(bad_custom_no_tier)
+        assert.is_string(err2)
+
+        -- Reject custom without custom_techniques
+        local bad_custom_no_techs, err3 = stats.add(
+            s,
+            record({
+                difficulty = "custom",
+                custom_tier = "master",
+            })
+        )
+        assert.is_nil(bad_custom_no_techs)
+        assert.is_string(err3)
+
+        -- Reject custom with invalid technique for tier
+        local bad_custom_invalid_tech, err4 = stats.add(
+            s,
+            record({
+                difficulty = "custom",
+                custom_tier = "hard",
+                custom_techniques = { "swordfish" }, -- swordfish is master, not hard
+            })
+        )
+        assert.is_nil(bad_custom_invalid_tech)
+        assert.is_string(err4)
+    end)
 end)

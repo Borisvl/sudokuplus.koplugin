@@ -22,6 +22,8 @@ describe("core.techniques.flags", function()
         assert.are.equal(bit.lshift(1, 25), flags.XY_WING)
         assert.are.equal(bit.lshift(1, 26), flags.XYZ_WING)
         assert.are.equal(bit.lshift(1, 27), flags.ALTERNATING_INFERENCE_CHAIN)
+        assert.are.equal(bit.lshift(1, 28), flags.X_CHAIN)
+        assert.are.equal(bit.lshift(1, 29), flags.XY_CHAIN)
     end)
 
     it("provides composite tier masks", function()
@@ -34,7 +36,10 @@ describe("core.techniques.flags", function()
                 flags.X_WING,
                 bit.bor(
                     flags.NAKED_QUADS,
-                    bit.bor(flags.SKYSCRAPER, bit.bor(flags.W_WING, bit.bor(flags.XY_WING, flags.XYZ_WING)))
+                    bit.bor(
+                        flags.SKYSCRAPER,
+                        bit.bor(flags.SWORDFISH, bit.bor(flags.W_WING, bit.bor(flags.XY_WING, flags.XYZ_WING)))
+                    )
                 )
             ),
             flags.MASTER
@@ -42,7 +47,10 @@ describe("core.techniques.flags", function()
         assert.are.equal(
             bit.bor(
                 flags.HIDDEN_QUADS,
-                bit.bor(flags.SWORDFISH, bit.bor(flags.JELLYFISH, flags.ALTERNATING_INFERENCE_CHAIN))
+                bit.bor(
+                    flags.JELLYFISH,
+                    bit.bor(flags.ALTERNATING_INFERENCE_CHAIN, bit.bor(flags.X_CHAIN, flags.XY_CHAIN))
+                )
             ),
             flags.EXPERT
         )
@@ -50,6 +58,17 @@ describe("core.techniques.flags", function()
             bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, bit.bor(flags.MASTER, flags.EXPERT)))),
             flags.ALL
         )
+    end)
+
+    it("provides cumulative tier masks", function()
+        assert.are.equal(flags.EASY, flags.CUMULATIVE_TIER_FLAGS.easy)
+        assert.are.equal(bit.bor(flags.EASY, flags.MEDIUM), flags.CUMULATIVE_TIER_FLAGS.medium)
+        assert.are.equal(bit.bor(flags.EASY, bit.bor(flags.MEDIUM, flags.HARD)), flags.CUMULATIVE_TIER_FLAGS.hard)
+        assert.are.equal(
+            bit.bor(flags.EASY, bit.bor(flags.MEDIUM, bit.bor(flags.HARD, flags.MASTER))),
+            flags.CUMULATIVE_TIER_FLAGS.master
+        )
+        assert.are.equal(flags.ALL, flags.CUMULATIVE_TIER_FLAGS.expert)
     end)
 
     it("ensures non-overlapping disjoint partition of difficulty tiers across ALL", function()
@@ -88,6 +107,8 @@ describe("core.techniques.flags", function()
         assert.are.equal(1, flags.lowest_bit(flags.HIDDEN_SINGLES))
         assert.are.equal(8, flags.lowest_bit(flags.NAKED_PAIRS))
         assert.are.equal(27, flags.lowest_bit(flags.ALTERNATING_INFERENCE_CHAIN))
+        assert.are.equal(28, flags.lowest_bit(flags.X_CHAIN))
+        assert.are.equal(29, flags.lowest_bit(flags.XY_CHAIN))
     end)
 
     it("maps flags to difficulty tiers", function()
@@ -104,10 +125,12 @@ describe("core.techniques.flags", function()
         assert.are.equal("master", flags.difficulty(flags.XY_WING))
         assert.are.equal("master", flags.difficulty(flags.XYZ_WING))
         assert.are.equal("master", flags.difficulty(flags.NAKED_QUADS))
+        assert.are.equal("master", flags.difficulty(flags.SWORDFISH))
         assert.are.equal("expert", flags.difficulty(flags.HIDDEN_QUADS))
-        assert.are.equal("expert", flags.difficulty(flags.SWORDFISH))
         assert.are.equal("expert", flags.difficulty(flags.JELLYFISH))
         assert.are.equal("expert", flags.difficulty(flags.ALTERNATING_INFERENCE_CHAIN))
+        assert.are.equal("expert", flags.difficulty(flags.X_CHAIN))
+        assert.are.equal("expert", flags.difficulty(flags.XY_CHAIN))
         assert.are.equal("easy", flags.difficulty(0))
     end)
 
@@ -118,6 +141,9 @@ describe("core.techniques.flags", function()
         assert.are.equal(40, flags.score(flags.LOCKED_CANDIDATES))
         assert.are.equal(50, flags.score(flags.NAKED_PAIRS))
         assert.are.equal(120, flags.score(flags.X_WING))
+        assert.are.equal(190, flags.score(flags.SWORDFISH))
+        assert.are.equal(220, flags.score(flags.X_CHAIN))
+        assert.are.equal(260, flags.score(flags.XY_CHAIN))
         assert.are.equal(300, flags.score(flags.ALTERNATING_INFERENCE_CHAIN))
     end)
 
@@ -128,10 +154,12 @@ describe("core.techniques.flags", function()
         assert.are.equal(9, flags.difficulty_point(flags.NAKED_PAIRS))
         assert.are.equal(17, flags.difficulty_point(flags.X_WING))
         assert.are.equal(28, flags.difficulty_point(flags.ALTERNATING_INFERENCE_CHAIN))
+        assert.are.equal(29, flags.difficulty_point(flags.X_CHAIN))
+        assert.are.equal(30, flags.difficulty_point(flags.XY_CHAIN))
     end)
 
     it("preserves catalog integrity between flags, scores, and lookup tables (drift protection)", function()
-        assert.are.equal(17, #flags.TECHNIQUES)
+        assert.are.equal(19, #flags.TECHNIQUES)
         for _, t in ipairs(flags.TECHNIQUES) do
             assert.is_table(flags.TECHNIQUE_BY_ID[t.id])
             assert.are.equal(t.id, flags.TECHNIQUE_BY_ID[t.id].id)
@@ -146,5 +174,10 @@ describe("core.techniques.flags", function()
         for flag, _ in pairs(flags.TECHNIQUE_SCORES) do
             assert.is_table(flags.TECHNIQUE_BY_FLAG[flag], "TECHNIQUE_SCORES contains unknown flag: " .. tostring(flag))
         end
+
+        assert.is_table(flags.TECHNIQUES_BY_TIER.medium)
+        assert.is_table(flags.TECHNIQUES_BY_TIER.hard)
+        assert.is_table(flags.TECHNIQUES_BY_TIER.master)
+        assert.is_table(flags.TECHNIQUES_BY_TIER.expert)
     end)
 end)

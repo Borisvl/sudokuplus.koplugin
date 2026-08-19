@@ -594,8 +594,15 @@ describe("sudoku view", function()
         assert.are.equal(dialog, closed[1], "the win dialog is closed before opening picker")
 
         -- 2. Test cancelling difficulty picker re-opens win dialog
-        local cancel_button = picker_dialog.buttons[#picker_dialog.buttons][1]
-        assert.are.equal("Cancel", cancel_button.text)
+        local cancel_button
+        for _, row in ipairs(picker_dialog.buttons) do
+            for _, btn in ipairs(row) do
+                if btn.text == "Cancel" then
+                    cancel_button = btn
+                end
+            end
+        end
+        assert.is_not_nil(cancel_button)
         dialog = nil
         cancel_button.callback()
         assert.is_not_nil(dialog, "cancelling picker re-shows win dialog")
@@ -1349,8 +1356,15 @@ describe("sudoku view", function()
         assert.are.equal(dialog, closed[1], "the pause dialog is closed before showing picker")
 
         -- Test cancelling the picker resumes the game
-        local cancel_button = picker_dialog.buttons[#picker_dialog.buttons][1]
-        assert.are.equal("Cancel", cancel_button.text)
+        local cancel_button
+        for _, row in ipairs(picker_dialog.buttons) do
+            for _, btn in ipairs(row) do
+                if btn.text == "Cancel" then
+                    cancel_button = btn
+                end
+            end
+        end
+        assert.is_not_nil(cancel_button)
         cancel_button.callback()
         assert.is_false(view.menu_open, "cancelling difficulty picker unpauses")
         assert.is_true(view.game.timer.running)
@@ -1377,6 +1391,110 @@ describe("sudoku view", function()
         hard_button.callback()
 
         assert.are.equal("hard", started, "new game starts at chosen difficulty")
+    end)
+
+    it("opens a custom difficulty picker from New game and starts a custom game", function()
+        local started_diff, started_opts
+        local view = new_view(new_game(PUZZLE, SOLUTION), {
+            new_game_cb = function(diff, opts)
+                started_diff = diff
+                started_opts = opts
+            end,
+        })
+        local dialog, picker_dialog, tier_dialog, strat_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons and widget.title then
+                if widget.title:find("Mistakes", 1, true) then
+                    dialog = widget
+                elseif widget.title:find("Choose difficulty", 1, true) then
+                    picker_dialog = widget
+                elseif widget.title:find("Strategy tier", 1, true) then
+                    tier_dialog = widget
+                elseif widget.title:find("Strategies", 1, true) then
+                    strat_dialog = widget
+                end
+            end
+        end
+        UIManager.close = function() end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        view:openMenu()
+        assert.is_not_nil(dialog)
+        local new_game_button
+        for _, row in ipairs(dialog.buttons) do
+            for _, btn in ipairs(row) do
+                if btn.text == "New game" then
+                    new_game_button = btn
+                end
+            end
+        end
+        assert.is_not_nil(new_game_button)
+        new_game_button.callback()
+        assert.is_not_nil(picker_dialog)
+
+        local custom_btn
+        for _, row in ipairs(picker_dialog.buttons) do
+            for _, btn in ipairs(row) do
+                if btn.text == "Custom…" then
+                    custom_btn = btn
+                end
+            end
+        end
+        assert.is_not_nil(custom_btn)
+        custom_btn.callback()
+        assert.is_not_nil(tier_dialog)
+
+        local expert_btn
+        for _, row in ipairs(tier_dialog.buttons) do
+            for _, btn in ipairs(row) do
+                if btn.text == "Expert" then
+                    expert_btn = btn
+                end
+            end
+        end
+        assert.is_not_nil(expert_btn)
+        expert_btn.callback()
+        assert.is_not_nil(strat_dialog)
+
+        local gen_btn
+        for _, row in ipairs(strat_dialog.buttons) do
+            for _, btn in ipairs(row) do
+                if btn.text == "Generate" then
+                    gen_btn = btn
+                end
+            end
+        end
+        assert.is_not_nil(gen_btn)
+        gen_btn.callback()
+
+        assert.are.equal("custom", started_diff)
+        assert.are.equal("expert", started_opts.target_tier)
+        assert.is_true(#started_opts.required_techniques > 0)
+    end)
+
+    it("displays formatted custom tier name in pause menu title", function()
+        local g = new_game(PUZZLE, SOLUTION)
+        g._difficulty = "custom"
+        g.custom_tier = "master"
+        local view = new_view(g)
+        local dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.buttons then
+                dialog = widget
+            end
+        end
+        view:openMenu()
+        UIManager.show = original_show
+        assert.is_not_nil(dialog)
+        assert.is_true(dialog.title:find("Custom (Master)", 1, true) ~= nil, "pause title includes custom tier")
     end)
 
     it("resets puzzle after confirmation, clears in-progress stats, and deletes save", function()

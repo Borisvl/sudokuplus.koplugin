@@ -146,6 +146,15 @@ function dialogs.open_difficulty_picker(view, cancel_cb)
     end
     buttons[#buttons + 1] = {
         {
+            text = _("Custom…"),
+            callback = function()
+                UIManager:close(diff_dialog)
+                dialogs.open_custom_difficulty_dialog(view, nil, function()
+                    dialogs.open_difficulty_picker(view, cancel_cb)
+                end)
+            end,
+        },
+        {
             text = _("Cancel"),
             callback = function()
                 UIManager:close(diff_dialog)
@@ -165,6 +174,163 @@ function dialogs.open_difficulty_picker(view, cancel_cb)
         end,
     }
     UIManager:show(diff_dialog)
+end
+
+function dialogs.open_custom_difficulty_dialog(view, on_start, cancel_cb)
+    local start_cb = on_start
+        or function(difficulty, custom_opts)
+            view.menu_open = false
+            UIManager:close(view, "flashui")
+            if view.new_game_cb then
+                view.new_game_cb(difficulty, custom_opts)
+            end
+        end
+
+    local function open_tier_picker()
+        local tier_dialog
+        local tiers = { "medium", "hard", "master", "expert" }
+        local buttons = {}
+        local current_row = {}
+        for _, tier_id in ipairs(tiers) do
+            current_row[#current_row + 1] = {
+                text = difficulties.label(tier_id) or tier_id,
+                callback = function()
+                    UIManager:close(tier_dialog)
+                    dialogs.open_custom_strategy_picker(view, tier_id, start_cb, function()
+                        open_tier_picker()
+                    end, cancel_cb)
+                end,
+            }
+            if #current_row == 2 then
+                buttons[#buttons + 1] = current_row
+                current_row = {}
+            end
+        end
+        if #current_row > 0 then
+            buttons[#buttons + 1] = current_row
+        end
+        buttons[#buttons + 1] = {
+            {
+                text = _("Back"),
+                callback = function()
+                    UIManager:close(tier_dialog)
+                    if cancel_cb then
+                        cancel_cb()
+                    end
+                end,
+            },
+        }
+        tier_dialog = ButtonDialog:new {
+            title = _("Custom difficulty — Strategy tier"),
+            buttons = buttons,
+            tap_close_callback = function()
+                if cancel_cb then
+                    cancel_cb()
+                end
+            end,
+        }
+        UIManager:show(tier_dialog)
+    end
+
+    open_tier_picker()
+end
+
+function dialogs.open_custom_strategy_picker(view, tier_id, on_start, back_cb, cancel_cb, selected_state)
+    local tier_techs = techniques.by_tier(tier_id)
+    local selected = selected_state
+    if not selected then
+        selected = {}
+        for _, t in ipairs(tier_techs) do
+            selected[t.id] = true
+        end
+    end
+
+    local strat_dialog
+    local function reopen(new_selected)
+        if strat_dialog then
+            UIManager:close(strat_dialog)
+        end
+        dialogs.open_custom_strategy_picker(view, tier_id, on_start, back_cb, cancel_cb, new_selected)
+    end
+
+    local buttons = {}
+    for _, t in ipairs(tier_techs) do
+        local check = selected[t.id] and "[✓] " or "[   ] "
+        buttons[#buttons + 1] = {
+            {
+                text = check .. t.label,
+                callback = function()
+                    selected[t.id] = not selected[t.id]
+                    reopen(selected)
+                end,
+            },
+        }
+    end
+
+    buttons[#buttons + 1] = {
+        {
+            text = _("Select all"),
+            callback = function()
+                for _, t in ipairs(tier_techs) do
+                    selected[t.id] = true
+                end
+                reopen(selected)
+            end,
+        },
+        {
+            text = _("Clear all"),
+            callback = function()
+                for _, t in ipairs(tier_techs) do
+                    selected[t.id] = false
+                end
+                reopen(selected)
+            end,
+        },
+    }
+
+    buttons[#buttons + 1] = {
+        {
+            text = _("Generate"),
+            callback = function()
+                local chosen = {}
+                for _, t in ipairs(tier_techs) do
+                    if selected[t.id] then
+                        chosen[#chosen + 1] = t.id
+                    end
+                end
+                if #chosen == 0 then
+                    UIManager:show(Notification:new { text = _("Please select at least one strategy.") })
+                    return
+                end
+                UIManager:close(strat_dialog)
+                on_start("custom", {
+                    target_tier = tier_id,
+                    required_techniques = chosen,
+                })
+            end,
+        },
+        {
+            text = _("Back"),
+            callback = function()
+                UIManager:close(strat_dialog)
+                if back_cb then
+                    back_cb()
+                end
+            end,
+        },
+    }
+
+    local tier_label = difficulties.label(tier_id) or tier_id
+    strat_dialog = ButtonDialog:new {
+        title = T(_("Custom %1 — Strategies"), tier_label),
+        buttons = buttons,
+        tap_close_callback = function()
+            if cancel_cb then
+                cancel_cb()
+            end
+        end,
+    }
+    UIManager:show(strat_dialog)
 end
 
 function dialogs.confirm_reset(view, cancel_cb)
@@ -230,6 +396,49 @@ function dialogs.confirm_give_up(view, cancel_cb)
     UIManager:show(confirm_dialog)
 end
 
+function dialogs.confirm_continue_custom_generation(
+    parent,
+    custom_options,
+    current_attempts,
+    next_attempts,
+    continue_cb,
+    cancel_cb
+)
+    local tier_label = difficulties.label(custom_options.target_tier) or custom_options.target_tier
+    local tech_names = {}
+    for _, id in ipairs(custom_options.required_techniques or {}) do
+        tech_names[#tech_names + 1] = techniques.label(id) or id
+    end
+    local strategy_str = table.concat(tech_names, ", ")
+    local text = T(
+        _(
+            "Could not generate a %1 puzzle requiring %2 in %3 attempts.\n\n"
+                .. "Continue searching with +50% budget (%4 attempts)?"
+        ),
+        tier_label,
+        strategy_str,
+        tostring(current_attempts),
+        tostring(next_attempts)
+    )
+    local confirm_dialog
+    confirm_dialog = ConfirmBox:new {
+        text = text,
+        ok_text = T(_("Continue (%1)"), tostring(next_attempts)),
+        ok_callback = function()
+            if continue_cb then
+                continue_cb()
+            end
+        end,
+        cancel_text = _("Cancel"),
+        cancel_callback = function()
+            if cancel_cb then
+                cancel_cb()
+            end
+        end,
+    }
+    UIManager:show(confirm_dialog)
+end
+
 function dialogs.open_menu(view)
     if view.game:is_finished() then
         dialogs.show_win_dialog(view)
@@ -244,7 +453,7 @@ function dialogs.open_menu(view)
     dialog = ButtonDialog:new {
         title = T(
             _("%1 — Time: %2    Mistakes: %3    Hints: %4"),
-            difficulties.label(view.game:difficulty()) or view.game:difficulty(),
+            difficulties.format_display(view.game:difficulty(), view.game.custom_tier) or view.game:difficulty(),
             format_time(view.game:elapsed()),
             tostring(view.game:mistakes()),
             tostring(#view.game:hints())

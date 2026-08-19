@@ -427,6 +427,73 @@ describe("sudoku stats view", function()
         assert.are.equal("hard", replayed.difficulty)
     end)
 
+    it("replays a custom game forwarding custom_tier and custom_techniques", function()
+        local GameDetail = require("ui.gamedetail")
+        local entry = record({
+            seed = 789,
+            difficulty = "custom",
+            custom_tier = "master",
+            custom_techniques = { "swordfish", "x_wing" },
+        })
+        local replayed
+        local detail = GameDetail:new {
+            entry = entry,
+            width = 758,
+            height = 1024,
+            replay_cb = function(seed, diff, custom_tier, custom_techs)
+                replayed = {
+                    seed = seed,
+                    difficulty = diff,
+                    custom_tier = custom_tier,
+                    custom_techniques = custom_techs,
+                }
+            end,
+        }
+        local function find_button(widget)
+            for _, child in ipairs(widget) do
+                if type(child) == "table" and child.text == "Play again" and child.callback then
+                    return child
+                end
+                local found = find_button(child)
+                if found then
+                    return found
+                end
+            end
+            return nil
+        end
+        local button = find_button(detail)
+        assert.is_not_nil(button)
+        button.callback()
+        assert.is_not_nil(replayed)
+        assert.are.equal(789, replayed.seed)
+        assert.are.equal("custom", replayed.difficulty)
+        assert.are.equal("master", replayed.custom_tier)
+        assert.are.same({ "swordfish", "x_wing" }, replayed.custom_techniques)
+
+        -- Verify deterministic end-to-end replay generation matches
+        local generator = require("core.generator")
+        local board_mod = require("core.board")
+        local prng = require("core.prng")
+        local g1 = generator.generate_game({
+            difficulty = "custom",
+            target_tier = replayed.custom_tier,
+            required_techniques = replayed.custom_techniques,
+            seed = replayed.seed,
+            rng = prng.new(replayed.seed),
+        })
+        local g2 = generator.generate_game({
+            difficulty = "custom",
+            target_tier = replayed.custom_tier,
+            required_techniques = replayed.custom_techniques,
+            seed = replayed.seed,
+            rng = prng.new(replayed.seed),
+        })
+        assert.is_not_nil(g1)
+        assert.is_not_nil(g2)
+        assert.are.equal(board_mod.to_string(g1.board), board_mod.to_string(g2.board))
+        assert.are.same(g1.techniques, g2.techniques)
+    end)
+
     it("navigates between previous and next games without closing GameDetail", function()
         local GameDetail = require("ui.gamedetail")
         local entry1 = record({ id = 1, seed = 111111, difficulty = "easy" })
