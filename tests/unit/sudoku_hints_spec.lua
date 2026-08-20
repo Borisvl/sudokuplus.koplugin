@@ -104,6 +104,76 @@ describe("core.hints", function()
         assert.is_not_nil(result.pattern)
         assert.is_not_nil(result.action)
         assert.are.same({ type = "place", row = 8, col = 8, value = 6, revision = 0 }, result.action)
+        assert.is_not_nil(result.actions)
+        assert.are.equal(1, #result.actions)
+        assert.are.same(result.action, result.actions[1])
+    end)
+
+    it("returns all candidate eliminations for a locked candidates pattern in actions", function()
+        local state = state_for(LOCKED_CANDIDATES_PUZZLE)
+        local result, err = hints.next(state, { techniques = flags.LOCKED_CANDIDATES })
+
+        assert.is_nil(err)
+        assert.are.equal("available", result.status)
+        assert.are.equal("locked_candidates", result.technique.id)
+        assert.is_not_nil(result.actions)
+        assert.is_true(#result.actions >= 1)
+        assert.are.same(result.action, result.actions[1])
+        for _, act in ipairs(result.actions) do
+            assert.are.equal("elim", act.type)
+            assert.are.equal(0, act.revision)
+            assert.is_true(act.row >= 0 and act.row <= 8)
+            assert.is_true(act.col >= 0 and act.col <= 8)
+            assert.is_true(act.value >= 1 and act.value <= 9)
+        end
+    end)
+
+    it("returns all candidate eliminations for a naked pair pattern in actions", function()
+        local state = state_for(NAKED_PAIR_PUZZLE)
+        local result, err = hints.next(state, { techniques = flags.NAKED_PAIRS })
+
+        assert.is_nil(err)
+        assert.are.equal("available", result.status)
+        assert.are.equal("naked_pairs", result.technique.id)
+        assert.is_not_nil(result.actions)
+        assert.is_true(#result.actions > 1)
+        assert.are.same(result.action, result.actions[1])
+    end)
+
+    it("isolates deductions to the exact pattern instance when multiple instances exist", function()
+        local state = state_for(LOCKED_CANDIDATES_PUZZLE)
+        local reference_solver = assert(solver.new(state.board, { techniques = flags.LOCKED_CANDIDATES }))
+        local reference_path = solve_path.new()
+        assert.is_true(reference_solver:propagate(reference_path))
+        assert.is_true(#reference_path.steps > 1, "test board must have multiple propagation steps")
+
+        local first_step = reference_path.steps[1]
+        local result = assert(hints.next(state, { techniques = flags.LOCKED_CANDIDATES }))
+        assert.is_not_nil(result.actions)
+
+        -- result.actions must match all and only steps sharing the exact first pattern instance
+        for _, act in ipairs(result.actions) do
+            assert.are.equal("elim", act.type)
+            assert.are.equal(first_step.value, act.value, "all actions must eliminate the first pattern's digit")
+            assert.are.equal(result.revision, act.revision)
+        end
+
+        -- Verify that any subsequent step in reference_path with a different pattern is NOT included
+        local different_pattern_steps = 0
+        for _, step in ipairs(reference_path.steps) do
+            if
+                step.value ~= first_step.value
+                or step.pattern.kind ~= first_step.pattern.kind
+                or step.pattern.unit.index ~= first_step.pattern.unit.index
+            then
+                different_pattern_steps = different_pattern_steps + 1
+                for _, act in ipairs(result.actions) do
+                    local matches = (act.row == step.row and act.col == step.col and act.value == step.value)
+                    assert.is_false(matches, "actions must not include deductions from a different pattern instance")
+                end
+            end
+        end
+        assert.is_true(different_pattern_steps > 0, "board must have at least one different pattern instance")
     end)
 
     it("rejects a reveal level because reveal state belongs to the UI", function()

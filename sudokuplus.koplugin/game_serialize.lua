@@ -6,7 +6,7 @@ local util = require("core.util")
 
 local game_serialize = {}
 
-local VERSION = 2
+local VERSION = 3
 local FULL_CANDIDATE_MASK = util.FULL_CANDIDATE_MASK
 local new_mask_grid = util.new_mask_grid
 local deep_copy = util.deep_copy
@@ -99,6 +99,41 @@ local function validate_history(data)
                 old_notes = old_notes,
                 old_manual_removed = old_manual_removed,
                 new_notes = new_notes,
+            }
+        elseif kind == "notes_elim" then
+            if type(entry.eliminations) ~= "table" or #entry.eliminations == 0 then
+                return nil, "invalid history entry eliminations list"
+            end
+            local elims = {}
+            for j, elim in ipairs(entry.eliminations) do
+                if type(elim) ~= "table" or not validate_cell(elim.r, elim.c) then
+                    return nil, "invalid history entry elimination cell"
+                end
+                if not validate_value(elim.value) then
+                    return nil, "invalid history entry elimination value"
+                end
+                if elim.old_manual_removed ~= nil and not validate_history_mask(elim.old_manual_removed) then
+                    return nil, "invalid history entry elimination manual note mask"
+                end
+                if elim.old_notes ~= nil and not validate_history_mask(elim.old_notes) then
+                    return nil, "invalid history entry elimination old notes mask"
+                end
+                if elim.new_notes ~= nil and not validate_history_mask(elim.new_notes) then
+                    return nil, "invalid history entry elimination new notes mask"
+                end
+                elims[j] = {
+                    r = elim.r,
+                    c = elim.c,
+                    value = elim.value,
+                    old_manual_removed = elim.old_manual_removed,
+                    had_note = elim.had_note,
+                    old_notes = elim.old_notes,
+                    new_notes = elim.new_notes,
+                }
+            end
+            history[i] = {
+                kind = "notes_elim",
+                eliminations = elims,
             }
         else
             local cell_ok, cell_err = validate_cell(entry.r, entry.c)
@@ -216,7 +251,7 @@ function game_serialize.restore(data, opts, mt)
     if type(data) ~= "table" then
         return nil, "save data must be a table"
     end
-    if data.version ~= VERSION then
+    if data.version ~= 2 and data.version ~= VERSION then
         return nil, "unsupported save version: " .. tostring(data.version)
     end
     if type(opts) ~= "table" or type(opts.now) ~= "function" then

@@ -990,6 +990,99 @@ describe("sudoku view", function()
         assert.are.equal(0, view.game:get(action.row, action.col), "the hint placement is undoable")
     end)
 
+    it("applies all candidate eliminations of a multi-elimination hint on the third tap", function()
+        local NAKED_PAIR_PUZZLE = "700009030000105006400260009002083951007000000005600000000000003100000060000004010"
+        local solver = require("core.solver")
+        local flags = require("core.techniques.flags")
+        local b = board.from_string(NAKED_PAIR_PUZZLE)
+        local s = solver.new(b)
+        local sol = s:solve_any().board
+        local g = assert(game.new {
+            puzzle = b,
+            solution = sol,
+            difficulty = "custom",
+            custom_tier = "medium",
+            custom_techniques = { "naked_pairs" },
+            allowed_techniques = flags.NAKED_PAIRS,
+            autofill_notes = true,
+            now = now,
+        })
+        local view = new_view(g)
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(1, view._hint_stage)
+        local hint_res = view._hint_result
+        assert.is_not_nil(hint_res)
+        assert.are.equal("naked_pairs", hint_res.technique.id)
+        assert.is_not_nil(hint_res.actions)
+        assert.is_true(#hint_res.actions > 1)
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(2, view._hint_stage)
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(0, view._hint_stage)
+
+        -- All eliminated candidate notes in hint_res.actions must be removed
+        for _, act in ipairs(hint_res.actions) do
+            local mask = view.game:get_notes(act.row, act.col)
+            local v_bit = bit.lshift(1, act.value - 1)
+            assert.are.equal(0, bit.band(mask, v_bit))
+        end
+
+        -- Single undo restores all of them
+        tap_button(view, "tool_row", "undo")
+        for _, act in ipairs(hint_res.actions) do
+            local mask = view.game:get_notes(act.row, act.col)
+            local v_bit = bit.lshift(1, act.value - 1)
+            assert.are.not_equal(0, bit.band(mask, v_bit))
+        end
+    end)
+
+    it("applies a multi-elimination hint cleanly when notes are off (Option 1 UX)", function()
+        local NAKED_PAIR_PUZZLE = "700009030000105006400260009002083951007000000005600000000000003100000060000004010"
+        local solver = require("core.solver")
+        local flags = require("core.techniques.flags")
+        local b = board.from_string(NAKED_PAIR_PUZZLE)
+        local s = solver.new(b)
+        local sol = s:solve_any().board
+        local g = assert(game.new {
+            puzzle = b,
+            solution = sol,
+            difficulty = "custom",
+            custom_tier = "medium",
+            custom_techniques = { "naked_pairs" },
+            allowed_techniques = flags.NAKED_PAIRS,
+            autofill_notes = false,
+            now = now,
+        })
+        local view = new_view(g)
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(1, view._hint_stage)
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(2, view._hint_stage)
+
+        -- Tap 3 applies the batch elimination without error notification
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(0, view._hint_stage)
+
+        -- Eliminated candidates are recorded in manual_removed and notes are materialized
+        local recorded_hints = view.game:hints()
+        assert.are.equal(1, #recorded_hints)
+        local has_any_materialized_notes = false
+        for r = 0, 8 do
+            for c = 0, 8 do
+                if view.game:get_notes(r, c) > 0 then
+                    has_any_materialized_notes = true
+                    break
+                end
+            end
+        end
+        assert.is_true(has_any_materialized_notes, "eliminated cells must have remaining notes materialized")
+    end)
+
     it("cancels a hint reveal on any other interaction", function()
         local view = new_view(new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION))
         local bb = Blitbuffer.new(758, 1024)

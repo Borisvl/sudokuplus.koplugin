@@ -774,16 +774,24 @@ function SudokuView:onHint()
         return true
     end
     if self._hint_stage == 2 then
-        local action = self._hint_result.action
-        local affected = self.game:affected_cells(action.row, action.col, action.value)
-        self:_clearHintState()
-        local ok, err = self.game:apply_action(action)
-        if ok then
-            if affected then
-                self:markCells(affected)
+        local actions = self._hint_result.actions or { self._hint_result.action }
+        local affected = {}
+        for _, act in ipairs(actions) do
+            if act.type == "place" then
+                local aff = self.game:affected_cells(act.row, act.col, act.value)
+                if aff then
+                    for key in pairs(aff) do
+                        affected[key] = true
+                    end
+                end
             else
-                self:markCell(action.row, action.col)
+                affected[act.row * 9 + act.col] = true
             end
+        end
+        self:_clearHintState()
+        local ok, err = self.game:apply_action(actions)
+        if ok then
+            self:markCells(affected)
             self:markToolRowIfChanged()
             self:_refreshMatchAfterMove()
         elseif err then

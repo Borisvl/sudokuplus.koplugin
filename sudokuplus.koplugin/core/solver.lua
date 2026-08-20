@@ -364,6 +364,67 @@ function mt:apply_action(action)
     if type(action) ~= "table" then
         return nil, "action must be a table"
     end
+    if
+        action[1] ~= nil
+        or action.type == "batch"
+        or (action.type == nil and action.actions ~= nil)
+        or (action.type == nil and action.row == nil and action.col == nil)
+    then
+        local list = action.actions or action
+        if #list == 0 then
+            return nil, "action list must not be empty"
+        end
+        local seen = {}
+        local unique_list = {}
+        for _, act in ipairs(list) do
+            if type(act) ~= "table" then
+                return nil, "action list item must be a table"
+            end
+            if act.type ~= "elim" then
+                return nil, "batch actions only support elimination type"
+            end
+            if
+                type(act.row) ~= "number"
+                or act.row % 1 ~= 0
+                or act.row < 0
+                or act.row > 8
+                or type(act.col) ~= "number"
+                or act.col % 1 ~= 0
+                or act.col < 0
+                or act.col > 8
+                or type(act.value) ~= "number"
+                or act.value % 1 ~= 0
+                or act.value < 1
+                or act.value > 9
+            then
+                return nil, "action coordinates and value are out of range"
+            end
+            if not board_is_empty(self.board, act.row, act.col) then
+                return nil, "action target must be empty"
+            end
+            local value_bit = bit.lshift(1, act.value - 1)
+            if bit.band(cand_get(self.candidates, act.row, act.col), value_bit) == 0 then
+                return nil, "action value is not a candidate"
+            end
+            local key = act.row * 81 + act.col * 9 + act.value
+            if not seen[key] then
+                seen[key] = true
+                unique_list[#unique_list + 1] = act
+            end
+        end
+        local path = solve_path.new()
+        local prop = propagator.new(self.board, self.masks, self.candidates, 0)
+        for _, act in ipairs(unique_list) do
+            local value_bit = bit.lshift(1, act.value - 1)
+            if bit.band(cand_get(self.candidates, act.row, act.col), value_bit) ~= 0 then
+                local eliminated, eliminate_err = prop:eliminate_candidate(act.row, act.col, value_bit, 0, path)
+                if not eliminated then
+                    return nil, eliminate_err or "action candidate is already absent"
+                end
+            end
+        end
+        return true
+    end
     if action.type ~= "place" and action.type ~= "elim" then
         return nil, "action type must be 'place' or 'elim'"
     end

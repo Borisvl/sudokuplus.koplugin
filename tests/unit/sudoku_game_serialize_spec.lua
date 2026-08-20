@@ -168,6 +168,44 @@ describe("game serialization", function()
         assert.is_string(move_err)
     end)
 
+    it("restores batch notes elimination history and supports undo/redo", function()
+        local instance = new_game()
+        assert.is_true(instance:toggle_note(0, 2, 1))
+        assert.is_true(instance:toggle_note(0, 2, 4))
+        -- Cell (0, 3) has empty notes (Option 1)
+        assert.is_true(instance:apply_action({
+            type = "batch",
+            actions = {
+                { type = "elim", row = 0, col = 2, value = 1 },
+                { type = "elim", row = 0, col = 2, value = 4 },
+                { type = "elim", row = 0, col = 3, value = 2 },
+            },
+        }))
+
+        local restored = restore(instance:serialize(), { t = 1000 })
+        assert.is_false(has_note(restored, 0, 2, 1))
+        assert.is_false(has_note(restored, 0, 2, 4))
+        assert.is_false(has_note(restored, 0, 3, 2))
+        assert.is_true(restored:get_notes(0, 3) > 0)
+        assert.are.equal(bit.bor(digit_bit(1), digit_bit(4)), restored.manual_removed[1][3])
+        assert.are.equal(digit_bit(2), restored.manual_removed[1][4])
+
+        assert.is_true(restored:undo())
+        assert.is_true(has_note(restored, 0, 2, 1))
+        assert.is_true(has_note(restored, 0, 2, 4))
+        assert.are.equal(0, restored:get_notes(0, 3))
+        assert.are.equal(0, restored.manual_removed[1][3])
+        assert.are.equal(0, restored.manual_removed[1][4])
+
+        assert.is_true(restored:redo())
+        assert.is_false(has_note(restored, 0, 2, 1))
+        assert.is_false(has_note(restored, 0, 2, 4))
+        assert.is_false(has_note(restored, 0, 3, 2))
+        assert.is_true(restored:get_notes(0, 3) > 0)
+        assert.are.equal(bit.bor(digit_bit(1), digit_bit(4)), restored.manual_removed[1][3])
+        assert.are.equal(digit_bit(2), restored.manual_removed[1][4])
+    end)
+
     it("restores conflicting and error states consistently", function()
         local instance = new_game()
         assert.is_true(instance:place(0, 7, 5))
@@ -376,7 +414,7 @@ describe("game serialization", function()
             { name = "not a table", data = "garbage" },
             { name = "bad version", data = { version = 99 } },
             { name = "legacy v1 version", data = { version = 1 } },
-            { name = "short board", data = { version = 2, board = "12" } },
+            { name = "short board", data = { version = 3, board = "12" } },
         }
         for _, case in ipairs(cases) do
             local restored, err = game.restore(case.data, { now = now })
@@ -503,9 +541,9 @@ describe("game serialization", function()
 
     it("exports serialize and restore directly from game_serialize module", function()
         local instance = new_game()
-        assert.are.equal(2, game_serialize.VERSION)
+        assert.are.equal(3, game_serialize.VERSION)
         local serialized = game_serialize.serialize(instance)
-        assert.are.equal(2, serialized.version)
+        assert.are.equal(3, serialized.version)
 
         local raw_restored, err = game_serialize.restore(serialized, {
             now = function()
@@ -515,6 +553,21 @@ describe("game serialization", function()
         assert.is_nil(err)
         assert.is_not_nil(raw_restored)
         assert.are.equal("hard", raw_restored._difficulty)
+    end)
+
+    it("restores legacy version 2 saves seamlessly", function()
+        local instance = new_game()
+        local serialized = game_serialize.serialize(instance)
+        serialized.version = 2
+
+        local restored, err = game_serialize.restore(serialized, {
+            now = function()
+                return 1000
+            end,
+        })
+        assert.is_nil(err)
+        assert.is_not_nil(restored)
+        assert.are.equal("hard", restored._difficulty)
     end)
 
     it("round-trips custom difficulty fields (custom_tier, custom_techniques, allowed_techniques)", function()

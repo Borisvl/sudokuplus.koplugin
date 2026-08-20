@@ -163,11 +163,16 @@ local function commit(self, entry)
         self.history[i] = nil
     end
     self._revision = self._revision + 1
-    -- A game is "started" once the user adds at least one number or note
-    -- (the game-log definition); the timestamp feeds per-game stats.
+    -- A game is "started" once the user places a digit, adds a note, fills all notes,
+    -- or applies a hint elimination (the game-log definition); the timestamp feeds per-game stats.
     if
         not self._started
-        and (entry.kind == "place" or (entry.kind == "note" and entry.added) or entry.kind == "fill_all_notes")
+        and (
+            entry.kind == "place"
+            or (entry.kind == "note" and entry.added)
+            or entry.kind == "fill_all_notes"
+            or entry.kind == "notes_elim"
+        )
     then
         self._started = true
         self._started_at = self.now()
@@ -369,8 +374,7 @@ function mt:digit_cells(value)
     return set
 end
 
--- The set of digits placed exactly nine times (fully solved). Used to grey out
--- the number selector; the digit stays selectable, this is purely visual.
+-- Set (keyed by 1..9) of digits whose 9 placements are already on the board.
 function mt:completed_digits()
     local counts = {}
     for i = 1, 81 do
@@ -430,6 +434,13 @@ local function entry_affected(self, entry)
                     affected[r * 9 + c] = true
                 end
             end
+        end
+        return affected
+    end
+    if entry.kind == "notes_elim" then
+        local affected = {}
+        for _, elim in ipairs(entry.eliminations) do
+            affected[elim.r * 9 + elim.c] = true
         end
         return affected
     end
@@ -760,6 +771,18 @@ local function undo_entry(self, entry)
         if entry.old_manual_removed ~= nil then
             self.manual_removed[entry.r + 1][entry.c + 1] = entry.old_manual_removed
         end
+    elseif entry.kind == "notes_elim" then
+        for i = #entry.eliminations, 1, -1 do
+            local elim = entry.eliminations[i]
+            if elim.old_manual_removed ~= nil then
+                self.manual_removed[elim.r + 1][elim.c + 1] = elim.old_manual_removed
+            end
+            if elim.old_notes ~= nil then
+                self.notes[elim.r + 1][elim.c + 1] = elim.old_notes
+            else
+                toggle_note_digit(self, elim.r, elim.c, elim.value, true)
+            end
+        end
     elseif entry.kind == "fill_all_notes" then
         self.notes = deep_copy(entry.old_notes)
         self.manual_removed = deep_copy(entry.old_manual_removed)
@@ -793,6 +816,17 @@ local function redo_entry(self, entry)
     elseif entry.kind == "notes_clear" then
         self.notes[entry.r + 1][entry.c + 1] = 0
         self.manual_removed[entry.r + 1][entry.c + 1] = FULL_CANDIDATE_MASK
+    elseif entry.kind == "notes_elim" then
+        for _, elim in ipairs(entry.eliminations) do
+            local value_bit = digit_bit(elim.value)
+            local old_manual_removed = elim.old_manual_removed or self.manual_removed[elim.r + 1][elim.c + 1]
+            self.manual_removed[elim.r + 1][elim.c + 1] = bit.bor(old_manual_removed, value_bit)
+            if elim.new_notes ~= nil then
+                self.notes[elim.r + 1][elim.c + 1] = elim.new_notes
+            else
+                toggle_note_digit(self, elim.r, elim.c, elim.value, false)
+            end
+        end
     elseif entry.kind == "fill_all_notes" then
         self.notes = deep_copy(entry.new_notes)
         self.manual_removed = new_mask_grid()
@@ -1041,17 +1075,6 @@ function mt:apply_action(action)
     if type(action) ~= "table" then
         return nil, "action must be a table"
     end
-    if action.type ~= "place" and action.type ~= "elim" then
-        return nil, "action type must be 'place' or 'elim'"
-    end
-    local cell_ok, cell_err = validate_cell(action.row, action.col)
-    if not cell_ok then
-        return nil, cell_err
-    end
-    local value_ok, value_err = validate_value(action.value)
-    if not value_ok then
-        return nil, value_err
-    end
     if self.finished then
         return nil, "game is finished"
     end
@@ -1060,27 +1083,116 @@ function mt:apply_action(action)
     end
 
     if action.type == "place" then
+        local cell_ok, cell_err = validate_cell(action.row, action.col)
+        if not cell_ok then
+            return nil, cell_err
+        end
+        local value_ok, value_err = validate_value(action.value)
+        if not value_ok then
+            return nil, value_err
+        end
         return self:place(action.row, action.col, action.value)
     end
 
-    local index = cell_index(action.row, action.col)
-    if self.board[index] ~= 0 then
-        return nil, "cannot edit notes on a filled cell"
+    local list
+    if
+        action[1] ~= nil
+        or action.type == "batch"
+        or (action.type == nil and action.actions ~= nil)
+        or (action.type == nil and action.row == nil and action.col == nil)
+    then
+        list = action.actions or action
+        if #list == 1 and type(list[1]) == "table" and list[1].type == "place" then
+            return self:apply_action(list[1])
+        end
+    elseif action.type == "elim" then
+        list = { action }
+    else
+        return nil, "action type must be 'place' or 'elim'"
     end
-    local v_bit = digit_bit(action.value)
-    if bit.band(self.notes[action.row + 1][action.col + 1], v_bit) == 0 then
+
+    if #list == 0 then
+        return nil, "action list must not be empty"
+    end
+    if action.revision ~= nil and action.revision ~= self._revision then
+        return nil, "action is stale"
+    end
+
+    for _, act in ipairs(list) do
+        if type(act) ~= "table" then
+            return nil, "action list item must be a table"
+        end
+        if act.type ~= "elim" then
+            return nil, "batch actions only support elimination type"
+        end
+        if act.revision ~= nil and act.revision ~= self._revision then
+            return nil, "action is stale"
+        end
+        local cell_ok, cell_err = validate_cell(act.row, act.col)
+        if not cell_ok then
+            return nil, cell_err
+        end
+        local value_ok, value_err = validate_value(act.value)
+        if not value_ok then
+            return nil, value_err
+        end
+        local index = cell_index(act.row, act.col)
+        if self.board[index] ~= 0 then
+            return nil, "cannot edit notes on a filled cell"
+        end
+    end
+
+    local constraint_masks
+    local applied_elims = {}
+    for _, act in ipairs(list) do
+        local v_bit = digit_bit(act.value)
+        local old_mr = self.manual_removed[act.row + 1][act.col + 1]
+        local cur_notes = self.notes[act.row + 1][act.col + 1]
+
+        if cur_notes == 0 then
+            if not constraint_masks then
+                constraint_masks = constraint_masks_for(self.board)
+            end
+            local legal = masks.compute_candidates_mask_for_cell(constraint_masks, act.row, act.col)
+            local already_absent = bit.band(legal, v_bit) == 0 or bit.band(old_mr, v_bit) ~= 0
+            if not already_absent then
+                local new_notes = bit.band(legal, bit.bnot(bit.bor(v_bit, old_mr)))
+                applied_elims[#applied_elims + 1] = {
+                    r = act.row,
+                    c = act.col,
+                    value = act.value,
+                    old_manual_removed = old_mr,
+                    old_notes = 0,
+                    new_notes = new_notes,
+                }
+                self.notes[act.row + 1][act.col + 1] = new_notes
+                self.manual_removed[act.row + 1][act.col + 1] = bit.bor(old_mr, v_bit)
+            end
+        else
+            local already_absent = bit.band(cur_notes, v_bit) == 0
+            if not already_absent then
+                local new_notes = bit.band(cur_notes, bit.bnot(v_bit))
+                applied_elims[#applied_elims + 1] = {
+                    r = act.row,
+                    c = act.col,
+                    value = act.value,
+                    old_manual_removed = old_mr,
+                    old_notes = cur_notes,
+                    new_notes = new_notes,
+                }
+                self.notes[act.row + 1][act.col + 1] = new_notes
+                self.manual_removed[act.row + 1][act.col + 1] = bit.bor(old_mr, v_bit)
+            end
+        end
+    end
+
+    if #applied_elims == 0 then
         return nil, "candidate is already absent"
     end
-    local old_manual_removed = self.manual_removed[action.row + 1][action.col + 1]
-    toggle_note_digit(self, action.row, action.col, action.value, false)
-    self.manual_removed[action.row + 1][action.col + 1] = bit.bor(old_manual_removed, v_bit)
+
     commit(self, {
-        kind = "note",
-        r = action.row,
-        c = action.col,
-        value = action.value,
-        added = false,
-        old_manual_removed = old_manual_removed,
+        kind = "notes_elim",
+        eliminations = applied_elims,
     })
     return true
 end

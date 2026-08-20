@@ -326,6 +326,53 @@ describe("core.solver", function()
         assert.are.equal(81, board.count_clues(solution.board))
         assert.is_true(solver.new(solution.board):is_solved())
     end)
+
+    it("applies a list of actions and batch actions", function()
+        local s = assert(solver.new(board.from_string(UNIQUE_PUZZLE)))
+        local ok, err = s:apply_action({
+            { type = "elim", row = 0, col = 2, value = 1 },
+            { type = "elim", row = 0, col = 2, value = 4 },
+        })
+        assert.is_nil(err)
+        assert.is_true(ok)
+        local mask = candidates.get(s.candidates, 0, 2)
+        assert.are.equal(0, bit.band(mask, bit.lshift(1, 0)))
+        assert.are.equal(0, bit.band(mask, bit.lshift(1, 3)))
+
+        local batch_ok, batch_err = s:apply_action({
+            type = "batch",
+            actions = {
+                { type = "elim", row = 0, col = 3, value = 2 },
+            },
+        })
+        assert.is_nil(batch_err)
+        assert.is_true(batch_ok)
+
+        -- Rejects empty batch
+        local empty_ok, empty_err = s:apply_action({ type = "batch", actions = {} })
+        assert.is_nil(empty_ok)
+        assert.are.equal("action list must not be empty", empty_err)
+
+        local bare_empty_ok, bare_empty_err = s:apply_action({})
+        assert.is_nil(bare_empty_ok)
+        assert.are.equal("action list must not be empty", bare_empty_err)
+
+        -- Applies batch with duplicate eliminations idempotently without error
+        local dup_s = assert(solver.new(board.from_string(UNIQUE_PUZZLE)))
+        local dup_ok, dup_err = dup_s:apply_action({
+            { type = "elim", row = 0, col = 2, value = 1 },
+            { type = "elim", row = 0, col = 2, value = 1 },
+        })
+        assert.is_nil(dup_err)
+        assert.is_true(dup_ok)
+
+        -- Rejects non-elim batch
+        local mixed_ok, mixed_err = s:apply_action({
+            { type = "place", row = 0, col = 2, value = 4 },
+        })
+        assert.is_nil(mixed_ok)
+        assert.are.equal("batch actions only support elimination type", mixed_err)
+    end)
 end)
 
 describe("core.sudoku facade", function()

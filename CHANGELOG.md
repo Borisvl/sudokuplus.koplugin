@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Disjoint Chain Sub-Classification**:
   - Split Alternating Inference Chains into three pedagogical categories: **X-Chain** (single-digit conjugate chains), **XY-Chain** (bivalue cell chains with weak inter-cell links), and general **AIC** (mixed links).
   - Dedicated hint explanations, visual highlights, and localized naming for X-Chain and XY-Chain.
+- **Comprehensive Hint Batch Eliminations**:
+  - Step 3 of the 3-stage hint reveal now executes all candidate eliminations deduced by the specific technique instance as an atomic batch (e.g. eliminating all obsolete notes for a Locked Candidates or Naked/Hidden Subset instance at once rather than one note per hint).
+  - Pattern instance isolation ensures that deductions from separate pattern instances on the board remain cleanly separated.
+  - Seamless notes-off support: applying an elimination hint when notes are disabled materializes the remaining legal candidate notes on the affected cells (while preserving any candidates previously removed manually) so deductions are visibly reflected on the grid and consecutive hints advance cleanly.
+  - Full undo/redo integration with atomic move history and backward compatibility for existing game saves.
 
 ### Changed
 - **Difficulty Model Realignment**:

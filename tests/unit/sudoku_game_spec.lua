@@ -834,6 +834,188 @@ describe("game", function()
         assert.is_true(has_note(instance, 0, 2, 4))
     end)
 
+    it("applies multi-cell batch elimination actions as a single atomic undoable move", function()
+        local instance, clock = new_game()
+        clock.t = 1050
+
+        assert.is_nil(instance:started_record().started_at, "game not started yet")
+
+        assert.is_true(instance:toggle_note(0, 2, 1))
+        assert.is_true(instance:toggle_note(0, 2, 4))
+        assert.is_true(instance:toggle_note(0, 3, 2))
+        assert.is_true(has_note(instance, 0, 2, 1))
+        assert.is_true(has_note(instance, 0, 2, 4))
+        assert.is_true(has_note(instance, 0, 3, 2))
+
+        local actions = {
+            type = "batch",
+            actions = {
+                { type = "elim", row = 0, col = 2, value = 1 },
+                { type = "elim", row = 0, col = 2, value = 4 },
+                { type = "elim", row = 0, col = 3, value = 2 },
+            },
+        }
+        assert.is_true(instance:apply_action(actions))
+        assert.is_false(has_note(instance, 0, 2, 1))
+        assert.is_false(has_note(instance, 0, 2, 4))
+        assert.is_false(has_note(instance, 0, 3, 2))
+
+        -- Started record must record the move
+        assert.is_not_nil(instance:started_record().started_at)
+
+        -- manual_removed bitmasks must have bits 1, 4 set for (0, 2) and bit 2 for (0, 3)
+        assert.are.equal(bit.bor(digit_bit(1), digit_bit(4)), instance.manual_removed[1][3])
+        assert.are.equal(digit_bit(2), instance.manual_removed[1][4])
+
+        -- Single undo restores all notes and restores manual_removed masks
+        assert.is_true(instance:undo())
+        assert.is_true(has_note(instance, 0, 2, 1))
+        assert.is_true(has_note(instance, 0, 2, 4))
+        assert.is_true(has_note(instance, 0, 3, 2))
+        assert.are.equal(0, instance.manual_removed[1][3])
+        assert.are.equal(0, instance.manual_removed[1][4])
+
+        local undo_affected = instance:undo_affected_cells()
+        assert.is_true(undo_affected[0 * 9 + 2])
+        assert.is_true(undo_affected[0 * 9 + 3])
+
+        -- Single redo eliminates all notes and re-applies manual_removed masks
+        assert.is_true(instance:redo())
+        assert.is_false(has_note(instance, 0, 2, 1))
+        assert.is_false(has_note(instance, 0, 2, 4))
+        assert.is_false(has_note(instance, 0, 3, 2))
+        assert.are.equal(bit.bor(digit_bit(1), digit_bit(4)), instance.manual_removed[1][3])
+        assert.are.equal(digit_bit(2), instance.manual_removed[1][4])
+
+        local redo_affected = instance:redo_affected_cells()
+        assert.is_true(redo_affected[0 * 9 + 2])
+        assert.is_true(redo_affected[0 * 9 + 3])
+    end)
+
+    it("applies batch eliminations successfully when notes are empty (Option 1 UX)", function()
+        local instance = new_game()
+        -- No notes toggled: instance:get_notes is 0 for all empty cells
+        assert.are.equal(0, instance:get_notes(0, 2))
+        assert.are.equal(0, instance:get_notes(0, 3))
+
+        local actions = {
+            { type = "elim", row = 0, col = 2, value = 1 },
+            { type = "elim", row = 0, col = 3, value = 2 },
+        }
+        -- Must succeed cleanly without "candidate is already absent" error
+        assert.is_true(instance:apply_action(actions))
+        assert.are.equal(digit_bit(1), instance.manual_removed[1][3])
+        assert.are.equal(digit_bit(2), instance.manual_removed[1][4])
+        assert.is_false(has_note(instance, 0, 2, 1))
+        assert.is_false(has_note(instance, 0, 3, 2))
+        assert.is_true(instance:get_notes(0, 2) > 0)
+        assert.is_true(instance:get_notes(0, 3) > 0)
+
+        -- Undo restores without adding spurious notes
+        assert.is_true(instance:undo())
+        assert.are.equal(0, instance:get_notes(0, 2))
+        assert.are.equal(0, instance:get_notes(0, 3))
+        assert.are.equal(0, instance.manual_removed[1][3])
+        assert.are.equal(0, instance.manual_removed[1][4])
+    end)
+
+    it("materializing candidate notes preserves previously manually-removed candidates", function()
+        local instance = new_game()
+        -- Toggle note 1 on and then off on (0, 2), recording manual_removed for digit 1
+        assert.is_true(instance:toggle_note(0, 2, 1))
+        assert.is_true(instance:toggle_note(0, 2, 1))
+        assert.are.equal(0, instance:get_notes(0, 2))
+        assert.are.equal(digit_bit(1), instance.manual_removed[1][3])
+
+        -- Apply an elimination for digit 4 on (0, 2)
+        local actions = {
+            { type = "elim", row = 0, col = 2, value = 4 },
+        }
+        assert.is_true(instance:apply_action(actions))
+
+        -- The materialized notes must NOT contain digit 1 or digit 4, but contain digit 2
+        assert.is_false(has_note(instance, 0, 2, 1))
+        assert.is_false(has_note(instance, 0, 2, 4))
+        assert.is_true(has_note(instance, 0, 2, 2))
+        assert.is_true(instance:get_notes(0, 2) > 0)
+        assert.are.equal(bit.bor(digit_bit(1), digit_bit(4)), instance.manual_removed[1][3])
+    end)
+
+    it("allows consecutive hints to advance seamlessly when notes are off", function()
+        local NAKED_PAIR_PUZZLE = "700009030000105006400260009002083951007000000005600000000000003100000060000004010"
+        local solver = require("core.solver")
+        local flags = require("core.techniques.flags")
+        local instance = assert(game.new({
+            puzzle = board.from_string(NAKED_PAIR_PUZZLE),
+            solution = assert(solver.new(board.from_string(NAKED_PAIR_PUZZLE)):solve_any().board),
+            difficulty = "custom",
+            custom_tier = "medium",
+            custom_techniques = { "naked_pairs" },
+            allowed_techniques = flags.NAKED_PAIRS,
+            autofill_notes = false,
+            now = function()
+                return 1000
+            end,
+        }))
+
+        -- First hint: finds Naked Pairs (elimination batch)
+        local hint1 = assert(instance:hint())
+        assert.are.equal("available", hint1.status)
+        assert.are.equal("naked_pairs", hint1.technique.id)
+        assert.is_true(#hint1.actions > 0)
+        assert.is_true(#instance:notes_needed() == 0, "notes_needed must not block before or after hint")
+
+        -- Apply the batch elimination
+        assert.is_true(instance:apply_action(hint1.actions))
+
+        -- After applying eliminations on note-less cells:
+        -- notes_needed must NOT flag the cells
+        assert.are.equal(
+            0,
+            #instance:notes_needed(),
+            "notes_needed must not flag cells with valid remaining candidates"
+        )
+
+        -- Second hint: must advance and find no further naked pairs (no infinite loop)
+        local hint2 = assert(instance:hint())
+        assert.are.equal("none", hint2.status)
+        assert.are.equal("no_applicable_technique", hint2.reason)
+    end)
+
+    it("rejects empty, mixed, non-elim, or stale batch actions", function()
+        local instance = new_game()
+
+        -- Empty list
+        local empty_ok, empty_err = instance:apply_action({})
+        assert.is_nil(empty_ok)
+        assert.are.equal("action list must not be empty", empty_err)
+
+        -- Mixed/non-elim batch
+        local mixed_ok, mixed_err = instance:apply_action({
+            { type = "place", row = 0, col = 2, value = 4 },
+            { type = "elim", row = 0, col = 3, value = 2 },
+        })
+        assert.is_nil(mixed_ok)
+        assert.are.equal("batch actions only support elimination type", mixed_err)
+
+        -- Stale revision on batch
+        local stale_ok, stale_err = instance:apply_action({
+            type = "batch",
+            revision = 999,
+            actions = { { type = "elim", row = 0, col = 2, value = 1 } },
+        })
+        assert.is_nil(stale_ok)
+        assert.are.equal("action is stale", stale_err)
+
+        -- Stale top-level revision on single-place list wrapper
+        local stale_wrap_ok, stale_wrap_err = instance:apply_action({
+            revision = 999,
+            { type = "place", row = 0, col = 2, value = 4 },
+        })
+        assert.is_nil(stale_wrap_ok)
+        assert.are.equal("action is stale", stale_wrap_err)
+    end)
+
     it("counts mistakes into the finish record", function()
         local instance, clock = new_game(PUZZLE_WIN, SOLUTION)
 

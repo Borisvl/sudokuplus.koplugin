@@ -291,6 +291,130 @@ local function no_hint_reason(instance, propagated, search_status)
     return "no_applicable_technique"
 end
 
+local unpack = unpack or table.unpack -- luacheck: ignore 143
+
+local function is_cell(t)
+    return type(t) == "table" and #t == 2 and type(t[1]) == "number" and type(t[2]) == "number"
+end
+
+local function is_cell_list(t)
+    if type(t) ~= "table" or #t == 0 then
+        return false
+    end
+    for i = 1, #t do
+        if not is_cell(t[i]) then
+            return false
+        end
+    end
+    return true
+end
+
+local function is_number_list(t)
+    if type(t) ~= "table" or #t == 0 then
+        return false
+    end
+    for i = 1, #t do
+        if type(t[i]) ~= "number" then
+            return false
+        end
+    end
+    return true
+end
+
+local function canonical_equal(a, b, key)
+    if a == b then
+        return true
+    end
+    if type(a) ~= "table" or type(b) ~= "table" then
+        return false
+    end
+
+    if key == "pivot" or key == "cell" or key == "target" then
+        if is_cell(a) and is_cell(b) then
+            return a[1] == b[1] and a[2] == b[2]
+        end
+    end
+
+    if key == "values" or key == "lines" or key == "digits" or key == "numbers" then
+        if is_number_list(a) and is_number_list(b) then
+            if #a ~= #b then
+                return false
+            end
+            local sorted_a = { unpack(a) }
+            local sorted_b = { unpack(b) }
+            table.sort(sorted_a)
+            table.sort(sorted_b)
+            for i = 1, #sorted_a do
+                if sorted_a[i] ~= sorted_b[i] then
+                    return false
+                end
+            end
+            return true
+        end
+    end
+
+    if is_cell_list(a) and is_cell_list(b) then
+        if #a ~= #b then
+            return false
+        end
+        local set_a, set_b = {}, {}
+        for i = 1, #a do
+            set_a[a[i][1] * 9 + a[i][2]] = true
+            set_b[b[i][1] * 9 + b[i][2]] = true
+        end
+        for k in pairs(set_a) do
+            if not set_b[k] then
+                return false
+            end
+        end
+        for k in pairs(set_b) do
+            if not set_a[k] then
+                return false
+            end
+        end
+        return true
+    end
+
+    if is_number_list(a) and is_number_list(b) then
+        if #a ~= #b then
+            return false
+        end
+        local sorted_a = { unpack(a) }
+        local sorted_b = { unpack(b) }
+        table.sort(sorted_a)
+        table.sort(sorted_b)
+        for i = 1, #sorted_a do
+            if sorted_a[i] ~= sorted_b[i] then
+                return false
+            end
+        end
+        return true
+    end
+
+    if is_cell(a) and is_cell(b) then
+        return a[1] == b[1] and a[2] == b[2]
+    end
+
+    for k, v in pairs(a) do
+        if not canonical_equal(v, b[k], k) then
+            return false
+        end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then
+            return false
+        end
+    end
+    return true
+end
+
+local function same_pattern_instance(first_step, other_step)
+    if other_step.flags ~= first_step.flags or other_step.type ~= first_step.type then
+        return false
+    end
+    return canonical_equal(first_step.pattern, other_step.pattern)
+end
+
 function hints.next(state, options)
     local normalized_options, options_err = validate_options(options)
     if not normalized_options then
@@ -321,11 +445,26 @@ function hints.next(state, options)
         return no_hint_result(normalized_state, no_hint_reason(instance, propagated, search_status))
     end
 
-    local step, step_err = normalize_step(path.steps[1])
+    local first_raw_step = path.steps[1]
+    local step, step_err = normalize_step(first_raw_step)
     if not step then
         return nil, step_err
     end
     local technique = TECHNIQUE_BY_FLAG[step.flags]
+
+    local actions = {}
+    for _, raw_step in ipairs(path.steps) do
+        if same_pattern_instance(first_raw_step, raw_step) then
+            actions[#actions + 1] = {
+                type = raw_step.type,
+                row = raw_step.row,
+                col = raw_step.col,
+                value = raw_step.value,
+                revision = normalized_state.revision,
+            }
+        end
+    end
+
     return {
         status = "available",
         revision = normalized_state.revision,
@@ -344,13 +483,8 @@ function hints.next(state, options)
             kind = step.pattern.kind,
             cells = copy_cells(step.pattern.cells),
         },
-        action = {
-            type = step.type,
-            row = step.row,
-            col = step.col,
-            value = step.value,
-            revision = normalized_state.revision,
-        },
+        action = actions[1],
+        actions = actions,
     }
 end
 

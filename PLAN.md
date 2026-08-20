@@ -37,6 +37,7 @@ A Sudoku puzzle game for e-ink readers (KOReader plugin, target: Kobo).
    - Swordfish is grouped into Master tier alongside 2-line fish and wings, reflecting standard community consensus (HoDoKu, Sudoku Swami, Enjoy Sudoku) for geometric patterns of equivalent cognitive tier.
    - Alternating Inference Chains (AIC) are sub-classified into disjoint pedagogical types (X-Chain for pure single-digit chains, XY-Chain for pure bivalue cell chains, and General AIC for mixed conjugate/bivalue links) with independent technique flags and gating so players can practice specific chain logic.
    - W-Wing parity with rustoku: requires 4 distinct cells ($P_1, P_2, S_1, S_2$) with $P_1 \ne S_1$ and $P_2 \ne S_2$ so that $P_1 = X \implies S_1 \ne X \implies S_2 = X \implies P_2 = Y$ (if a pincer were a bridge end, $P_1 = X \implies S_1 = X$, breaking the conjugate pair deduction).
+   - Hint step 3 batch elimination: while rustoku steps emit individual single-candidate deductions, the hint engine groups all deductions belonging to the exact same highlighted pattern instance into `result.actions` (while preserving `result.action = actions[1]`), applying all obsolete candidate note eliminations for that pattern atomically in Step 3 and undoing/redoing them as a single move.
    Keep these documented here.
 3. **Difficulty model**: 6-tier progression (Beginner, Easy, Medium, Hard, Master,
    Expert) determined by peak human technique tier, clue-count thresholding
@@ -523,7 +524,11 @@ interaction cancels the reveal; the action is applied through the move
 machinery (undoable) with the revision guard rejecting stale actions. The
 hint banner is a **reserved strip** between the grid and the tool row (the
 grid only shrinks where vertical space is too tight; portrait layouts are
-unaffected). When deduction is blocked because the user cleared a cell's
+unaffected). When applying an elimination hint to note-less cells (`notes == 0`),
+the remaining board-legal candidates (minus the eliminated digit and any previously
+manually-removed candidates) are materialized as visible notes on the affected cells
+so the deduction is visibly applied and subsequent hints advance cleanly.
+When deduction is blocked because the user cleared a cell's
 candidates, the view names those cells (`game:notes_needed()`, pure) instead
 of a bare "no hint". The **win dialog** gains "New game" (same difficulty)
 and "Statistics" buttons; the statistics screen stays reachable from the
@@ -1553,4 +1558,19 @@ Enable players to practice specific advanced techniques on demand via a custom d
 - [x] Automated headless and frontend specs covering all new functionality.
 
 **Exit criteria**: all specs green (`./dev.sh test`), `./dev.sh lint` and `./dev.sh fmt` clean, emulator smoke test.
+
+### M19 — Atomic Hint Batch Eliminations (v1.1.0) (done)
+
+Execute all candidate eliminations deduced by a specific technique instance in a single atomic batch on stage 3 of the hint progression.
+
+- [x] `core/hints.lua`: `hints.next` groups all elimination actions sharing the identical canonical pattern instance into a single batch action (`{ type = "batch", actions = { ... } }`), eliminating all obsolete notes for a strategy instance in one step.
+- [x] `core/hints.lua`: Pattern canonical equality compares cell coordinate sets and candidate value lists order-insensitively while preserving positional coordinates for pivots and single target cells.
+- [x] `core/solver.lua`: `solver:apply_action` accepts batch elimination tables, checks presence, deduplicates duplicate eliminations, and validates against candidate state.
+- [x] `game.lua`: `game:apply_action` applies all eliminations in a batch atomically as a single `notes_elim` history entry; hoists revision checks; handles empty and notes-off boards cleanly by materializing remaining legal candidate notes (minus previously manually-removed candidates); fully integrates with undo/redo.
+- [x] `game_serialize.lua`: Serializes and restores `notes_elim` history entries with `old_notes` and `new_notes` candidate bitmasks; maintains backward compatibility with version 2 saves.
+- [x] `ui/sudokuview.lua`: Progressive hint reveal applies the entire batch on stage 3 in a single tap; handles candidate note updates on the grid and redraws without error.
+- [x] Automated unit and integration tests covering pattern isolation, solver batch deduplication, serialization version compatibility, notes-off materialization, and multi-step hint advancement.
+
+**Exit criteria**: all specs green (`./dev.sh test`), `./dev.sh lint` and `./dev.sh fmt` clean.
+
 
