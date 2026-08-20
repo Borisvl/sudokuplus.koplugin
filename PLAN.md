@@ -518,23 +518,29 @@ every generation starts with a **"Generating…" notification** (generation,
 expert especially, is synchronous and can take seconds on-device). The
 **"Resume game" entry is renamed "Continue"** and the menu becomes: Continue,
 New game (difficulty submenu Easy/Medium/Hard/Expert), Statistics,
-Auto-fill notes. The hint reveal is a strict **three-tap progression**
-(① name banner → ② pattern cells highlighted → ③ apply), and any other
-interaction cancels the reveal; the action is applied through the move
-machinery (undoable) with the revision guard rejecting stale actions. The
-hint banner is a **reserved strip** between the grid and the tool row (the
-grid only shrinks where vertical space is too tight; portrait layouts are
-unaffected). When applying an elimination hint to note-less cells (`notes == 0`),
-the remaining board-legal candidates (minus the eliminated digit and any previously
-manually-removed candidates) are materialized as visible notes on the affected cells
-so the deduction is visibly applied and subsequent hints advance cleanly.
-When deduction is blocked because the user cleared a cell's
-candidates, the view names those cells (`game:notes_needed()`, pure) instead
-of a bare "no hint". The **win dialog** gains "New game" (same difficulty)
-and "Statistics" buttons; the statistics screen stays reachable from the
-Tools menu only. `format_time` moved to `core/util.lua` (shared by the
-views, pure). Hint requests are recorded **per request** (no dedupe): every
-"available" result counts as a missed strategy.
+Auto-fill notes. The hint reveal is a **three-tap progression**
+(① name banner → ② pattern cells highlighted → ③ apply). Non-mutating
+inspection (arming/switching digits on the number bar, cycling digits via
+hardware keys, selecting cells to inspect candidates, toggling pencil/pen notes
+mode) **preserves** the active hint banner and stage, allowing the player to
+look for the pattern before advancing to Stage 2. Mutating moves (placing/erasing
+digits, editing notes, undo, redo, check errors, opening menu) cancel the active
+hint reveal. The action is applied through the move machinery (undoable) with the
+revision guard rejecting stale actions. The hint banner is a **reserved strip**
+between the grid and the tool row (the grid only shrinks where vertical space
+is too tight; portrait layouts are unaffected). When applying an elimination
+hint to note-less cells (`notes == 0`), the remaining board-legal candidates
+(minus the eliminated digit and any previously manually-removed candidates) are
+materialized as visible notes on the affected cells so the deduction is visibly
+applied and subsequent hints advance cleanly. When deduction is blocked because
+the user cleared a cell's candidates, the view names those cells
+(`game:notes_needed()`, pure) instead of a bare "no hint". The **win dialog**
+gains "New game" (same difficulty) and "Statistics" buttons; the statistics
+screen stays reachable from the Tools menu only. `format_time` moved to
+`core/util.lua` (shared by the views, pure). Hint requests are deduplicated
+across the session using the solver's deterministic `hint_id` (`_hint_ids` set),
+so repeated requests on the same puzzle state or after undo/redo only count as a
+single missed strategy in statistics.
 
 - [x] `ui/difficulties.lua` + `sudoku_difficulties_spec.lua` — ordered
       id/label list for the picker and the stats screen

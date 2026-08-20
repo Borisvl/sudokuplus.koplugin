@@ -163,6 +163,17 @@ describe("game serialization", function()
         assert.is_true(restored:is_finished())
         assert.are.equal(1, #restored:hints())
         assert.are.equal("naked_singles", restored:hints()[1].technique)
+
+        -- An in-progress restored game deduplicates already seen hints
+        local in_progress_inst = new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION)
+        local hint_res = assert(in_progress_inst:hint())
+        local in_progress_data = in_progress_inst:serialize()
+        local in_progress_restored = restore(in_progress_data, { t = 1000 })
+        assert.are.equal(1, #in_progress_restored:hints())
+        local re_hint = assert(in_progress_restored:hint())
+        assert.are.equal(hint_res.hint_id, re_hint.hint_id)
+        assert.are.equal(1, #in_progress_restored:hints(), "restored game must not duplicate already seen hint")
+
         local move_ok, move_err = restored:place(0, 2, 4)
         assert.is_nil(move_ok)
         assert.is_string(move_err)

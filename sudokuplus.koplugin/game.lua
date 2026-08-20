@@ -313,6 +313,7 @@ function game.new(options)
         _check_errors = 0,
         _revealed = {},
         _hints = {},
+        _hint_ids = {},
         _started = false,
         _started_at = nil,
         finished = false,
@@ -1062,11 +1063,18 @@ function mt:hint()
         return nil, err
     end
     if result.status == "available" then
-        self._hints[#self._hints + 1] = {
-            id = result.hint_id,
-            technique = result.technique.id,
-            flag = result.technique.flag,
-        }
+        -- Deduplicate hints across the session using core.hints' deterministic hint_id
+        -- (technique:type:row:col:value:pattern). This ensures repeated hint requests
+        -- on the same puzzle state, or re-requesting a previously revealed deduction
+        -- after undo/redo, only count as a single missed strategy in game statistics.
+        if not self._hint_ids[result.hint_id] then
+            self._hint_ids[result.hint_id] = true
+            self._hints[#self._hints + 1] = {
+                id = result.hint_id,
+                technique = result.technique.id,
+                flag = result.technique.flag,
+            }
+        end
     end
     return result
 end
@@ -1209,6 +1217,7 @@ function mt:reset()
     self._check_errors = 0
     self._revealed = {}
     self._hints = {}
+    self._hint_ids = {}
     self._started = false
     self._started_at = nil
     self.timer = { running = self.timer.running, started = self.now(), elapsed = 0 }

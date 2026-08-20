@@ -31,6 +31,14 @@ local function validate_history_mask(mask)
         and mask <= FULL_CANDIDATE_MASK
 end
 
+local function hint_ids_set(hints)
+    local set = {}
+    for _, entry in ipairs(hints or {}) do
+        set[entry.id] = true
+    end
+    return set
+end
+
 local function validate_mask_grid(grid, name)
     if type(grid) ~= "table" then
         return nil, name .. " must be a 9x9 table"
@@ -473,6 +481,7 @@ function game_serialize.restore(data, opts, mt)
         _check_errors = data.check_errors,
         _revealed = revealed,
         _hints = hints_copy,
+        _hint_ids = hint_ids_set(hints_copy),
         _started = started_at ~= nil,
         _started_at = started_at,
         finished = data.finished,

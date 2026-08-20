@@ -1083,30 +1083,144 @@ describe("sudoku view", function()
         assert.is_true(has_any_materialized_notes, "eliminated cells must have remaining notes materialized")
     end)
 
-    it("cancels a hint reveal on any other interaction", function()
+    it("preserves hint stage 1 when inspecting the board, switching numbers, or selecting cells", function()
+        local view = new_view(new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION))
+
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(1, view._hint_stage)
+
+        -- Arming/switching digits on the number row preserves the hint banner
+        tap_button(view, "number_row", 4)
+        assert.are.equal(4, view.armed)
+        assert.are.equal(1, view._hint_stage, "arming a digit must preserve stage 1")
+
+        -- Hardware digit cycling forward and backward preserves the hint banner
+        view:onDigitNext()
+        assert.is_not_nil(view.armed)
+        assert.are.equal(1, view._hint_stage, "cycling digits forward must preserve stage 1")
+
+        view:onDigitPrev()
+        assert.is_not_nil(view.armed)
+        assert.are.equal(1, view._hint_stage, "cycling digits backward must preserve stage 1")
+
+        -- Selecting a cell preserves the hint banner
+        tap_button(view, "number_row", view.armed) -- disarm
+        tap_cell(view, 0, 0)
+        assert.are.equal(0, view.selected.row)
+        assert.are.equal(0, view.selected.col)
+        assert.are.equal(1, view._hint_stage, "selecting a cell must preserve stage 1")
+
+        -- Toggling notes mode preserves the hint banner
+        tap_button(view, "tool_row", "notes")
+        assert.are.equal(1, view._hint_stage, "toggling notes mode must preserve stage 1")
+
+        -- Tapping Hint again advances directly to stage 2
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(2, view._hint_stage, "second hint tap must advance to stage 2")
+        assert.are.equal(1, #view.game:hints(), "only 1 hint recorded")
+
+        -- Tapping Hint a third time applies the action
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(0, view._hint_stage)
+        assert.are.equal(6, view.game:get(8, 8))
+        assert.are.equal(1, #view.game:hints(), "only 1 hint recorded after applying")
+    end)
+
+    it(
+        "preserves stage 2 pattern cells and banner when inspecting the board, switching numbers, or selecting cells",
+        function()
+            local view = new_view(new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION))
+
+            tap_button(view, "tool_row", "hint")
+            tap_button(view, "tool_row", "hint")
+            assert.are.equal(2, view._hint_stage)
+            assert.is_true(view._hint_cells[8 * 9 + 8], "pattern cell (8,8) is marked")
+
+            -- Arming/switching digits preserves stage 2 and pattern cells
+            tap_button(view, "number_row", 4)
+            assert.are.equal(4, view.armed)
+            assert.are.equal(2, view._hint_stage)
+            assert.is_true(view._hint_cells[8 * 9 + 8])
+
+            -- Hardware digit cycling forward and backward preserves stage 2 and pattern cells
+            view:onDigitNext()
+            assert.are.equal(2, view._hint_stage)
+            assert.is_true(view._hint_cells[8 * 9 + 8])
+            view:onDigitPrev()
+            assert.are.equal(2, view._hint_stage)
+            assert.is_true(view._hint_cells[8 * 9 + 8])
+
+            -- Selecting a cell preserves stage 2 and pattern cells
+            tap_button(view, "number_row", view.armed) -- disarm
+            tap_cell(view, 0, 0)
+            assert.are.equal(2, view._hint_stage)
+            assert.is_true(view._hint_cells[8 * 9 + 8])
+
+            -- Toggling notes mode preserves stage 2 and pattern cells
+            tap_button(view, "tool_row", "notes")
+            assert.are.equal(2, view._hint_stage)
+            assert.is_true(view._hint_cells[8 * 9 + 8])
+
+            -- Tapping Hint applies the action
+            tap_button(view, "tool_row", "hint")
+            assert.are.equal(0, view._hint_stage)
+            assert.are.equal(6, view.game:get(8, 8))
+            assert.are.equal(1, #view.game:hints())
+        end
+    )
+
+    it("cancels a hint reveal on mutating actions", function()
         local view = new_view(new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION))
         local bb = Blitbuffer.new(758, 1024)
         bb:fill(Blitbuffer.COLOR_WHITE)
         local cell = layout.cell_rect(view.layout, 8, 8)
 
+        -- Request hint on valid board up to stage 2
         tap_button(view, "tool_row", "hint")
+        assert.are.equal(1, view._hint_stage)
         tap_button(view, "tool_row", "hint")
         assert.are.equal(2, view._hint_stage)
-        tap_cell(view, 0, 0)
-        assert.are.equal(0, view._hint_stage, "a cell tap cancels the reveal")
+
+        -- Check errors cancels the hint reveal and clears pattern cells
+        tap_button(view, "tool_row", "check")
+        assert.are.equal(0, view._hint_stage, "check cancels the reveal")
         view:paintTo(bb, 0, 0)
         assert.are.equal(
             tonumber(theme.background.a),
             tonumber(bb:getPixel(cell.x + 2, cell.y + 2).a),
-            "the highlight is cleared on cancel"
+            "the pattern highlight is cleared on cancel"
         )
-        assert.are.equal(0, view.game:get(8, 8), "nothing was applied")
 
+        -- Mutating place cancels stage 1 reveal
         tap_button(view, "tool_row", "hint")
         assert.are.equal(1, view._hint_stage)
-        tap_button(view, "number_row", 4)
-        assert.are.equal(0, view._hint_stage, "an interaction cancels the reveal")
+        tap_button(view, "number_row", 5)
+        tap_cell(view, 8, 8)
+        assert.are.equal(0, view._hint_stage, "placing a number cancels the reveal")
+        assert.are.equal(5, view.game:get(8, 8))
+
+        -- Undo cancels an active hint reveal
+        tap_button(view, "number_row", 5) -- disarm 5
+        tap_button(view, "tool_row", "hint")
+        -- Note: with 5 at (8,8), board diverges so hint fails. Let's undo first.
+        tap_button(view, "tool_row", "undo") -- board back to 0 at (8,8)
         assert.are.equal(0, view.game:get(8, 8))
+        assert.are.equal(0, view._hint_stage)
+
+        -- Request hint up to stage 2, then undo cancels it
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(1, view._hint_stage)
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(2, view._hint_stage)
+        tap_button(view, "tool_row", "undo") -- undoes initial place
+        assert.are.equal(0, view._hint_stage, "undo cancels stage 2 reveal")
+
+        -- Redo cancels an active hint reveal
+        tap_button(view, "tool_row", "hint")
+        assert.are.equal(1, view._hint_stage)
+        tap_button(view, "tool_row", "redo")
+        assert.are.equal(0, view._hint_stage, "redo cancels stage 1 reveal")
+
         bb:free()
     end)
 

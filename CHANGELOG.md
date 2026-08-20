@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Pattern instance isolation ensures that deductions from separate pattern instances on the board remain cleanly separated.
   - Seamless notes-off support: applying an elimination hint when notes are disabled materializes the remaining legal candidate notes on the affected cells (while preserving any candidates previously removed manually) so deductions are visibly reflected on the grid and consecutive hints advance cleanly.
   - Full undo/redo integration with atomic move history and backward compatibility for existing game saves.
+- **Hint Inspection & Session-Wide Deduplication**:
+  - Preserve active 3-step hint reveals and top banner across non-mutating puzzle inspection (arming/switching digits on the number bar, hardware key digit cycling, moving cell selection, and toggling pencil/pen notes mode) so players can freely search for technique patterns before advancing to Stage 2.
+  - Deduplicate hint requests across the game session using deterministic technique identifiers, ensuring that re-requesting a hint on the same puzzle state or after undo/redo cycles only counts as a single hint in statistics.
 
 ### Changed
 - **Difficulty Model Realignment**:

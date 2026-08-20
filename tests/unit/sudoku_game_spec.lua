@@ -741,6 +741,12 @@ describe("game", function()
         assert.is_string(hints[1].id)
         assert.is_true(hints[1].flag ~= 0)
 
+        -- Consecutive hint requests on the same state do not duplicate hint records
+        local result2 = instance:hint()
+        assert.are.equal("available", result2.status)
+        assert.are.equal(result.hint_id, result2.hint_id)
+        assert.are.equal(1, #instance:hints())
+
         assert.is_true(instance:apply_action(result.action))
         assert.are.equal(6, instance:get(8, 8))
         assert.is_true(instance:is_won())
@@ -748,6 +754,32 @@ describe("game", function()
         local exhausted = instance:hint()
         assert.are.equal("none", exhausted.status)
         assert.are.equal(1, #instance:hints(), "no-hint results are not recorded")
+    end)
+
+    it("does not duplicate hint records when undoing and re-requesting the same hint", function()
+        local instance = new_game(NAKED_SINGLE_PUZZLE, NAKED_SINGLE_SOLUTION)
+        local hint1 = assert(instance:hint())
+        assert.are.equal(1, #instance:hints())
+
+        -- Player makes a temporary move
+        assert.is_true(instance:place(8, 8, 5))
+        assert.are.equal(1, #instance:hints())
+
+        -- Player undoes the move back to original state
+        assert.is_true(instance:undo())
+        assert.are.equal(0, instance:get(8, 8))
+
+        -- Requesting hint again at the original state produces the same hint_id and does not duplicate
+        local hint2 = assert(instance:hint())
+        assert.are.equal(hint1.hint_id, hint2.hint_id)
+        assert.are.equal(1, #instance:hints())
+
+        -- Redo and undo again
+        assert.is_true(instance:redo())
+        assert.is_true(instance:undo())
+        local hint3 = assert(instance:hint())
+        assert.are.equal(hint1.hint_id, hint3.hint_id)
+        assert.are.equal(1, #instance:hints())
     end)
 
     it("rejects a hint action after the game revision changes", function()
@@ -1325,6 +1357,11 @@ describe("game", function()
         it("reverts the board, notes, timer, mistakes, and history to fresh state", function()
             local instance, clock = new_game()
             clock.t = 1010
+
+            -- Request a hint on initial state before making moves
+            local hint_before = assert(instance:hint())
+            assert.are.equal(1, #instance:hints())
+
             assert.is_true(instance:place(0, 2, 4))
             assert.is_true(instance:toggle_note(0, 3, 6))
             assert.is_true(instance:place(0, 6, 2)) -- mistake (peer with 6,6)
@@ -1357,6 +1394,11 @@ describe("game", function()
             assert.is_false(instance:is_started())
             assert.is_nil(instance:started_at())
             assert.is_false(instance:is_finished())
+
+            -- Requesting a hint on the reset game re-records it (verifying _hint_ids was cleared)
+            local hint_after = assert(instance:hint())
+            assert.are.equal(hint_before.hint_id, hint_after.hint_id)
+            assert.are.equal(1, #instance:hints())
         end)
 
         it("reverts notes to legal candidates when autofill_notes was enabled", function()

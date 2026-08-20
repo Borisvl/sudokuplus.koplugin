@@ -379,6 +379,7 @@ end
 -- holds it). Shared by tap (notes mode decides) and hold (the opposite mode),
 -- so the two gesture paths cannot drift.
 function SudokuView:_applyArmed(row, col, as_note)
+    self:_clearHintState()
     self:_moveSelection(row, col)
     local ok, err
     if as_note then
@@ -402,7 +403,6 @@ end
 -- Cursor-only tap: moves the selection and drives the digit-match highlight
 -- (a digit cell highlights every cell sharing its digit).
 function SudokuView:_selectCell(hit)
-    self:_clearHintState()
     local previous = self.selected
     self:_moveSelection(hit.row, hit.col)
     self:_onSelectionChanged(previous)
@@ -541,7 +541,6 @@ function SudokuView:onTap(ev_args, ges)
     end
     if hit.kind == "cell" then
         if self.armed then
-            self:_clearHintState()
             self:_applyArmed(hit.row, hit.col, self.notes_mode)
         else
             self:_selectCell(hit)
@@ -553,7 +552,6 @@ function SudokuView:onTap(ev_args, ges)
     if type(hit.id) == "number" then
         -- The number bar is the "pen": arming never mutates the board. Tapping
         -- the armed digit again disarms it, any other digit switches to it.
-        self:_clearHintState()
         if self.armed == hit.id then
             self:_disarm()
         else
@@ -598,7 +596,6 @@ function SudokuView:onHold(ev_args, ges)
     if not hit or hit.kind ~= "cell" or not self.armed then
         return true
     end
-    self:_clearHintState()
     self:_applyArmed(hit.row, hit.col, not self.notes_mode)
     return true
 end
@@ -620,7 +617,6 @@ end
 -- Toggles notes mode; shared by the Notes button and the hardware-key hold so
 -- the two paths cannot drift. The caller runs afterMove() to repaint.
 function SudokuView:_toggleNotes()
-    self:_clearHintState()
     self.notes_mode = not self.notes_mode
     self:markToolRow()
 end
@@ -646,7 +642,6 @@ function SudokuView:_cycleDigit(forward, key)
     if self.menu_open or self.game:is_finished() then
         return true
     end
-    self:_clearHintState()
     if self.armed then
         local from = forward and (self.armed % 9 + 1) or (self.armed == 1 and 9 or self.armed - 1)
         local digit = next_cycle_digit(self._completed_digits, forward, from)

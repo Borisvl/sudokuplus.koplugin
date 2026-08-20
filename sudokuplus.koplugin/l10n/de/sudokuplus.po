@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sudokuplus\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-20 08:49+0200\n"
+"POT-Creation-Date: 2026-08-20 21:26+0200\n"
 "PO-Revision-Date: 2026-08-15 14:45+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -677,29 +677,29 @@ msgstr "%1 — Tipp antippen für das Muster"
 msgid "%1 — tap Hint to apply"
 msgstr "%1 — Tipp antippen zum Anwenden"
 
-#: sudokuplus.koplugin/ui/sudokuview.lua:740
+#: sudokuplus.koplugin/ui/sudokuview.lua:735
 msgid "No mistakes found."
 msgstr "Keine Fehler gefunden."
 
-#: sudokuplus.koplugin/ui/sudokuview.lua:741
+#: sudokuplus.koplugin/ui/sudokuview.lua:736
 msgid "1 wrong cell found."
 msgid_plural "%1 wrong cells found."
 msgstr[0] "1 falsche Zelle gefunden."
 msgstr[1] "%1 falsche Zellen gefunden."
 
-#: sudokuplus.koplugin/ui/sudokuview.lua:816
+#: sudokuplus.koplugin/ui/sudokuview.lua:811
 msgid "Some notes are inconsistent with the board. Fix them first."
 msgstr "Einige Notizen widersprechen dem Spielfeld. Bitte zuerst korrigieren."
 
-#: sudokuplus.koplugin/ui/sudokuview.lua:829
+#: sudokuplus.koplugin/ui/sudokuview.lua:824
 msgid "No hint available. Re-add notes to: %1"
 msgstr "Kein Tipp verfügbar. Notizen wieder hinzufügen bei: %1"
 
-#: sudokuplus.koplugin/ui/sudokuview.lua:832
+#: sudokuplus.koplugin/ui/sudokuview.lua:827
 msgid "The puzzle is solved."
 msgstr "Das Rätsel ist gelöst."
 
-#: sudokuplus.koplugin/ui/sudokuview.lua:834
+#: sudokuplus.koplugin/ui/sudokuview.lua:829
 msgid "No hint available."
 msgstr "Kein Tipp verfügbar."
 
