@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: sudokuplus\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-21 23:20+0200\n"
+"POT-Creation-Date: 2026-08-21 23:24+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: sudokuplus.koplugin/_meta.lua:12 sudokuplus.koplugin/main.lua:496
+#: sudokuplus.koplugin/_meta.lua:12 sudokuplus.koplugin/main.lua:500
 msgid "Sudoku+"
 msgstr ""
 
@@ -38,77 +38,77 @@ msgstr ""
 msgid "save the new game"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:238
+#: sudokuplus.koplugin/main.lua:242
 msgid "Generating…"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:294
+#: sudokuplus.koplugin/main.lua:298
 msgid "Failed to prepare the game statistics."
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:333
+#: sudokuplus.koplugin/main.lua:337
 msgid "Failed to start a game."
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:347
+#: sudokuplus.koplugin/main.lua:351
 msgid "save the current game before replacing it"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:377
+#: sudokuplus.koplugin/main.lua:381
 msgid "This game cannot be replayed (no reproduction seed)."
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:405
+#: sudokuplus.koplugin/main.lua:409
 msgid "The save was corrupted; a backup was kept at %1"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:409
+#: sudokuplus.koplugin/main.lua:413
 msgid "Failed to restore the saved game."
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:413
+#: sudokuplus.koplugin/main.lua:417
 msgid "No saved game found."
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:428
+#: sudokuplus.koplugin/main.lua:432
 msgid "Failed to reconcile the saved game statistics."
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:444
+#: sudokuplus.koplugin/main.lua:448
 msgid "save the continued game statistics"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:453
+#: sudokuplus.koplugin/main.lua:457
 msgid "save the continued game"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:488
+#: sudokuplus.koplugin/main.lua:492
 #: sudokuplus.koplugin/sudokuplus/ui/dialogs.lua:146
 msgid "Custom…"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:500
+#: sudokuplus.koplugin/main.lua:504
 msgid "Continue"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:509
+#: sudokuplus.koplugin/main.lua:513
 #: sudokuplus.koplugin/sudokuplus/ui/dialogs.lua:88
 #: sudokuplus.koplugin/sudokuplus/ui/dialogs.lua:500
 msgid "New game"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:513
+#: sudokuplus.koplugin/main.lua:517
 #: sudokuplus.koplugin/sudokuplus/ui/dialogs.lua:98
 #: sudokuplus.koplugin/sudokuplus/ui/dialogs.lua:490
 msgid "Statistics"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:520
+#: sudokuplus.koplugin/main.lua:524
 #: sudokuplus.koplugin/sudokuplus/ui/dialogs.lua:534
 msgid "Help"
 msgstr ""
 
-#: sudokuplus.koplugin/main.lua:527
+#: sudokuplus.koplugin/main.lua:531
 msgid "Auto-fill notes"
 msgstr ""
 
