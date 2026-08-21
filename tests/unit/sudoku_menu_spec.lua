@@ -730,6 +730,146 @@ describe("sudoku plugin menu", function()
         assert.are.equal(shown[1], closed[1], "the notification must be dismissed after generation")
     end)
 
+    it("retries failed standard generation with +50% budget and a fresh seed", function()
+        local generator = require("sudokuplus.core.generator")
+        local original_generate = generator.generate_game
+        local generated_opts = {}
+        generator.generate_game = function(opts)
+            generated_opts[#generated_opts + 1] = opts
+            return nil, "forced standard generation failure"
+        end
+
+        local seeds = { 111, 222 }
+        local seed_index = 0
+        local original_seed_source = Sudoku.seed_source
+        Sudoku.seed_source = function()
+            seed_index = seed_index + 1
+            return seeds[seed_index]
+        end
+
+        local retry_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text and widget.ok_text:find("Retry", 1, true) then
+                retry_dialog = widget
+            end
+        end
+        UIManager.close = function() end
+
+        finally(function()
+            generator.generate_game = original_generate
+            Sudoku.seed_source = original_seed_source
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        Sudoku:startGame("hard")
+
+        assert.are.equal(1, #generated_opts)
+        assert.are.equal(100, generated_opts[1].max_attempts)
+        assert.are.equal(111, generated_opts[1].seed)
+        assert.is_not_nil(retry_dialog)
+        assert.is_true(retry_dialog.ok_text:find("150", 1, true) ~= nil)
+
+        retry_dialog.ok_callback()
+        assert.are.equal(2, #generated_opts)
+        assert.are.equal(150, generated_opts[2].max_attempts)
+        assert.are.equal(222, generated_opts[2].seed)
+    end)
+
+    it("preserves on_cancel across chained standard retries", function()
+        local generator = require("sudokuplus.core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function()
+            return nil, "forced chained generation failure"
+        end
+
+        local retry_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text and widget.ok_text:find("Retry", 1, true) then
+                retry_dialog = widget
+            end
+        end
+        UIManager.close = function() end
+
+        finally(function()
+            generator.generate_game = original_generate
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        local cancelled = 0
+        Sudoku:startGame("hard", {
+            on_cancel = function()
+                cancelled = cancelled + 1
+            end,
+        })
+
+        assert.is_not_nil(retry_dialog)
+        retry_dialog.ok_callback()
+        assert.is_not_nil(retry_dialog)
+        retry_dialog.cancel_callback()
+        assert.are.equal(1, cancelled)
+    end)
+
+    it("continues standard replay retries from the exhausted PRNG state", function()
+        local generator = require("sudokuplus.core.generator")
+        local original_generate = generator.generate_game
+        local generated_opts = {}
+        local starting_states = {}
+        local ending_states = {}
+        generator.generate_game = function(opts)
+            generated_opts[#generated_opts + 1] = opts
+            starting_states[#starting_states + 1] = opts.rng.state
+            opts.rng:next()
+            ending_states[#ending_states + 1] = opts.rng.state
+            return nil, "forced standard replay failure"
+        end
+
+        local retry_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text and widget.ok_text:find("Retry", 1, true) then
+                retry_dialog = widget
+            end
+        end
+        UIManager.close = function() end
+
+        finally(function()
+            generator.generate_game = original_generate
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        local target_seed = 246813579
+        Sudoku:replayGame(target_seed, "hard")
+
+        assert.are.equal(1, #generated_opts)
+        assert.are.equal(target_seed, generated_opts[1].seed)
+        assert.are.equal(100, generated_opts[1].max_attempts)
+        assert.is_not_nil(retry_dialog)
+
+        retry_dialog.ok_callback()
+        assert.are.equal(2, #generated_opts)
+        assert.are.equal(target_seed, generated_opts[2].seed)
+        assert.are.equal(50, generated_opts[2].max_attempts, "only the attempts added between 100 and 150 run")
+        assert.are.equal(ending_states[1], starting_states[2], "retry resumes from the exhausted PRNG state")
+        assert.is_true(retry_dialog.ok_text:find("225", 1, true) ~= nil)
+
+        retry_dialog.ok_callback()
+        assert.are.equal(3, #generated_opts)
+        assert.are.equal(target_seed, generated_opts[3].seed)
+        assert.are.equal(75, generated_opts[3].max_attempts, "only the attempts added between 150 and 225 run")
+        assert.are.equal(ending_states[2], starting_states[3])
+    end)
+
     it("keeps the saved game when generating a new one fails", function()
         local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
@@ -946,7 +1086,7 @@ describe("sudoku plugin menu", function()
         assert.is_true(old_view.game.timer.running)
     end)
 
-    it("restores the same live view after standard failure or cancelled custom retry", function()
+    it("restores the same live view after cancelled standard or custom retry", function()
         local board = require("sudokuplus.core.board")
         local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
@@ -971,12 +1111,15 @@ describe("sudoku plugin menu", function()
         end)
 
         local views = {}
+        local standard_retry
         local custom_retry
         local UIManager = require("ui/uimanager")
         local original_show = UIManager.show
         UIManager.show = function(_, widget)
             if widget and widget.game then
                 views[#views + 1] = widget
+            elseif widget and widget.ok_text and widget.ok_text:find("Retry", 1, true) then
+                standard_retry = widget
             elseif widget and widget.ok_text and widget.ok_text:find("Continue", 1, true) then
                 custom_retry = widget
             end
@@ -989,6 +1132,9 @@ describe("sudoku plugin menu", function()
         local old_view = assert(views[1])
         old_view.new_game_cb("hard")
         assert.are.equal(1, #views)
+        assert.is_not_nil(standard_retry)
+        assert.is_false(old_view.game.timer.running)
+        standard_retry.cancel_callback()
         assert.is_true(old_view.game.timer.running)
 
         old_view.new_game_cb("custom", {
@@ -1138,12 +1284,17 @@ describe("sudoku plugin menu", function()
         assert.is_not_nil(generated_opts[2].seed)
     end)
 
-    it("preserves exact reproduction seed when retrying custom replay", function()
+    it("continues custom replay retries from the exhausted PRNG state", function()
         local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         local replay_opts = {}
+        local starting_states = {}
+        local ending_states = {}
         generator.generate_game = function(opts)
             replay_opts[#replay_opts + 1] = opts
+            starting_states[#starting_states + 1] = opts.rng.state
+            opts.rng:next()
+            ending_states[#ending_states + 1] = opts.rng.state
             return nil, "forced replay generation failure"
         end
 
@@ -1174,10 +1325,12 @@ describe("sudoku plugin menu", function()
         confirm_dialog.ok_callback()
         assert.are.equal(2, #replay_opts)
         assert.are.equal(target_seed, replay_opts[2].seed, "must preserve reproduction seed across replay retries")
-        assert.are.equal(150, replay_opts[2].max_attempts)
+        assert.are.equal(50, replay_opts[2].max_attempts, "only the attempts added between 100 and 150 run")
+        assert.are.equal(ending_states[1], starting_states[2], "retry resumes from the exhausted PRNG state")
+        assert.is_true(confirm_dialog.ok_text:find("225", 1, true) ~= nil)
     end)
 
-    it("returns to the main menu when cancelling custom generation retry", function()
+    it("stays on the main menu when cancelling standard or custom generation retry", function()
         local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function()
@@ -1189,7 +1342,11 @@ describe("sudoku plugin menu", function()
         local original_show = UIManager.show
         local original_close = UIManager.close
         UIManager.show = function(_, widget)
-            if widget and widget.ok_text and widget.ok_text:find("Continue", 1, true) then
+            if
+                widget
+                and widget.ok_text
+                and (widget.ok_text:find("Retry", 1, true) or widget.ok_text:find("Continue", 1, true))
+            then
                 confirm_dialog = widget
             end
         end
@@ -1214,6 +1371,12 @@ describe("sudoku plugin menu", function()
             storage.exists = original_exists
         end)
 
+        Sudoku:startGame("hard")
+        assert.is_not_nil(confirm_dialog)
+        confirm_dialog.cancel_callback()
+        assert.is_false(continued, "standard Cancel must not launch an unrelated saved game")
+
+        confirm_dialog = nil
         Sudoku:startGame("custom", {
             target_tier = "master",
             required_techniques = { "swordfish" },
@@ -1221,6 +1384,6 @@ describe("sudoku plugin menu", function()
 
         assert.is_not_nil(confirm_dialog)
         confirm_dialog.cancel_callback()
-        assert.is_false(continued, "main-menu Cancel must not launch an unrelated saved game")
+        assert.is_false(continued, "custom Cancel must not launch an unrelated saved game")
     end)
 end)

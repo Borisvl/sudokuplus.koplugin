@@ -46,6 +46,14 @@ end
 
 Sudoku.seed_source = seed_from_wall_clock
 
+local function copy_generation_options(options)
+    local copied = {}
+    for key, value in pairs(options or {}) do
+        copied[key] = value
+    end
+    return copied
+end
+
 local function load_plugin_translations(base_path)
     if not _.loadMO then
         return
@@ -185,10 +193,47 @@ function Sudoku:_persistReplacement(g, stats_data, source_view)
     persist()
 end
 
+-- Routes generation cancellation back to the initiating context.
+function Sudoku:_cancelGeneration(generation_options, source_view)
+    if generation_options and generation_options.on_cancel then
+        generation_options.on_cancel()
+    elseif source_view then
+        self:_resumeSourceView(source_view)
+    end
+end
+
+-- Carries the full generation context into the next bounded search. Replays
+-- continue from the exhausted PRNG state and run only the newly added budget;
+-- fresh games keep the established new-seed/full-budget behavior.
+function Sudoku:_retryGeneration(
+    difficulty,
+    seed,
+    generation_options,
+    source_view,
+    current_attempts,
+    next_attempts,
+    rng_state
+)
+    local next_options = copy_generation_options(generation_options)
+    local next_seed
+    if next_options.is_replay then
+        next_options.attempts = next_attempts - current_attempts
+        next_options.total_attempts = next_attempts
+        next_options.rng_state = rng_state
+        next_seed = seed
+    else
+        next_options.attempts = next_attempts
+        next_options.total_attempts = next_attempts
+        next_options.rng_state = nil
+        next_seed = self.seed_source()
+    end
+    self:_startWithSeed(difficulty, next_seed, next_options, source_view)
+end
+
 -- Generates a puzzle (wall-clock or reproduction seed), abandons the
 -- currently saved game, and starts a fresh one. Shared by startGame and
 -- replayGame so the replace/abandon/bookkeeping flow stays in one place.
-function Sudoku:_startWithStats(difficulty, seed, custom_options, stats_data, source_view)
+function Sudoku:_startWithStats(difficulty, seed, generation_options, stats_data, source_view)
     -- Generation (expert especially) can take a few seconds; the emulator
     -- and the device are single-threaded, so explain the wait up front.
     -- forceRePaint() drains the paint/refresh queues immediately: without it
@@ -197,45 +242,48 @@ function Sudoku:_startWithStats(difficulty, seed, custom_options, stats_data, so
     local generating = Notification:new { text = _("Generating…") }
     UIManager:show(generating)
     UIManager:forceRePaint()
-    local attempts = custom_options and custom_options.attempts or 100
+    local attempts = generation_options and generation_options.attempts or 100
+    local total_attempts = generation_options and generation_options.total_attempts or attempts
     local gen_opts = {
         difficulty = difficulty,
         seed = seed,
-        rng = prng.new(seed),
+        rng = prng.new(generation_options and generation_options.rng_state or seed),
         max_attempts = attempts,
     }
-    if difficulty == "custom" and custom_options then
-        gen_opts.target_tier = custom_options.target_tier
-        gen_opts.required_techniques = custom_options.required_techniques
+    if difficulty == "custom" and generation_options then
+        gen_opts.target_tier = generation_options.target_tier
+        gen_opts.required_techniques = generation_options.required_techniques
     end
     local payload, gen_err = generator.generate_game(gen_opts)
     UIManager:close(generating)
     if not payload then
-        if difficulty == "custom" and custom_options then
-            local next_attempts = math.floor(attempts * 1.5)
-            dialogs.confirm_continue_custom_generation(self, custom_options, attempts, next_attempts, function()
-                local next_opts = {
-                    target_tier = custom_options.target_tier,
-                    required_techniques = custom_options.required_techniques,
-                    attempts = next_attempts,
-                    is_replay = custom_options.is_replay,
-                    on_cancel = custom_options.on_cancel,
-                }
-                local next_seed = custom_options.is_replay and seed or self.seed_source()
-                self:_startWithSeed("custom", next_seed, next_opts, source_view)
-            end, function()
-                if custom_options.on_cancel then
-                    custom_options.on_cancel()
-                elseif source_view then
-                    self:_resumeSourceView(source_view)
-                end
-            end)
-            return
+        logger.warn("sudoku: generation failed: " .. tostring(gen_err))
+        local next_attempts = math.floor(total_attempts * 1.5)
+        local retry_callback = function()
+            self:_retryGeneration(
+                difficulty,
+                seed,
+                generation_options,
+                source_view,
+                total_attempts,
+                next_attempts,
+                gen_opts.rng.state
+            )
         end
-        self:_resumeSourceView(source_view)
-        UIManager:show(InfoMessage:new {
-            text = _("Failed to generate a Sudoku puzzle.") .. "\n" .. tostring(gen_err),
-        })
+        local cancel_callback = function()
+            self:_cancelGeneration(generation_options, source_view)
+        end
+        if difficulty == "custom" and generation_options then
+            dialogs.confirm_continue_custom_generation(
+                generation_options,
+                total_attempts,
+                next_attempts,
+                retry_callback,
+                cancel_callback
+            )
+        else
+            dialogs.confirm_retry_generation(difficulty, total_attempts, next_attempts, retry_callback, cancel_callback)
+        end
         return
     end
     -- A new puzzle replaces the active save: if the replaced game had been
@@ -294,7 +342,7 @@ function Sudoku:_startWithStats(difficulty, seed, custom_options, stats_data, so
     self:_persistReplacement(g, candidate_stats, source_view)
 end
 
-function Sudoku:_startWithSeed(difficulty, seed, custom_options, source_view, skip_source_checkpoint)
+function Sudoku:_startWithSeed(difficulty, seed, generation_options, source_view, skip_source_checkpoint)
     if source_view and not source_view.game:is_finished() and not skip_source_checkpoint then
         source_view.game:pause()
         local checkpointed, checkpoint_err = source_view:checkpoint("replacement")
@@ -303,26 +351,26 @@ function Sudoku:_startWithSeed(difficulty, seed, custom_options, source_view, sk
                 _("save the current game before replacing it"),
                 checkpoint_err,
                 function()
-                    self:_startWithSeed(difficulty, seed, custom_options, source_view)
+                    self:_startWithSeed(difficulty, seed, generation_options, source_view)
                 end,
                 function()
-                    self:_startWithSeed(difficulty, seed, custom_options, source_view, true)
+                    self:_startWithSeed(difficulty, seed, generation_options, source_view, true)
                 end
             )
             return
         end
     end
     self:_withStats(function(stats_data)
-        self:_startWithStats(difficulty, seed, custom_options, stats_data, source_view)
+        self:_startWithStats(difficulty, seed, generation_options, stats_data, source_view)
     end)
 end
 
-function Sudoku:startGame(difficulty, custom_options, source_view)
+function Sudoku:startGame(difficulty, generation_options, source_view)
     -- core/ is deterministic: seed the PRNG from the wall clock (ms) in the
     -- plugin layer. A fresh game abandons any previous save, but only once a
     -- new puzzle exists: a failed generation must not destroy the saved game.
     difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
-    self:_startWithSeed(difficulty, self.seed_source(), custom_options, source_view)
+    self:_startWithSeed(difficulty, self.seed_source(), generation_options, source_view)
 end
 
 -- Restarts an exact puzzle from the game log by its reproduction seed.
@@ -334,15 +382,17 @@ function Sudoku:replayGame(seed, difficulty, custom_tier, custom_techniques, sou
         })
         return
     end
-    local custom_options = nil
+    local generation_options = {
+        is_replay = true,
+    }
     if difficulty == "custom" then
-        custom_options = {
+        generation_options = {
             target_tier = custom_tier,
             required_techniques = custom_techniques,
             is_replay = true,
         }
     end
-    self:_startWithSeed(difficulty, seed, custom_options, source_view)
+    self:_startWithSeed(difficulty, seed, generation_options, source_view)
 end
 
 function Sudoku:continueGame()

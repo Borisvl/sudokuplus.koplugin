@@ -19,7 +19,7 @@ A full-featured, logical Sudoku puzzle game and interactive tutor crafted specif
   - *Basic*: Naked/Hidden Singles, Naked/Hidden Pairs, Triples, and Quads
   - *Intersections*: Locked Candidates (Pointing & Claiming)
   - *Wings & Fish*: X-Wing, Swordfish, Jellyfish, Skyscraper, W-Wing, XY-Wing, XYZ-Wing
-- **🎯 6 Balanced Difficulty Tiers**: Beginner, Easy, Medium, Hard, Master, and Expert, backed by an algorithmic generator with 5 symmetry modes (Rotational 180°, Rotational 90°, Diagonal, Horizontal, Vertical) plus asymmetric boards.
+- **🎯 6 Exact Difficulty Tiers**: Beginner, Easy, Medium, Hard, Master, and Expert, backed by an algorithmic generator with 5 symmetry modes (Rotational 180°, Rotational 90°, Diagonal, Horizontal, Vertical) plus asymmetric boards. Standard generation never substitutes another tier; if its bounded search is exhausted, you can Retry with a larger budget or Cancel without losing the current game.
   1. **Identify**: Teaches you the next logical technique to look for.
   2. **Highlight**: Highlights the pattern cells, pincers, and affected candidate eliminations directly on your board.
   3. **Apply**: Executes the elimination or digit placement for you.

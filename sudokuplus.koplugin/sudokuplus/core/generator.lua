@@ -44,17 +44,6 @@ local DIFFICULTY_RANGES = {
     custom_expert = { min = 21, max = 26 },
 }
 
--- Rank used to pick the closest usable fallback when an exact difficulty
--- match cannot be found within max_attempts.
-local DIFFICULTY_ORDER = {
-    beginner = 1,
-    easy = 2,
-    medium = 3,
-    hard = 4,
-    master = 5,
-    expert = 6,
-}
-
 -- P3: clue-target sampling weights, aligned with DIFFICULTY_RANGES (weights[1]
 -- is the low end of the range). Empirical calibration balances generation speed
 -- with hitting the target technique tier.
@@ -526,9 +515,8 @@ function generator.generate(options)
         return payload.board
     end
 
-    -- Strict API: a requested difficulty is an exact-match contract. The
-    -- game-facing generate_game adds the best-effort fallback below; here
-    -- exhaustion is still an error (the caller asked for a specific board).
+    -- A requested difficulty is an exact-match contract. Exhaustion is an
+    -- error so callers can explicitly offer another bounded search.
     local range = DIFFICULTY_RANGES[normalized.difficulty]
     for _ = 1, normalized.max_attempts do
         local payload, attempt_err, classification = attempt_puzzle(normalized, range)
@@ -592,45 +580,24 @@ function generator.generate_game(options)
         return nil, last_err or "failed to generate a non-guessing game"
     end
 
-    -- Best-effort difficulty targeting: prefer an exact match, but never
-    -- hard-fail — if max_attempts is exhausted, return the closest usable
-    -- (unique, no-guessing) puzzle with its ACTUAL difficulty so the game
-    -- labels it correctly.
+    -- Standard difficulty generation is strict: never substitute a nearby
+    -- tier when the bounded search cannot satisfy the request.
     local range = DIFFICULTY_RANGES[normalized.difficulty]
-    local requested_rank = DIFFICULTY_ORDER[normalized.difficulty]
-    local best
     for _ = 1, normalized.max_attempts do
         local payload, attempt_err, classification = attempt_puzzle(normalized, range)
         if attempt_err then
             return nil, attempt_err
         end
-        if payload and not classification.requires_guessing then
-            if
-                classification.difficulty == normalized.difficulty
-                and meets_density_criteria(classification, normalized.difficulty)
-            then
-                return game_payload(payload, classification, normalized)
-            end
-            local rank_diff = math.abs(requested_rank - DIFFICULTY_ORDER[classification.difficulty])
-            local is_dense = meets_density_criteria(classification, classification.difficulty)
-            -- Prioritize density-passing candidates over non-dense candidates:
-            -- A density-passing adjacent tier candidate (score 1) beats an exact-tier candidate
-            -- that failed density (score 10). If all attempts fail density, the exact match wins (10 vs 11).
-            local penalty = is_dense and 0 or 10
-            local distance = rank_diff + penalty
-            if not best or distance < best.distance then
-                best = {
-                    payload = payload,
-                    classification = classification,
-                    distance = distance,
-                }
-            end
+        if
+            payload
+            and not classification.requires_guessing
+            and classification.difficulty == normalized.difficulty
+            and meets_density_criteria(classification, normalized.difficulty)
+        then
+            return game_payload(payload, classification, normalized)
         end
     end
 
-    if best then
-        return game_payload(best.payload, best.classification, normalized)
-    end
     return nil, "failed to generate a " .. normalized.difficulty .. " game"
 end
 

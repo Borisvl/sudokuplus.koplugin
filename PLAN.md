@@ -1735,3 +1735,64 @@ and 9 frontend specs green; `./dev.sh fmt`, `./dev.sh test`, and
 `./dev.sh lint` clean; package verification and emulator plugin-load smoke pass;
 PLAN, README, and architecture documentation describe the namespaced layout;
 one clear milestone commit.
+
+### M23 — Exact-Tier Standard Generation (v1.1.0)
+
+Remove best-effort difficulty fallback from standard puzzle generation so a
+requested tier is never silently replaced by another tier. Exhausted searches
+offer an explicit Retry/Cancel choice while preserving the current game.
+
+Test-first task order:
+
+1. [x] Replace fallback-oriented generator regressions with strict exact-tier
+   and tier-density exhaustion regressions.
+2. [x] Add frontend regressions for standard generation Retry/Cancel, increased
+   retry budgets, fresh seeds for new games, preserved seeds for replays, and
+   recoverability of the current game.
+3. [x] Remove closest-tier selection from the standard generator and return an
+   error when its bounded search cannot satisfy the requested tier and density.
+4. [x] Add a localized standard-generation Retry/Cancel dialog and route retry
+   context through new-game and replay orchestration.
+5. [x] Update release notes and user documentation with the exact-tier contract.
+
+Resolved decisions (2026-08-21):
+
+1. A standard request succeeds only when both its difficulty classification and
+   configured technique-density threshold match the requested tier.
+2. Retry increases the bounded search budget by 50%, matching the established
+   Custom-generation workflow.
+3. A normal new-game retry uses a fresh seed; a replay retry preserves its
+   reproduction seed and increases only the search budget.
+4. Cancel resumes the source game when replacement began there. Cancel from the
+   KOReader main menu stays in that menu and never opens an unrelated save.
+
+Review follow-up (2026-08-21):
+
+1. [x] Preserve the complete generation context, including `on_cancel`, across
+   every standard and Custom retry round.
+2. [x] Consolidate retry budget, seed/continuation, and Cancel routing in one
+   orchestration path while keeping tier-specific dialog copy separate.
+3. [x] Remove the unused Custom-dialog parent argument and make both generation
+   dialogs use the same required-callback contract.
+4. [x] Continue standard and Custom replay searches from their advanced PRNG
+   state, running only the attempts added by each 50% budget increase.
+5. [x] Add chained-retry and replay-continuation regressions, then rerun every
+   milestone gate.
+
+Resolved review decisions (2026-08-21):
+
+1. `attempts` is the current search round's budget; `total_attempts` records the
+   cumulative replay budget displayed by the Retry dialog.
+2. A replay continuation keeps the original reproduction seed in the game
+   payload but initializes the next round from the exhausted round's PRNG state.
+3. Fresh-game retries retain the existing behavior: a new seed receives the
+   full increased budget rather than continuing the exhausted seed.
+4. Do not make `generate()` delegate wholesale to `generate_game()`: their
+   clue-only paths intentionally have different classification and retry
+   behavior. Any shared targeted-search refactor is deferred.
+
+**Exit criteria**: no standard generation path returns a different tier; all
+strict-generation and Retry/Cancel regressions green; current-game state remains
+recoverable after exhaustion; localization is current; all core and frontend
+specs green; `./dev.sh fmt`, `./dev.sh test`, and `./dev.sh lint` clean; package
+verification and emulator plugin-load smoke pass; one clear milestone commit.

@@ -369,7 +369,6 @@ function dialogs.confirm_give_up(view, cancel_cb)
 end
 
 function dialogs.confirm_continue_custom_generation(
-    parent,
     custom_options,
     current_attempts,
     next_attempts,
@@ -392,21 +391,30 @@ function dialogs.confirm_continue_custom_generation(
         tostring(current_attempts),
         tostring(next_attempts)
     )
-    local confirm_dialog
-    confirm_dialog = ConfirmBox:new {
+    local confirm_dialog = ConfirmBox:new {
         text = text,
         ok_text = T(_("Continue (%1)"), tostring(next_attempts)),
-        ok_callback = function()
-            if continue_cb then
-                continue_cb()
-            end
-        end,
+        ok_callback = continue_cb,
         cancel_text = _("Cancel"),
-        cancel_callback = function()
-            if cancel_cb then
-                cancel_cb()
-            end
-        end,
+        cancel_callback = cancel_cb,
+    }
+    UIManager:show(confirm_dialog)
+end
+
+function dialogs.confirm_retry_generation(difficulty, current_attempts, next_attempts, retry_cb, cancel_cb)
+    local tier_label = difficulties.label(difficulty) or difficulty
+    local text = T(
+        _("Could not generate an exact %1 puzzle in %2 attempts.\n\n" .. "Retry with +50% budget (%3 attempts)?"),
+        tier_label,
+        tostring(current_attempts),
+        tostring(next_attempts)
+    )
+    local confirm_dialog = ConfirmBox:new {
+        text = text,
+        ok_text = T(_("Retry (%1)"), tostring(next_attempts)),
+        ok_callback = retry_cb,
+        cancel_text = _("Cancel"),
+        cancel_callback = cancel_cb,
     }
     UIManager:show(confirm_dialog)
 end

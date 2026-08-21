@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Deduplicate hint requests across the game session using deterministic technique identifiers, ensuring that re-requesting a hint on the same puzzle state or after undo/redo cycles only counts as a single hint in statistics.
 
 ### Changed
+- **Exact-Tier Puzzle Generation**:
+  - Standard difficulty requests now return only the selected tier and never silently substitute a nearby difficulty.
+  - Exhausted bounded searches offer Retry with a 50% larger budget or Cancel while preserving the current game.
+  - New-game retries use a fresh seed; replay retries preserve the original reproduction seed and continue from the exhausted search state without recomputing earlier attempts.
 - **Difficulty Model Realignment**:
   - Reclassified **Swordfish** from Hard tier to **Master tier** to balance 3x3 fish complexity alongside X-Wing and Skyscraper.
 - **Release Safety & Compliance**:

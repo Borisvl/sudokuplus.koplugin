@@ -192,10 +192,9 @@ describe("core.generator game payload", function()
         assert.is_string(err)
     end)
 
-    it("never hard-fails on an exact difficulty match: returns the closest valid puzzle", function()
+    it("fails instead of returning a different standard difficulty", function()
         -- Force every attempt to classify as "hard" so "medium" can never
-        -- match exactly; the generator must fall back to the closest usable
-        -- puzzle (labeled with its actual difficulty) instead of failing.
+        -- match exactly. Standard generation is an exact-tier contract.
         local solve_path_mod = require("sudokuplus.core.solve_path")
         local original_classify = solve_path_mod.classify
         solve_path_mod.classify = function()
@@ -217,21 +216,18 @@ describe("core.generator game payload", function()
             rng = prng.new(9999),
         })
 
-        assert.is_nil(err)
-        assert.is_not_nil(payload, "a best-effort puzzle must be returned instead of failing")
-        assert.are.equal("hard", payload.difficulty, "the payload reports the actual classification")
-        assert.are.equal(board.count_clues(payload.board), payload.clues)
-        assert.is_not_nil(payload.solution)
+        assert.is_nil(payload)
+        assert.are.equal("failed to generate a medium game", err)
     end)
 
-    it("fallback prefers density-passing adjacent tier over non-dense exact match", function()
+    it("fails when no exact-tier candidate meets its density threshold", function()
         local solve_path_mod = require("sudokuplus.core.solve_path")
         local original_classify = solve_path_mod.classify
         local attempt = 0
         solve_path_mod.classify = function()
             attempt = attempt + 1
             if attempt == 1 then
-                -- Attempt 1: exact difficulty match ("medium") but fails density (1 non-single)
+                -- Exact difficulty match, but below Medium's density threshold.
                 return {
                     difficulty = "medium",
                     requires_guessing = false,
@@ -240,7 +236,7 @@ describe("core.generator game payload", function()
                     non_single_count = 1,
                 }
             else
-                -- Subsequent attempts: adjacent tier ("hard") passing density (2 non-singles)
+                -- A density-passing adjacent tier still must not be returned.
                 return {
                     difficulty = "hard",
                     requires_guessing = false,
@@ -260,10 +256,8 @@ describe("core.generator game payload", function()
             rng = prng.new(1234),
         })
 
-        assert.is_nil(err)
-        assert.is_not_nil(payload)
-        -- Dense "hard" neighbor (score 1) must beat non-dense "medium" exact match (score 10)
-        assert.are.equal("hard", payload.difficulty)
+        assert.is_nil(payload)
+        assert.are.equal("failed to generate a medium game", err)
     end)
 
     it("generates within the search node budget on fixed seeds", function()
