@@ -216,7 +216,7 @@ run_guarded_frontend() {
             rm -rf "$run_root"
         fi
     }
-    # shellcheck disable=SC2329 # Invoked by the signal traps below.
+    # shellcheck disable=SC2317,SC2329 # Invoked by the signal traps below.
     interrupt_guarded_frontend() {
         local signal_status="$1"
         trap - EXIT INT TERM HUP
