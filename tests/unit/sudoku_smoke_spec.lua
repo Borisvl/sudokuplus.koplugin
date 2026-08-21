@@ -1,12 +1,14 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local meta = require("_meta")
-local sudoku = require("core.sudoku")
+local metadata = require("sudokuplus.metadata")
+local meta = dofile("plugins/sudokuplus.koplugin/_meta.lua")
+local sudoku = require("sudokuplus.core.sudoku")
 
 describe("sudoku test harness", function()
     it("loads the plugin metadata with single-source-of-truth version", function()
         assert.is_table(meta)
-        assert.are.equal("sudokuplus", meta.name)
+        assert.are.equal(metadata.name, meta.name)
+        assert.are.equal(metadata.version, meta.version)
         assert.is_string(meta.fullname)
         assert.is_string(meta.description)
         assert.is_string(meta.version)

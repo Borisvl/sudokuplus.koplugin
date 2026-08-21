@@ -35,9 +35,9 @@ describe("sudoku numberbar", function()
         require("commonrequire")
         Blitbuffer = require("ffi/blitbuffer")
         package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
-        layout = require("ui.layout")
-        numberbar = require("ui.numberbar")
-        theme = require("ui.theme")
+        layout = require("sudokuplus.ui.layout")
+        numberbar = require("sudokuplus.ui.numberbar")
+        theme = require("sudokuplus.ui.theme")
     end)
 
     before_each(function()

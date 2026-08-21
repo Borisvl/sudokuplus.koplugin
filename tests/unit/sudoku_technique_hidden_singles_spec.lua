@@ -1,11 +1,11 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local flags = require("core.techniques.flags")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local flags = require("sudokuplus.core.techniques.flags")
 
 -- HoDoKu hidden single example: https://hodoku.sourceforge.net/en/show_example.php?file=h101&tech=Hidden+Single
 local HODOKU = "008007000016083000000000051107290000000000000000046307290000000000860140000300700"
@@ -66,7 +66,7 @@ describe("core.techniques.hidden_singles", function()
     end)
 
     it("each hidden single value appears nowhere else in its recorded unit", function()
-        local units = require("core.techniques.units")
+        local units = require("sudokuplus.core.techniques.units")
         local s = solver.new(board.from_string(HODOKU), { techniques = flags.HIDDEN_SINGLES })
         local path = solve_path.new()
         s:propagate(path)

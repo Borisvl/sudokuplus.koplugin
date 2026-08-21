@@ -8,14 +8,14 @@ local project_root = script_path:match("^(.*)/tools/[^/]+$") or "."
 package.path = project_root .. "/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local flags = require("core.techniques.flags")
-local masks = require("core.masks")
-local prng = require("core.prng")
-local propagator = require("core.techniques.propagator")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local flags = require("sudokuplus.core.techniques.flags")
+local masks = require("sudokuplus.core.masks")
+local prng = require("sudokuplus.core.prng")
+local propagator = require("sudokuplus.core.techniques.propagator")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
 
 local DEFAULT_SEED = 20260807
 local DEFAULT_ITERATIONS = 3

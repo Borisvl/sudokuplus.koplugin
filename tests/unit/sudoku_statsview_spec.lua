@@ -72,8 +72,8 @@ describe("sudoku stats view", function()
     setup(function()
         require("commonrequire")
         Blitbuffer = require("ffi/blitbuffer")
-        stats = require("stats")
-        statsview = require("ui.statsview")
+        stats = require("sudokuplus.stats")
+        statsview = require("sudokuplus.ui.statsview")
         UIManager = require("ui/uimanager")
     end)
 
@@ -210,7 +210,7 @@ describe("sudoku stats view", function()
     end)
 
     it("paints a game detail page with the mini grid without error", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local s = sample_stats()
         local entry = stats.list(s)[3]
         local detail = GameDetail:new {
@@ -230,7 +230,7 @@ describe("sudoku stats view", function()
     end)
 
     it("paints a game detail page without a seed or replay callback", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local entry = record()
         entry.seed = nil
         local detail = GameDetail:new {
@@ -245,7 +245,7 @@ describe("sudoku stats view", function()
     end)
 
     it("displays seed and explicit or derived techniques in GameDetail", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local entry = record({
             seed = 123456,
             techniques = { "locked_candidates", "naked_pairs" },
@@ -288,7 +288,7 @@ describe("sudoku stats view", function()
     end)
 
     it("derives techniques on-the-fly for legacy records with an 81-char puzzle string", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local entry = record({
             seed = 777,
             puzzle = "530070000600195000098000060800060003400803001700020006060000280000419005000080079",
@@ -323,7 +323,7 @@ describe("sudoku stats view", function()
     end)
 
     it("does not display or derive techniques for in-progress games", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local entry = in_progress({
             seed = 777,
             puzzle = "530070000600195000098000060800060003400803001700020006060000280000419005000080079",
@@ -358,7 +358,7 @@ describe("sudoku stats view", function()
     end)
 
     it("paints the detail page of a game without a board snapshot", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local data = {
             version = 2,
             streak = 1,
@@ -398,7 +398,7 @@ describe("sudoku stats view", function()
     end)
 
     it("replays the exact puzzle from the detail page", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local entry = record({ seed = 987654, difficulty = "hard" })
         local replayed
         local detail = GameDetail:new {
@@ -430,7 +430,7 @@ describe("sudoku stats view", function()
     end)
 
     it("replays a custom game forwarding custom_tier and custom_techniques", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local entry = record({
             seed = 789,
             difficulty = "custom",
@@ -473,9 +473,9 @@ describe("sudoku stats view", function()
         assert.are.same({ "swordfish", "x_wing" }, replayed.custom_techniques)
 
         -- Verify deterministic end-to-end replay generation matches
-        local generator = require("core.generator")
-        local board_mod = require("core.board")
-        local prng = require("core.prng")
+        local generator = require("sudokuplus.core.generator")
+        local board_mod = require("sudokuplus.core.board")
+        local prng = require("sudokuplus.core.prng")
         local g1 = generator.generate_game({
             difficulty = "custom",
             target_tier = replayed.custom_tier,
@@ -497,7 +497,7 @@ describe("sudoku stats view", function()
     end)
 
     it("navigates between previous and next games without closing GameDetail", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local entry1 = record({ id = 1, seed = 111111, difficulty = "easy" })
         local entry2 = record({ id = 2, seed = 222222, difficulty = "medium" })
         local entry3 = record({ id = 3, seed = 333333, difficulty = "hard" })
@@ -566,7 +566,7 @@ describe("sudoku stats view", function()
     end)
 
     it("wraps long technique lists into multiple lines via TextBoxWidget", function()
-        local GameDetail = require("ui.gamedetail")
+        local GameDetail = require("sudokuplus.ui.gamedetail")
         local entry = record({
             seed = 999999,
             techniques = {

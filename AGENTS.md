@@ -20,12 +20,15 @@ every session and every agent working in this repository.
 
 ## Core library discipline
 
-- `sudokuplus.koplugin/core/` is pure Lua with **zero KOReader dependencies**
+- `sudokuplus.koplugin/sudokuplus/core/` is pure Lua with **zero KOReader dependencies**
   (no `ui/`, no `UIManager`, no `Device`). It must be fully unit-testable
   headless.
 - Keep it deterministic: inject randomness (PRNG) and time instead of using
   `os.time()` / `math.random` directly.
-- KOReader-dependent code lives outside `core/` (UI, storage, stats I/O).
+- KOReader-dependent code lives outside `sudokuplus/core/` (UI, storage, stats I/O).
+- All private Lua modules use the process-global-safe `sudokuplus.*` namespace.
+  Only KOReader's directly loaded `main.lua` and `_meta.lua` entrypoints remain
+  at the plugin root; never add compatibility aliases for generic module IDs.
 
 ## Headless CI vs. UI test discipline
 

@@ -1,11 +1,11 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local flags = require("core.techniques.flags")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local flags = require("sudokuplus.core.techniques.flags")
 
 -- HoDoKu hidden triple example: https://hodoku.sourceforge.net/en/show_example.php?file=h301&tech=Hidden+Triple
 local HODOKU = "200000400500000006001034080000500040000000000060790000090200600003009001000080037"

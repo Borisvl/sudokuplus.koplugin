@@ -1,14 +1,14 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local flags = require("core.techniques.flags")
-local masks = require("core.masks")
-local propagator = require("core.techniques.propagator")
-local naked_triples = require("core.techniques.naked_triples")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local flags = require("sudokuplus.core.techniques.flags")
+local masks = require("sudokuplus.core.masks")
+local propagator = require("sudokuplus.core.techniques.propagator")
+local naked_triples = require("sudokuplus.core.techniques.naked_triples")
 
 -- HoDoKu naked triple example: https://hodoku.sourceforge.net/en/show_example.php?file=l302&tech=Locked+Triple
 local HODOKU = "400500370320000004060000000800002030210840000000000090070090100040651000000070000"

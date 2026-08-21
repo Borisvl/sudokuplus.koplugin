@@ -1,14 +1,14 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local flags = require("core.techniques.flags")
-local masks = require("core.masks")
-local propagator = require("core.techniques.propagator")
-local naked_quads = require("core.techniques.naked_quads")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local flags = require("sudokuplus.core.techniques.flags")
+local masks = require("sudokuplus.core.masks")
+local propagator = require("sudokuplus.core.techniques.propagator")
+local naked_quads = require("sudokuplus.core.techniques.naked_quads")
 
 -- HoDoKu naked quad example: https://hodoku.sourceforge.net/en/show_example.php?file=n401&tech=Naked+Quad
 local HODOKU = "000000060000030047032500000600007005207010908081004000000002000000000001005870000"

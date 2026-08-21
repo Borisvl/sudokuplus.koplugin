@@ -127,13 +127,13 @@ describe("sudoku view", function()
         Blitbuffer = require("ffi/blitbuffer")
         DataStorage = require("datastorage")
         bit = require("bit")
-        board = require("core.board")
-        game = require("game")
-        layout = require("ui.layout")
-        stats = require("stats")
-        storage = require("storage")
-        SudokuView = require("ui.sudokuview")
-        theme = require("ui.theme")
+        board = require("sudokuplus.core.board")
+        game = require("sudokuplus.game")
+        layout = require("sudokuplus.ui.layout")
+        stats = require("sudokuplus.stats")
+        storage = require("sudokuplus.storage")
+        SudokuView = require("sudokuplus.ui.sudokuview")
+        theme = require("sudokuplus.ui.theme")
         save_path = DataStorage:getDataDir() .. "/sudoku_test_save"
         stats_path = DataStorage:getDataDir() .. "/sudoku_test_stats"
     end)
@@ -1105,8 +1105,8 @@ describe("sudoku view", function()
 
     it("applies all candidate eliminations of a multi-elimination hint on the third tap", function()
         local NAKED_PAIR_PUZZLE = "700009030000105006400260009002083951007000000005600000000000003100000060000004010"
-        local solver = require("core.solver")
-        local flags = require("core.techniques.flags")
+        local solver = require("sudokuplus.core.solver")
+        local flags = require("sudokuplus.core.techniques.flags")
         local b = board.from_string(NAKED_PAIR_PUZZLE)
         local s = solver.new(b)
         local sol = s:solve_any().board
@@ -1154,8 +1154,8 @@ describe("sudoku view", function()
 
     it("applies a multi-elimination hint cleanly when notes are off (Option 1 UX)", function()
         local NAKED_PAIR_PUZZLE = "700009030000105006400260009002083951007000000005600000000000003100000060000004010"
-        local solver = require("core.solver")
-        local flags = require("core.techniques.flags")
+        local solver = require("sudokuplus.core.solver")
+        local flags = require("sudokuplus.core.techniques.flags")
         local b = board.from_string(NAKED_PAIR_PUZZLE)
         local s = solver.new(b)
         local sol = s:solve_any().board

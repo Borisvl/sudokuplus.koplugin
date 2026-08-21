@@ -1,7 +1,7 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local masks = require("core.masks")
+local masks = require("sudokuplus.core.masks")
 
 local function bit_of(n)
     return bit.lshift(1, n - 1)

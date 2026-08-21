@@ -70,19 +70,18 @@ A full-featured, logical Sudoku puzzle game and interactive tutor crafted specif
 
 ```
 sudokuplus.koplugin/
-├── core/                # Pure Lua logical solver & generator (0 KOReader UI deps)
-│   ├── board.lua        # 81-cell grid bitmask engine
-│   ├── candidates.lua   # Candidate cache management
-│   ├── generator.lua    # Deterministic seeded puzzle generation & symmetry
-│   ├── hints.lua        # Progressive 3-stage hint derive engine
-│   ├── solver.lua       # MRV backtracking & technique classification
-│   └── techniques/      # 17 technique families exposed as 19 classified IDs
-├── ui/                  # KOReader widget UI, e-ink refresh engine & menus
-├── game.lua             # Pure game state machine (undo/redo, notes, timer)
-├── stats.lua            # Pure statistics & game history log engine
-├── storage.lua          # Storage serialization
+├── main.lua, _meta.lua  # KOReader loader entrypoints
+├── sudokuplus/          # Private Lua modules (`sudokuplus.*` namespace)
+│   ├── core/            # Pure solver/generator (0 KOReader UI dependencies)
+│   │   ├── board.lua    # 81-cell grid bitmask engine
+│   │   ├── generator.lua # Deterministic seeded puzzle generation & symmetry
+│   │   └── techniques/  # 17 technique families exposed as 19 classified IDs
+│   ├── ui/              # KOReader widgets, e-ink refresh engine, and menus
+│   ├── game.lua         # Pure game state machine (undo/redo, notes, timer)
+│   ├── stats.lua        # Pure statistics and game-history engine
+│   └── storage.lua      # Storage serialization
 └── l10n/                # Gettext translation catalogs (.pot, .po, .mo)
-tests/unit/              # Busted specs (47 suites: 39 pure-Lua headless + 8 KOReader UI)
+tests/unit/              # Busted specs (48 suites: 39 pure-Lua headless + 9 KOReader UI)
 tools/                   # Headless benchmarks and release packaging scripts
 dev.sh                   # Build, lint, test, format, and emulator launcher
 ```
@@ -93,7 +92,7 @@ dev.sh                   # Build, lint, test, format, and emulator launcher
 # Run the local KOReader emulator with live symlinked plugin
 ./dev.sh
 
-# Run all 47 plugin specs (39 core, then 8 isolated frontend)
+# Run all 48 plugin specs (39 core, then 9 isolated frontend)
 ./dev.sh test
 
 # Run one test category

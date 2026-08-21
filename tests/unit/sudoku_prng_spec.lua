@@ -1,6 +1,6 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local prng = require("core.prng")
+local prng = require("sudokuplus.core.prng")
 
 local function sequence(seed, n)
     local rng = prng.new(seed)

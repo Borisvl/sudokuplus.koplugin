@@ -1,13 +1,13 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local prng = require("core.prng")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local flags = require("core.techniques.flags")
-local propagator = require("core.techniques.propagator")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local prng = require("sudokuplus.core.prng")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local flags = require("sudokuplus.core.techniques.flags")
+local propagator = require("sudokuplus.core.techniques.propagator")
 
 -- HoDoKu naked single example (single empty cell at (8,8), only candidate 6).
 local NAKED_SINGLE_PUZZLE = "385421967194756328627983145571892634839645271246137589462579813918364752753218490"
@@ -243,7 +243,7 @@ describe("core.techniques.propagator", function()
         local function propagate()
             local s = solver.new(board.from_string(HIDDEN_SINGLE_PUZZLE), {
                 techniques = bit.bor(flags.NAKED_SINGLES, flags.HIDDEN_SINGLES),
-                rng = require("core.prng").new(42),
+                rng = require("sudokuplus.core.prng").new(42),
             })
             local path = solve_path.new()
             s:propagate(path)
@@ -361,7 +361,7 @@ describe("core.techniques.propagator", function()
         -- until it is empty, forcing a propagation dead-end on a board that is
         -- still solvable. The dead-end must not hide the real solution: the
         -- rolled-back state is handed to plain backtracking.
-        local naked_singles_mod = require("core.techniques.naked_singles")
+        local naked_singles_mod = require("sudokuplus.core.techniques.naked_singles")
         local original_apply = naked_singles_mod.apply
         naked_singles_mod.apply = function(prop, path)
             local mask = prop:cand(0, 2)
@@ -417,9 +417,9 @@ describe("core.techniques.propagator", function()
             puzzles[#puzzles + 1] = entry[2]
         end
         for _, puzzle in ipairs(puzzles) do
-            local plain = solver.new(board.from_string(puzzle), { rng = require("core.prng").new(7) })
+            local plain = solver.new(board.from_string(puzzle), { rng = require("sudokuplus.core.prng").new(7) })
             local tech = solver.new(board.from_string(puzzle), {
-                rng = require("core.prng").new(7),
+                rng = require("sudokuplus.core.prng").new(7),
                 techniques = all_implemented,
             })
             local a = plain:solve_all()

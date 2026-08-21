@@ -68,7 +68,7 @@ expect_failure "$TOOL" check "$TMP/valid.txt" "$TMP/unit"
 "$TOOL" check "$ROOT/tests/spec-manifest.txt" "$ROOT/tests/unit"
 [[ "$("$TOOL" list core "$ROOT/tests/spec-manifest.txt" | wc -l | tr -d ' ')" == "39" ]] \
     || fail "core manifest must contain 39 specs"
-[[ "$("$TOOL" list frontend "$ROOT/tests/spec-manifest.txt" | wc -l | tr -d ' ')" == "8" ]] \
-    || fail "frontend manifest must contain 8 specs"
+[[ "$("$TOOL" list frontend "$ROOT/tests/spec-manifest.txt" | wc -l | tr -d ' ')" == "9" ]] \
+    || fail "frontend manifest must contain 9 specs"
 
 printf 'spec_manifest_test: ok\n'

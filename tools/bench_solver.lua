@@ -7,9 +7,9 @@ local script_path = source:sub(1, 1) == "@" and source:sub(2) or source
 local project_root = script_path:match("^(.*)/tools/[^/]+$") or "."
 package.path = project_root .. "/sudokuplus.koplugin/?.lua;" .. package.path
 
-local board = require("core.board")
-local solver = require("core.solver")
-local prng = require("core.prng")
+local board = require("sudokuplus.core.board")
+local solver = require("sudokuplus.core.solver")
+local prng = require("sudokuplus.core.prng")
 
 local PUZZLES = {
     unique = "530070000600195000098000060800060003400803001700020006060000280000419005000080079",

@@ -1,9 +1,9 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local units = require("core.techniques.units")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local units = require("sudokuplus.core.techniques.units")
 
 describe("core.techniques.units", function()
     it("lists row cells in column order", function()

@@ -19,12 +19,12 @@ describe("sudoku localization", function()
         _ = require("gettext")
         N_ = _.ngettext
         T = require("ffi/util").template
-        hints = require("core.hints")
-        techniques = require("ui.techniques")
-        messages = require("ui.messages")
-        difficulties = require("ui.difficulties")
-        status = require("ui.status")
-        help = require("ui.help")
+        hints = require("sudokuplus.core.hints")
+        techniques = require("sudokuplus.ui.techniques")
+        messages = require("sudokuplus.ui.messages")
+        difficulties = require("sudokuplus.ui.difficulties")
+        status = require("sudokuplus.ui.status")
+        help = require("sudokuplus.ui.help")
         Sudoku = require("main")
     end)
 

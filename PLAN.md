@@ -76,36 +76,25 @@ A Sudoku puzzle game for e-ink readers (KOReader plugin, target: Kobo).
 ## Architecture
 
 ```
-sudoku.koplugin/
-├── _meta.lua, main.lua          # plugin entry + Tools menu (exists)
-├── core/                        # PURE Lua — zero KOReader deps, unit-testable headless
-│   ├── sudoku.lua               # public API facade
-│   ├── board.lua                # 81-cell grid, parse/serialize, validation
-│   ├── masks.lua                # row/col/box constraint bitmasks
-│   ├── candidates.lua           # per-cell candidate bitmasks
-│   ├── solver.lua               # MRV backtracking (solve_any / solve_until / solve_all)
-│   ├── solve_path.lua           # SolveStep/SolvePath w/ technique + PATTERN metadata
-│   ├── techniques/
-│   │   ├── flags.lua            # technique bitflags + difficulty tiers
-│   │   ├── units.lua            # row/col/box cell lists (+ variant units)
-│   │   ├── propagator.lua       # deterministic technique loop (mediator)
-│   │   └── <17 technique files> # naked/hidden singles/pairs/triples/quads,
-│   │                            # locked candidates, X-Wing, Swordfish, Jellyfish,
-│   │                            # Skyscraper, W-Wing, XY-Wing, XYZ-Wing, AIC
-│   ├── variants/                # variant constraint descriptors (pure, data+logic)
-│   │   ├── classic.lua          # no-op descriptor (the default)
-│   │   ├── diag.lua             # Sudoku X: the two diagonal units
-│   │   ├── killer.lua           # Killer: cage model, combo pruning
-│   │   └── killer_puzzles.lua   # M15 predefined puzzle set (6, one per tier)
-│   ├── variants.lua             # variant registry (get/list)
-│   ├── generator.lua            # unique-solution + symmetry + difficulty-targeted
-│   └── hints.lua                # progressive hint derivation + missed-strategy classification
-├── game.lua                     # game state machine: board, notes, undo/redo,
-│                                # timer, mistake/check layers, win detection (pure, time-injected)
-├── stats.lua                    # stat recording/aggregation (pure)
-├── json.lua                     # minimal strict JSON codec (pure)
-├── storage.lua                  # JSON file save/load/delete (injected paths)
-└── ui/                          # sudokuview.lua (grid render + input), numberbar.lua, statsview.lua
+sudokuplus.koplugin/
+├── _meta.lua, main.lua          # KOReader loader entrypoints
+└── sudokuplus/                  # private `sudokuplus.*` Lua namespace
+    ├── metadata.lua             # untranslated plugin identity/version
+    ├── core/                    # PURE Lua — zero KOReader deps, unit-testable headless
+    │   ├── sudoku.lua           # public API facade
+    │   ├── board.lua            # 81-cell grid, parse/serialize, validation
+    │   ├── masks.lua            # row/col/box constraint bitmasks
+    │   ├── candidates.lua       # per-cell candidate bitmasks
+    │   ├── solver.lua           # MRV backtracking and exact solution search
+    │   ├── solve_path.lua       # solve steps with technique/pattern metadata
+    │   ├── techniques/          # human solving-technique modules
+    │   ├── generator.lua        # unique-solution and difficulty-targeted generation
+    │   └── hints.lua            # progressive hints and missed-strategy classification
+    ├── game.lua                 # pure game state, notes, timer, undo/redo
+    ├── stats.lua                # stat recording/aggregation (pure)
+    ├── json.lua                 # minimal strict JSON codec (pure)
+    ├── storage.lua              # JSON file save/load/delete (injected paths)
+    └── ui/                      # sudokuview, numberbar, statistics, dialogs
 tests/unit/*_spec.lua            # busted specs (symlinked into koreader spec/unit)
 third_party/rustoku              # pinned rustoku clone (gitignored reference)
 ```
@@ -1704,3 +1693,45 @@ chosen; IDs remain unique across quit/continue/retry flows; all 39 core and 8
 frontend specs green; `./dev.sh fmt` and `./dev.sh lint` clean; emulator smoke
 covers Pause, Flush, Suspend/Resume, replacement failure, Retry, Discard, and
 statistics Reset. No commit is created without explicit user approval.
+
+### M22 — Runtime Module Namespace Isolation (v1.1.0)
+
+Prevent Sudoku+ private Lua modules from consuming or replacing KOReader and
+other plugin modules through the process-global `package.loaded` cache. This
+milestone addresses MOD-001 from `REVIEW.md`.
+
+Test-first task order:
+
+1. [x] Add frontend regressions for both JSON load orders and preloaded generic
+   `_meta`, `game`, `game_serialize`, `stats`, `storage`, `core.*`, and `ui.*`
+   sentinels.
+2. [x] Assert loading Sudoku+ neither consumes nor replaces unrelated generic
+   modules, and only creates private `package.loaded` entries below
+   `sudokuplus.*`.
+3. [x] Move every private module below the unique `sudokuplus.*` namespace and
+   update production, test, benchmark, and developer-tool imports.
+4. [x] Keep only KOReader's required `main.lua` and `_meta.lua` loader
+   entrypoints at the plugin root; remove every internal `require("_meta")`.
+5. [x] Introduce namespaced, untranslated metadata as the single source for the
+   internal plugin name/version while leaving translated KOReader metadata in
+   the root `_meta.lua` entrypoint.
+6. [x] Update architecture and test documentation for the namespaced layout.
+
+Resolved decisions (2026-08-21):
+
+1. Apply full namespacing rather than only renaming the private JSON codec;
+   partial aliases would leave the remaining confirmed collision paths open.
+2. Use `sudokuplus.*` for every private module ID, matching the plugin identity
+   and the review's recommended namespace.
+3. Do not retain compatibility aliases for the old generic module IDs. These
+   modules are private, and registering aliases would recreate MOD-001.
+4. Keep source organization parallel to module IDs under
+   `sudokuplus.koplugin/sudokuplus/`; KOReader continues loading root
+   `main.lua` and `_meta.lua` directly through PluginLoader.
+
+**Exit criteria**: both load-order collision regressions green; no Sudoku+
+private module is registered under a generic `package.loaded` key; all 39 core
+and 9 frontend specs green; `./dev.sh fmt`, `./dev.sh test`, and
+`./dev.sh lint` clean; package verification and emulator plugin-load smoke pass;
+PLAN, README, and architecture documentation describe the namespaced layout;
+one clear milestone commit.

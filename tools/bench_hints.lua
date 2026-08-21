@@ -9,10 +9,10 @@ local script_path = source:sub(1, 1) == "@" and source:sub(2) or source
 local project_root = script_path:match("^(.*)/tools/[^/]+$") or "."
 package.path = project_root .. "/sudokuplus.koplugin/?.lua;" .. package.path
 
-local generator = require("core.generator")
-local hints = require("core.hints")
-local masks = require("core.masks")
-local prng = require("core.prng")
+local generator = require("sudokuplus.core.generator")
+local hints = require("sudokuplus.core.hints")
+local masks = require("sudokuplus.core.masks")
+local prng = require("sudokuplus.core.prng")
 
 local DEFAULT_SEED = 20260809
 local DEFAULT_ITERATIONS = 10

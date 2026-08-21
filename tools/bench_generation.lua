@@ -7,10 +7,10 @@ local script_path = source:sub(1, 1) == "@" and source:sub(2) or source
 local project_root = script_path:match("^(.*)/tools/[^/]+$") or "."
 package.path = project_root .. "/sudokuplus.koplugin/?.lua;" .. package.path
 
-local board = require("core.board")
-local generator = require("core.generator")
-local prng = require("core.prng")
-local solver = require("core.solver")
+local board = require("sudokuplus.core.board")
+local generator = require("sudokuplus.core.generator")
+local prng = require("sudokuplus.core.prng")
+local solver = require("sudokuplus.core.solver")
 
 local DEFAULT_SEED = 20260807
 local DEFAULT_ITERATIONS = 3

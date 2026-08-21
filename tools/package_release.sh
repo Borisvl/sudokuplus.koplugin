@@ -19,7 +19,7 @@ done
 [[ -x "$MSGFMT" ]] || command -v "$MSGFMT" >/dev/null 2>&1 || die "required msgfmt command not found: $MSGFMT"
 
 if [[ -z "${EXPECTED_VERSION:-}" ]]; then
-    EXPECTED_VERSION="$(python3 - "$ROOT/sudokuplus.koplugin/_meta.lua" <<'PY'
+    EXPECTED_VERSION="$(python3 - "$ROOT/sudokuplus.koplugin/sudokuplus/metadata.lua" <<'PY'
 import re
 import sys
 

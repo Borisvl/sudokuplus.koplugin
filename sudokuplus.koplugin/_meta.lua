@@ -5,9 +5,11 @@ if not ok then
     end
 end
 
+local metadata = require("sudokuplus.metadata")
+
 return {
-    name = "sudokuplus",
+    name = metadata.name,
     fullname = _("Sudoku+"),
     description = _([[A logical Sudoku puzzle game and tutor for e-ink readers.]]),
-    version = "1.1.0",
+    version = metadata.version,
 }

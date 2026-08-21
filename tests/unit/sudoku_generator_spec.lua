@@ -1,13 +1,13 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local generator = require("core.generator")
-local prng = require("core.prng")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local sudoku = require("core.sudoku")
-local flags = require("core.techniques.flags")
+local board = require("sudokuplus.core.board")
+local generator = require("sudokuplus.core.generator")
+local prng = require("sudokuplus.core.prng")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local sudoku = require("sudokuplus.core.sudoku")
+local flags = require("sudokuplus.core.techniques.flags")
 
 local ALL_TECHNIQUES = flags.ALL
 

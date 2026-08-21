@@ -48,8 +48,8 @@ describe("sudoku plugin menu", function()
     setup(function()
         require("commonrequire")
         DataStorage = require("datastorage")
-        game = require("game")
-        storage = require("storage")
+        game = require("sudokuplus.game")
+        storage = require("sudokuplus.storage")
         Sudoku = require("main")
         menu_items = {}
         Sudoku:addToMainMenu(menu_items)
@@ -190,8 +190,8 @@ describe("sudoku plugin menu", function()
     end)
 
     it("starts a game of the chosen difficulty", function()
-        local board = require("core.board")
-        local generator = require("core.generator")
+        local board = require("sudokuplus.core.board")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function(opts)
             assert.are.equal("expert", opts.difficulty)
@@ -225,8 +225,8 @@ describe("sudoku plugin menu", function()
     end)
 
     it("uses injected session storage paths and clock", function()
-        local board = require("core.board")
-        local generator = require("core.generator")
+        local board = require("sudokuplus.core.board")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function(opts)
             return {
@@ -433,7 +433,7 @@ describe("sudoku plugin menu", function()
     end)
 
     it("continues the saved game from the menu item", function()
-        local board = require("core.board")
+        local board = require("sudokuplus.core.board")
         local clock = { t = 1000 }
         local g = assert(game.new {
             puzzle = board.from_string(
@@ -466,8 +466,8 @@ describe("sudoku plugin menu", function()
     end)
 
     it("reconciles and persists the id of an unlogged continued game", function()
-        local board = require("core.board")
-        local stats = require("stats")
+        local board = require("sudokuplus.core.board")
+        local stats = require("sudokuplus.stats")
         local g = assert(game.new {
             puzzle = board.from_string(
                 "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
@@ -574,7 +574,7 @@ describe("sudoku plugin menu", function()
     it("backs up timer-drifted save on continue and reports drift error", function()
         local valid_puzzle = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
         local valid_solution = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
-        local board = require("core.board")
+        local board = require("sudokuplus.core.board")
         local g = game.new({
             puzzle = board.from_string(valid_puzzle),
             solution = board.from_string(valid_solution),
@@ -659,8 +659,8 @@ describe("sudoku plugin menu", function()
     end)
 
     it("seeds the puzzle PRNG from the wall clock at millisecond resolution", function()
-        local board = require("core.board")
-        local generator = require("core.generator")
+        local board = require("sudokuplus.core.board")
+        local generator = require("sudokuplus.core.generator")
         local time = require("ui/time")
         local original_generate = generator.generate_game
         local original_realtime = time.realtime
@@ -695,7 +695,7 @@ describe("sudoku plugin menu", function()
     end)
 
     it("shows a generating notification before generating and closes it after", function()
-        local generator = require("core.generator")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function(opts)
             assert.are.equal("hard", opts.difficulty)
@@ -731,7 +731,7 @@ describe("sudoku plugin menu", function()
     end)
 
     it("keeps the saved game when generating a new one fails", function()
-        local generator = require("core.generator")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function()
             return nil, "forced generation failure"
@@ -751,8 +751,8 @@ describe("sudoku plugin menu", function()
     end)
 
     it("keeps the live view until replacement state is durable and retries failed writes", function()
-        local board = require("core.board")
-        local generator = require("core.generator")
+        local board = require("sudokuplus.core.board")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function(opts)
             return {
@@ -834,8 +834,8 @@ describe("sudoku plugin menu", function()
     end)
 
     it("checkpoints an unsaved live game before replacing it", function()
-        local board = require("core.board")
-        local generator = require("core.generator")
+        local board = require("sudokuplus.core.board")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function(opts)
             return {
@@ -885,8 +885,8 @@ describe("sudoku plugin menu", function()
     end)
 
     it("keeps the live view when the generated payload cannot construct a game", function()
-        local board = require("core.board")
-        local generator = require("core.generator")
+        local board = require("sudokuplus.core.board")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function(opts)
             return {
@@ -947,8 +947,8 @@ describe("sudoku plugin menu", function()
     end)
 
     it("restores the same live view after standard failure or cancelled custom retry", function()
-        local board = require("core.board")
-        local generator = require("core.generator")
+        local board = require("sudokuplus.core.board")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function(opts)
             if opts.difficulty ~= "easy" then
@@ -1095,7 +1095,7 @@ describe("sudoku plugin menu", function()
     end)
 
     it("offers to continue custom generation with +50% budget when generation fails", function()
-        local generator = require("core.generator")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         local generated_opts = {}
         generator.generate_game = function(opts)
@@ -1139,7 +1139,7 @@ describe("sudoku plugin menu", function()
     end)
 
     it("preserves exact reproduction seed when retrying custom replay", function()
-        local generator = require("core.generator")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         local replay_opts = {}
         generator.generate_game = function(opts)
@@ -1178,7 +1178,7 @@ describe("sudoku plugin menu", function()
     end)
 
     it("returns to the main menu when cancelling custom generation retry", function()
-        local generator = require("core.generator")
+        local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function()
             return nil, "forced failure"

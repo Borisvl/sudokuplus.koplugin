@@ -1,6 +1,6 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local storage = require("storage")
+local storage = require("sudokuplus.storage")
 local lfs = require("lfs")
 
 local counter = 0

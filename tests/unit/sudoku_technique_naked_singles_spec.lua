@@ -1,9 +1,9 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local board = require("core.board")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local flags = require("core.techniques.flags")
+local board = require("sudokuplus.core.board")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local flags = require("sudokuplus.core.techniques.flags")
 
 -- HoDoKu naked single example (single empty cell at (8,8), only candidate 6).
 local HODOKU = "385421967194756328627983145571892634839645271246137589462579813918364752753218490"

@@ -1,11 +1,11 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local propagator = require("core.techniques.propagator")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local flags = require("core.techniques.flags")
+local board = require("sudokuplus.core.board")
+local propagator = require("sudokuplus.core.techniques.propagator")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local flags = require("sudokuplus.core.techniques.flags")
 
 local FULL_MASK = 0x1FF
 
@@ -320,7 +320,7 @@ local function apply_first_pass(case)
 
     local prop = propagator.new(s.board, s.masks, s.candidates, 0)
     local path = solve_path.new()
-    local technique = require("core.techniques." .. case.module)
+    local technique = require("sudokuplus.core.techniques." .. case.module)
     assert.is_true(technique.apply(prop, path), case.name .. " should make a deduction")
     return path
 end

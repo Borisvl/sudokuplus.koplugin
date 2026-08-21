@@ -1,7 +1,7 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local flags = require("core.techniques.flags")
-local solve_path = require("core.solve_path")
+local flags = require("sudokuplus.core.techniques.flags")
+local solve_path = require("sudokuplus.core.solve_path")
 
 describe("core.solve_path", function()
     it("creates placement steps with defaults", function()

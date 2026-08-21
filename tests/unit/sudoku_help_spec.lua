@@ -8,7 +8,7 @@ describe("sudoku help module", function()
 
     setup(function()
         require("commonrequire")
-        help = require("ui.help")
+        help = require("sudokuplus.ui.help")
         UIManager = require("ui/uimanager")
     end)
 
@@ -51,7 +51,7 @@ describe("sudoku help module", function()
     end)
 
     it("returns formatted text for the about topic", function()
-        local meta = require("_meta")
+        local meta = require("sudokuplus.metadata")
         local text = help.get_text("about")
         assert.is_string(text)
         assert.is_true(#text > 50)

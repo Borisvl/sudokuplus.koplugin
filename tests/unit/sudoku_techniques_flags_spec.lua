@@ -1,7 +1,7 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local flags = require("core.techniques.flags")
+local flags = require("sudokuplus.core.techniques.flags")
 
 describe("core.techniques.flags", function()
     it("assigns bit positions per difficulty tier", function()

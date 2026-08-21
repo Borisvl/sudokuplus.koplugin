@@ -1,8 +1,8 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local board = require("core.board")
-local game = require("game")
-local stats = require("stats")
+local board = require("sudokuplus.core.board")
+local game = require("sudokuplus.game")
+local stats = require("sudokuplus.stats")
 
 local NAKED_SINGLE_PUZZLE = "385421967194756328627983145571892634839645271246137589462579813918364752753218490"
 local NAKED_SINGLE_SOLUTION = "385421967194756328627983145571892634839645271246137589462579813918364752753218496"

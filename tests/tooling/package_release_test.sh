@@ -20,7 +20,7 @@ expect_failure() {
 
 [[ -f "$VERIFIER" ]] || fail "missing $VERIFIER"
 
-VERSION="$(python3 - "$ROOT/sudokuplus.koplugin/_meta.lua" <<'PY'
+VERSION="$(python3 - "$ROOT/sudokuplus.koplugin/sudokuplus/metadata.lua" <<'PY'
 import re
 import sys
 
@@ -90,7 +90,7 @@ source, target = sys.argv[1:]
 with zipfile.ZipFile(source) as src, zipfile.ZipFile(target, "w") as dst:
     for info in src.infolist():
         data = src.read(info.filename)
-        if info.filename == "sudokuplus.koplugin/game.lua":
+        if info.filename == "sudokuplus.koplugin/sudokuplus/game.lua":
             data += b"\n-- altered after packaging\n"
         dst.writestr(info, data)
 PY

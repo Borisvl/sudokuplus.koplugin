@@ -35,7 +35,7 @@ jobs:
           ref_sha="$(git rev-parse "refs/tags/$tag")"
           git checkout --detach "$sha"
           ./tools/validate_release.sh git "$tag" "$sha" origin/main .
-          ./tools/validate_release.sh files "$tag" sudokuplus.koplugin/_meta.lua CHANGELOG.md release-notes.md
+          ./tools/validate_release.sh files "$tag" sudokuplus.koplugin/sudokuplus/metadata.lua CHANGELOG.md release-notes.md
           printf 'sha=%s\nref_sha=%s\ntag=%s\n' "$sha" "$ref_sha" "$tag" >> "$GITHUB_OUTPUT"
 
       - name: Upload validated release notes

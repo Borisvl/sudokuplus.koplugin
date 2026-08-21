@@ -1,14 +1,14 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local flags = require("core.techniques.flags")
-local masks = require("core.masks")
-local propagator = require("core.techniques.propagator")
-local hidden_pairs = require("core.techniques.hidden_pairs")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local flags = require("sudokuplus.core.techniques.flags")
+local masks = require("sudokuplus.core.masks")
+local propagator = require("sudokuplus.core.techniques.propagator")
+local hidden_pairs = require("sudokuplus.core.techniques.hidden_pairs")
 
 -- HoDoKu hidden pair example: https://hodoku.sourceforge.net/en/show_example.php?file=h201&tech=Hidden+Pair
 local HODOKU = "000032000000000000007600914096000800005008000030040005050200000700000560904010000"

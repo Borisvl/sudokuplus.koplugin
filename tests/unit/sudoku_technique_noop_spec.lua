@@ -1,17 +1,17 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local board = require("core.board")
-local candidates = require("core.candidates")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local propagator = require("core.techniques.propagator")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local propagator = require("sudokuplus.core.techniques.propagator")
 
 local SOLVED = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
 
 describe("every technique is a no-op on a solved board", function()
     for _, name in ipairs(propagator.technique_names()) do
         it(name .. " changes nothing on a solved board", function()
-            local mod = require("core.techniques." .. name)
+            local mod = require("sudokuplus.core.techniques." .. name)
             local s = solver.new(board.from_string(SOLVED))
             local p = propagator.new(s.board, s.masks, s.candidates, 0)
             local path = solve_path.new()

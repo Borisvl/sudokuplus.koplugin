@@ -6,7 +6,7 @@ describe("sudoku theme", function()
     setup(function()
         require("commonrequire")
         package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
-        theme = require("ui.theme")
+        theme = require("sudokuplus.ui.theme")
     end)
 
     it("defines all inks used by the view", function()

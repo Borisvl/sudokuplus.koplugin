@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserve Custom tier and technique metadata when replaying from in-game statistics; Cancel from main-menu generation remains on the menu.
   - Reconcile stale game IDs and make terminal statistics retries idempotent without accepting conflicting games or results.
   - Fail closed on statistics read errors and require Retry or an explicit destructive Reset.
+- **Runtime Module Isolation**:
+  - Load every private module through the unique `sudokuplus.*` namespace so Sudoku+ cannot consume or replace KOReader and other plugin modules in Lua's global module cache.
+  - Keep only KOReader's `main.lua` and `_meta.lua` loader entrypoints at the plugin root, with namespaced metadata as the internal name/version source.
 
 ## [1.0.0] - 2026-08-15
 

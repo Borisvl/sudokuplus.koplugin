@@ -1,6 +1,6 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local json = require("json")
+local json = require("sudokuplus.json")
 
 local function round_trip(value)
     local encoded, encode_err = json.encode(value)

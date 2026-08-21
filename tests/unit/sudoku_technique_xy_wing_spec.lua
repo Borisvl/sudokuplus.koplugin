@@ -1,12 +1,12 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local flags = require("core.techniques.flags")
-local units = require("core.techniques.units")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local flags = require("sudokuplus.core.techniques.flags")
+local units = require("sudokuplus.core.techniques.units")
 
 -- HoDoKu XY-Wing example: https://hodoku.sourceforge.net/en/show_example.php?file=y101&tech=XY-Wing
 local HODOKU = "000060000000010863003009000904000000300000704570820000000006580690007000000040030"

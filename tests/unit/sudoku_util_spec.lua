@@ -1,6 +1,6 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local util = require("core.util")
+local util = require("sudokuplus.core.util")
 
 describe("core.util", function()
     it("accepts the seven supported difficulties", function()

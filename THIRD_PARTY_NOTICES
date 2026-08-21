@@ -41,7 +41,7 @@ HoDoKu runtime data
 -------------------
 
 The technique workload scores in
-sudokuplus.koplugin/core/techniques/flags.lua are adapted and modified from
+sudokuplus.koplugin/sudokuplus/core/techniques/flags.lua are adapted and modified from
 HoDoKu 2.2.0 by Bernhard Hobiger. HoDoKu's program source is licensed under
 GNU GPL version 3 or, at your option, any later version. The adapted score data
 remains subject to GNU GPL version 3; the complete license is in

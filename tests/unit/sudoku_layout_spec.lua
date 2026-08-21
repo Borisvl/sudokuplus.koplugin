@@ -1,6 +1,6 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local layout = require("ui.layout")
+local layout = require("sudokuplus.ui.layout")
 
 -- Scale functions mimic Screen:scaleBySize for a given factor.
 local function scaler(factor)

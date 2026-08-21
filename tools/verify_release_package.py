@@ -113,7 +113,10 @@ def verify(args: argparse.Namespace) -> None:
             if archive.read(name) != source_path.read_bytes():
                 fail(f"packaged {name} differs from its repository source")
 
-        metadata = archive.read(f"{PLUGIN_ROOT}/_meta.lua").decode("utf-8")
+        entrypoint = archive.read(f"{PLUGIN_ROOT}/_meta.lua").decode("utf-8")
+        if 'require("sudokuplus.metadata")' not in entrypoint:
+            fail("root metadata entrypoint must use sudokuplus.metadata")
+        metadata = archive.read(f"{PLUGIN_ROOT}/sudokuplus/metadata.lua").decode("utf-8")
         name_matches = re.findall(r'\bname\s*=\s*"([^"]+)"', metadata)
         version_matches = re.findall(r'\bversion\s*=\s*"([^"]+)"', metadata)
         if name_matches != ["sudokuplus"]:

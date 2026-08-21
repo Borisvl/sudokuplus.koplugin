@@ -1,12 +1,12 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
-local board = require("core.board")
-local generator = require("core.generator")
-local prng = require("core.prng")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local sudoku = require("core.sudoku")
-local flags = require("core.techniques.flags")
+local board = require("sudokuplus.core.board")
+local generator = require("sudokuplus.core.generator")
+local prng = require("sudokuplus.core.prng")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local sudoku = require("sudokuplus.core.sudoku")
+local flags = require("sudokuplus.core.techniques.flags")
 
 local ALL_TECHNIQUES = flags.ALL
 
@@ -196,7 +196,7 @@ describe("core.generator game payload", function()
         -- Force every attempt to classify as "hard" so "medium" can never
         -- match exactly; the generator must fall back to the closest usable
         -- puzzle (labeled with its actual difficulty) instead of failing.
-        local solve_path_mod = require("core.solve_path")
+        local solve_path_mod = require("sudokuplus.core.solve_path")
         local original_classify = solve_path_mod.classify
         solve_path_mod.classify = function()
             return {
@@ -225,7 +225,7 @@ describe("core.generator game payload", function()
     end)
 
     it("fallback prefers density-passing adjacent tier over non-dense exact match", function()
-        local solve_path_mod = require("core.solve_path")
+        local solve_path_mod = require("sudokuplus.core.solve_path")
         local original_classify = solve_path_mod.classify
         local attempt = 0
         solve_path_mod.classify = function()
@@ -320,8 +320,8 @@ describe("core.generator game payload", function()
         -- to a tiny node budget so most checks cap. Capped removals must be
         -- restored, the final confirmation must accept (the dig invariant
         -- guarantees uniqueness), and generation must not hard-fail.
-        local board_mod = require("core.board")
-        local solver_mod = require("core.solver")
+        local board_mod = require("sudokuplus.core.board")
+        local solver_mod = require("sudokuplus.core.solver")
         local original_new = solver_mod.new
         solver_mod.new = function(b, opts)
             opts = opts or {}

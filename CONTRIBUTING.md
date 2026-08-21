@@ -45,7 +45,9 @@ Sudoku+ is developed against the [KOReader](https://github.com/koreader/koreader
 
 ### Test-First Policy
 We follow a strict **test-first discipline**:
-- `sudokuplus.koplugin/core/` is **pure Lua** with **zero KOReader UI dependencies**. It must be fully unit-testable headless.
+- `sudokuplus.koplugin/sudokuplus/core/` is **pure Lua** with **zero KOReader UI dependencies**. It must be fully unit-testable headless.
+- Private modules must stay under the `sudokuplus.*` Lua namespace; generic
+  module IDs can collide with KOReader or other plugins through `package.loaded`.
 - Always write tests before implementing new features or fixing bugs.
 - PRs without tests for new logic will not be merged.
 

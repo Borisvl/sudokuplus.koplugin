@@ -1,8 +1,8 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local game = require("game")
+local board = require("sudokuplus.core.board")
+local game = require("sudokuplus.game")
 
 local PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
 local SOLUTION = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
@@ -975,8 +975,8 @@ describe("game", function()
 
     it("allows consecutive hints to advance seamlessly when notes are off", function()
         local NAKED_PAIR_PUZZLE = "700009030000105006400260009002083951007000000005600000000000003100000060000004010"
-        local solver = require("core.solver")
-        local flags = require("core.techniques.flags")
+        local solver = require("sudokuplus.core.solver")
+        local flags = require("sudokuplus.core.techniques.flags")
         local instance = assert(game.new({
             puzzle = board.from_string(NAKED_PAIR_PUZZLE),
             solution = assert(solver.new(board.from_string(NAKED_PAIR_PUZZLE)):solve_any().board),

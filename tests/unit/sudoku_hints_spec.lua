@@ -1,13 +1,13 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local bit = require("bit")
-local board = require("core.board")
-local candidates = require("core.candidates")
-local flags = require("core.techniques.flags")
-local hints = require("core.hints")
-local solve_path = require("core.solve_path")
-local solver = require("core.solver")
-local sudoku = require("core.sudoku")
+local board = require("sudokuplus.core.board")
+local candidates = require("sudokuplus.core.candidates")
+local flags = require("sudokuplus.core.techniques.flags")
+local hints = require("sudokuplus.core.hints")
+local solve_path = require("sudokuplus.core.solve_path")
+local solver = require("sudokuplus.core.solver")
+local sudoku = require("sudokuplus.core.sudoku")
 
 local NAKED_SINGLE_PUZZLE = "385421967194756328627983145571892634839645271246137589462579813918364752753218490"
 local HIDDEN_SINGLE_PUZZLE = "008007000016083000000000051107290000000000000000046307290000000000860140000300700"

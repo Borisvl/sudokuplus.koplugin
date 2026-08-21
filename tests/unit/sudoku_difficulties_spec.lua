@@ -6,7 +6,7 @@ describe("sudoku difficulties", function()
     local difficulties
     setup(function()
         require("commonrequire")
-        difficulties = require("ui.difficulties")
+        difficulties = require("sudokuplus.ui.difficulties")
     end)
 
     it("lists all six difficulties in order", function()
