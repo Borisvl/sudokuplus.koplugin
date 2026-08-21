@@ -549,6 +549,113 @@ describe("sudoku view", function()
         assert.is_nil(io.open(save_path, "rb"))
     end)
 
+    it("keeps the active save until finished statistics can be retried", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local s = stats.new()
+        local g = new_game(puzzle, SOLUTION)
+        g.id = assert(stats.reserve_id(s))
+        assert.is_true(storage.save(save_path, g:serialize()))
+        local stats_save_fails = true
+        local fake_storage = {
+            save = function(path, data)
+                if path == stats_path and stats_save_fails then
+                    return nil, "stats disk full"
+                end
+                return storage.save(path, data)
+            end,
+            delete = storage.delete,
+            exists = storage.exists,
+        }
+        local view = new_view(g, {
+            stats = s,
+            save_path = save_path,
+            stats_path = stats_path,
+            storage_adapter = fake_storage,
+        })
+        local retry_dialog, win_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Retry" then
+                retry_dialog = widget
+            elseif widget and widget.title and widget.title:find("Puzzle solved", 1, true) then
+                win_dialog = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
+
+        assert.is_not_nil(retry_dialog)
+        assert.is_nil(win_dialog, "the win transition waits for required persistence")
+        assert.is_true(storage.exists(save_path), "the active save remains recoverable")
+        assert.are.equal(1, s.streak)
+
+        stats_save_fails = false
+        retry_dialog.ok_callback()
+        assert.is_not_nil(win_dialog)
+        assert.is_false(storage.exists(save_path))
+        assert.are.equal(1, #s.games)
+        assert.are.equal(1, s.streak, "retry must not apply terminal statistics twice")
+    end)
+
+    it("retries save deletion before exposing the completed transition", function()
+        local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
+        local s = stats.new()
+        local g = new_game(puzzle, SOLUTION)
+        g.id = assert(stats.reserve_id(s))
+        assert.is_true(storage.save(save_path, g:serialize()))
+        local delete_fails = true
+        local fake_storage = {
+            save = storage.save,
+            delete = function(path)
+                if delete_fails then
+                    return nil, "delete denied"
+                end
+                return storage.delete(path)
+            end,
+            exists = storage.exists,
+        }
+        local view = new_view(g, {
+            stats = s,
+            save_path = save_path,
+            stats_path = stats_path,
+            storage_adapter = fake_storage,
+        })
+        local retry_dialog, win_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Retry" then
+                retry_dialog = widget
+            elseif widget and widget.title and widget.title:find("Puzzle solved", 1, true) then
+                win_dialog = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        tap_button(view, "number_row", solution_cell(0, 3))
+        tap_cell(view, 0, 3)
+        tap_button(view, "number_row", solution_cell(8, 0))
+        tap_cell(view, 8, 0)
+        assert.is_not_nil(retry_dialog)
+        assert.is_truthy(retry_dialog.text:find("remove the active game save", 1, true))
+        assert.is_nil(win_dialog)
+        assert.is_true(storage.exists(save_path))
+
+        delete_fails = false
+        retry_dialog.ok_callback()
+        assert.is_not_nil(win_dialog)
+        assert.is_false(storage.exists(save_path))
+    end)
+
     it("offers a new game, statistics, and close on win", function()
         local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
         local g = new_game(puzzle, SOLUTION)
@@ -735,15 +842,17 @@ describe("sudoku view", function()
         end
     end)
 
-    it("replays game from win-dialog statistics screen and cleans up parent view and dialog", function()
+    it("forwards Custom replay metadata from win statistics without closing the source view", function()
         local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
-        local replayed_seed, replayed_difficulty
+        local replayed_seed, replayed_difficulty, replayed_tier, replayed_techniques
         local s = stats.new()
         local view = new_view(new_game(puzzle, SOLUTION), {
             stats = s,
-            replay_cb = function(seed, difficulty)
+            replay_cb = function(seed, difficulty, custom_tier, custom_techniques)
                 replayed_seed = seed
                 replayed_difficulty = difficulty
+                replayed_tier = custom_tier
+                replayed_techniques = custom_techniques
             end,
         })
         local shown_widgets = {}
@@ -794,14 +903,16 @@ describe("sudoku view", function()
 
         -- Trigger "Play again"
         assert.is_not_nil(detail_view.replay_cb)
-        detail_view.replay_cb(12345, "easy")
+        detail_view.replay_cb(12345, "custom", "master", { "swordfish", "x_wing" })
         assert.are.equal(12345, replayed_seed)
-        assert.are.equal("easy", replayed_difficulty)
-        assert.are.equal(1, count_closed(closed, view), "replaying from stats must close old SudokuView")
+        assert.are.equal("custom", replayed_difficulty)
+        assert.are.equal("master", replayed_tier)
+        assert.are.same({ "swordfish", "x_wing" }, replayed_techniques)
+        assert.are.equal(0, count_closed(closed, view), "the replacement coordinator owns the source view")
         assert.are.equal(1, count_closed(closed, win_dialog), "replaying from stats must close parent win dialog")
     end)
 
-    it("replays game from pause-menu statistics screen and cleans up parent view and dialog", function()
+    it("replays from pause statistics without closing the source view", function()
         local s = stats.new()
         local id = assert(stats.reserve_id(s))
         local replayed_seed, replayed_difficulty
@@ -865,7 +976,7 @@ describe("sudoku view", function()
         detail_view.replay_cb(54321, "hard")
         assert.are.equal(54321, replayed_seed)
         assert.are.equal("hard", replayed_difficulty)
-        assert.are.equal(1, count_closed(closed, view), "replaying from stats must close old SudokuView")
+        assert.are.equal(0, count_closed(closed, view), "the replacement coordinator owns the source view")
         assert.are.equal(1, count_closed(closed, pause_dialog), "replaying from stats must close parent pause dialog")
     end)
 
@@ -1393,6 +1504,59 @@ describe("sudoku view", function()
         assert.is_nil(io.open(save_path, "rb"))
     end)
 
+    it("keeps the game open when give-up statistics fail and retries", function()
+        local s = stats.new()
+        local g = new_game(PUZZLE, SOLUTION)
+        g.id = assert(stats.reserve_id(s))
+        assert.is_true(g:place(0, 2, 4))
+        assert.is_true(storage.save(save_path, g:serialize()))
+        local stats_save_fails = true
+        local fake_storage = {
+            save = function(path, data)
+                if path == stats_path and stats_save_fails then
+                    return nil, "stats unavailable"
+                end
+                return storage.save(path, data)
+            end,
+            delete = storage.delete,
+            exists = storage.exists,
+        }
+        local view = new_view(g, {
+            stats = s,
+            save_path = save_path,
+            stats_path = stats_path,
+            storage_adapter = fake_storage,
+        })
+        local retry_dialog
+        local closed = {}
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Retry" then
+                retry_dialog = widget
+            end
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        view:onGiveUp()
+        assert.is_not_nil(retry_dialog)
+        assert.are.equal(0, count_closed(closed, view))
+        assert.is_true(storage.exists(save_path))
+
+        stats_save_fails = false
+        retry_dialog.ok_callback()
+        assert.are.equal(1, count_closed(closed, view))
+        assert.is_false(storage.exists(save_path))
+        assert.are.equal("give_up", s.games[1].status)
+    end)
+
     it("quits: pauses the timer and saves the game for later", function()
         local g = new_game(PUZZLE, SOLUTION)
         local view = new_view(g, { save_path = save_path })
@@ -1405,6 +1569,224 @@ describe("sudoku view", function()
         assert.is_not_nil(restored, err)
         assert.are.equal(2, restored:get(0, 3))
         assert.is_false(restored.timer.running)
+    end)
+
+    it("waits for Retry or Discard when the pause checkpoint fails", function()
+        local save_fails = true
+        local fake_storage = {
+            save = function(path, data)
+                if save_fails then
+                    return nil, "pause write failed"
+                end
+                return storage.save(path, data)
+            end,
+            delete = storage.delete,
+            exists = storage.exists,
+        }
+        local view = new_view(new_game(PUZZLE, SOLUTION), {
+            save_path = save_path,
+            storage_adapter = fake_storage,
+        })
+        local retry_dialog, menu_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Retry" then
+                retry_dialog = widget
+            elseif widget and widget.buttons then
+                menu_dialog = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        view:openMenu()
+        assert.is_not_nil(retry_dialog)
+        assert.is_nil(menu_dialog, "the pause menu waits for the checkpoint decision")
+        assert.is_false(view.game.timer.running)
+
+        save_fails = false
+        retry_dialog.ok_callback()
+        assert.is_not_nil(menu_dialog)
+        assert.is_not_nil(storage.load(save_path))
+
+        retry_dialog = nil
+        menu_dialog = nil
+        save_fails = true
+        view:openMenu()
+        assert.is_not_nil(retry_dialog)
+        retry_dialog.cancel_callback()
+        assert.is_not_nil(menu_dialog, "Discard explicitly continues to the pause menu")
+    end)
+
+    it("checkpoints game and stats idempotently on FlushSettings", function()
+        local Event = require("ui/event")
+        local s = stats.new()
+        local g = new_game(PUZZLE, SOLUTION)
+        g.id = assert(stats.reserve_id(s))
+        local view = new_view(g, {
+            stats = s,
+            save_path = save_path,
+            stats_path = stats_path,
+        })
+        tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 3)
+
+        view:handleEvent(Event:new("FlushSettings"))
+        view:handleEvent(Event:new("FlushSettings"))
+
+        local saved_game = assert(storage.load(save_path))
+        local saved_stats = assert(storage.load(stats_path))
+        assert.is_true(view.game.timer.running, "a standalone flush resumes the active view after checkpointing")
+        assert.is_false(saved_game.timer.running, "the durable timer snapshot remains paused")
+        assert.are.equal("2", saved_game.board:sub(4, 4))
+        assert.are.equal(1, #saved_stats.games)
+        assert.are.equal("in_progress", saved_stats.games[1].status)
+        assert.are.equal(2, saved_stats.next_id)
+    end)
+
+    it("keeps a failed FlushSettings checkpoint pending until Retry or Discard", function()
+        local Event = require("ui/event")
+        local save_fails = true
+        local fake_storage = {
+            save = function(path, data)
+                if save_fails then
+                    return nil, "flush write failed"
+                end
+                return storage.save(path, data)
+            end,
+            delete = storage.delete,
+            exists = storage.exists,
+        }
+        local view = new_view(new_game(PUZZLE, SOLUTION), {
+            save_path = save_path,
+            storage_adapter = fake_storage,
+        })
+        local retry_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Retry" then
+                retry_dialog = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        view:handleEvent(Event:new("FlushSettings"))
+        assert.is_not_nil(retry_dialog)
+        assert.is_false(view.game.timer.running)
+        assert.is_not_nil(view._pending_persistence)
+
+        retry_dialog.cancel_callback()
+        assert.is_nil(view._pending_persistence)
+        assert.is_true(view.game.timer.running, "Discard resumes the still-active game")
+    end)
+
+    it("does not add an unstarted game to the log when checkpointing", function()
+        local s = stats.new()
+        local g = new_game(PUZZLE, SOLUTION)
+        g.id = assert(stats.reserve_id(s))
+        local view = new_view(g, {
+            stats = s,
+            save_path = save_path,
+            stats_path = stats_path,
+        })
+
+        assert.is_true(view:checkpoint("test"))
+        local saved_stats = assert(storage.load(stats_path))
+        assert.are.equal(0, #saved_stats.games)
+        assert.are.equal(2, saved_stats.next_id, "the unstarted game's id reservation is durable")
+    end)
+
+    it("keeps the view open after a quit save failure and retries explicitly", function()
+        local save_fails = true
+        local fake_storage = {
+            save = function(path, data)
+                if path == save_path and save_fails then
+                    return nil, "disk full"
+                end
+                return storage.save(path, data)
+            end,
+            delete = storage.delete,
+            exists = storage.exists,
+        }
+        local view = new_view(new_game(PUZZLE, SOLUTION), {
+            save_path = save_path,
+            storage_adapter = fake_storage,
+        })
+        tap_button(view, "number_row", 2)
+        tap_cell(view, 0, 3)
+
+        local retry_dialog
+        local closed = {}
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Retry" then
+                retry_dialog = widget
+            end
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        view:onQuit()
+        assert.is_not_nil(retry_dialog)
+        assert.are.equal(0, count_closed(closed, view), "failed persistence must keep the game view open")
+        assert.is_nil(storage.load(save_path))
+
+        save_fails = false
+        retry_dialog.ok_callback()
+        assert.are.equal(1, count_closed(closed, view))
+        assert.is_not_nil(storage.load(save_path))
+    end)
+
+    it("defers a suspend save failure and surfaces it on resume", function()
+        local save_fails = true
+        local fake_storage = {
+            save = function(path, data)
+                if save_fails then
+                    return nil, "read-only filesystem"
+                end
+                return storage.save(path, data)
+            end,
+            delete = storage.delete,
+            exists = storage.exists,
+        }
+        local view = new_view(new_game(PUZZLE, SOLUTION), {
+            save_path = save_path,
+            storage_adapter = fake_storage,
+        })
+        local retry_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Retry" then
+                retry_dialog = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        view:onSuspend()
+        assert.is_nil(retry_dialog, "suspend must not block on a modal dialog")
+        view:onResume()
+        assert.is_not_nil(retry_dialog, "resume surfaces the pending persistence failure")
+        assert.is_false(view.game.timer.running)
+
+        save_fails = false
+        retry_dialog.ok_callback()
+        assert.is_true(view.game.timer.running)
+        assert.is_not_nil(storage.load(save_path))
     end)
 
     it("pauses the timer on suspend and resumes on wake", function()
@@ -1600,6 +1982,7 @@ describe("sudoku view", function()
         hard_button.callback()
 
         assert.are.equal("hard", started, "new game starts at chosen difficulty")
+        assert.are.equal(0, count_closed(closed, view), "the old view remains until replacement succeeds")
     end)
 
     it("opens a custom difficulty picker from New game and starts a custom game", function()
@@ -1706,23 +2089,16 @@ describe("sudoku view", function()
         assert.is_true(dialog.title:find("Custom (Master)", 1, true) ~= nil, "pause title includes custom tier")
     end)
 
-    it("resets puzzle after confirmation, clears in-progress stats, and deletes save", function()
+    it("resets puzzle after confirmation and assigns a fresh game id", function()
         local s = stats.new()
         local id = assert(stats.reserve_id(s))
-        local deleted_save = false
         local g = new_game(PUZZLE, SOLUTION, function()
             return 1000
         end)
         g.id = id
         local view = new_view(g, {
             stats = s,
-            delete_save_fn = function()
-                deleted_save = true
-            end,
         })
-        view.deleteSave = function(self)
-            deleted_save = true
-        end
 
         assert.is_true(g:place(0, 2, 4))
         assert.is_true(g:toggle_note(0, 3, 2))
@@ -1769,7 +2145,6 @@ describe("sudoku view", function()
         assert.are.equal(0, g:elapsed(), "timer is reset")
         assert.is_false(view.menu_open, "menu is closed")
         assert.is_true(g.timer.running, "timer resumes after reset")
-        assert.is_true(deleted_save, "save file deleted on reset")
         assert.are.equal(0, #s.games, "in-progress stats record was dropped")
 
         -- Subsequent move creates a fresh in-progress entry with new id and started_at
@@ -1778,6 +2153,81 @@ describe("sudoku view", function()
         assert.are.equal(1, #s.games)
         assert.are.equal(g.id, s.games[1].id)
         assert.are.equal(clock.value, s.games[1].started_at)
+    end)
+
+    it("keeps the original game intact when reset persistence fails and retries", function()
+        local s = stats.new()
+        local old_id = assert(stats.reserve_id(s))
+        local g = new_game(PUZZLE, SOLUTION)
+        g.id = old_id
+        assert.is_true(g:place(0, 2, 4))
+        local failed_path
+        local fake_storage = {
+            save = function(path, data)
+                if path == failed_path then
+                    return nil, "reset write failed"
+                end
+                return storage.save(path, data)
+            end,
+            delete = storage.delete,
+            exists = storage.exists,
+        }
+        local view = new_view(g, {
+            stats = s,
+            save_path = save_path,
+            stats_path = stats_path,
+            storage_adapter = fake_storage,
+        })
+        view:afterMove()
+        assert.is_true(storage.save(save_path, g:serialize()))
+
+        local menu_dialog, reset_dialog, retry_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Reset" then
+                reset_dialog = widget
+            elseif widget and widget.ok_text == "Retry" then
+                retry_dialog = widget
+            elseif widget and widget.buttons then
+                menu_dialog = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        view:openMenu()
+        local reset_button
+        for _, row in ipairs(menu_dialog.buttons) do
+            for _, button in ipairs(row) do
+                if button.text == "Reset puzzle" then
+                    reset_button = button
+                end
+            end
+        end
+        reset_button.callback()
+        failed_path = stats_path
+        reset_dialog.ok_callback()
+
+        assert.is_not_nil(retry_dialog)
+        assert.are.equal(4, g:get(0, 2), "failed reset leaves the live board unchanged")
+        assert.are.equal(old_id, g.id)
+        assert.are.equal("4", assert(storage.load(save_path)).board:sub(3, 3))
+
+        local stats_retry_dialog = retry_dialog
+        failed_path = save_path
+        stats_retry_dialog.ok_callback()
+        assert.are_not.equal(stats_retry_dialog, retry_dialog)
+        assert.are.equal(4, g:get(0, 2), "a failed reset-game write also leaves the board unchanged")
+        assert.are.equal(old_id, g.id)
+
+        failed_path = nil
+        retry_dialog.ok_callback()
+        assert.are.equal(0, g:get(0, 2))
+        assert.is_true(g.id > old_id)
+        assert.are.equal("0", assert(storage.load(save_path)).board:sub(3, 3))
+        assert.are.equal(0, #s.games)
     end)
 
     it("fills all notes from the pause menu and handles errors", function()

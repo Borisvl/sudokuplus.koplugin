@@ -9,6 +9,7 @@ describe("sudoku plugin menu", function()
     local menu_items
     local storage
     local save_path
+    local stats_path
 
     local function item_with(text)
         for _, item in ipairs(menu_items.sudokuplus.sub_item_table) do
@@ -22,6 +23,16 @@ describe("sudoku plugin menu", function()
             end
         end
         error("no menu item " .. text)
+    end
+
+    local function count_closed(list, widget)
+        local count = 0
+        for _, closed in ipairs(list) do
+            if closed == widget then
+                count = count + 1
+            end
+        end
+        return count
     end
 
     local created_baks = {}
@@ -43,11 +54,14 @@ describe("sudoku plugin menu", function()
         menu_items = {}
         Sudoku:addToMainMenu(menu_items)
         save_path = DataStorage:getDataDir() .. "/sudokuplus_save"
+        stats_path = DataStorage:getDataDir() .. "/sudokuplus_stats"
         os.remove(save_path)
+        os.remove(stats_path)
     end)
 
     after_each(function()
         os.remove(save_path)
+        os.remove(stats_path)
         for _, p in ipairs(created_baks) do
             os.remove(p)
         end
@@ -203,6 +217,95 @@ describe("sudoku plugin menu", function()
         generator.generate_game = original_generate
         assert.is_not_nil(shown, "New game must show the game view")
         assert.are.equal("expert", shown.game:difficulty())
+        local saved_game = assert(storage.load(save_path))
+        local saved_stats = assert(storage.load(stats_path))
+        assert.are.equal(shown.game.id, saved_game.id, "the initial game is durable before it is shown")
+        assert.are.equal(shown.game.id + 1, saved_stats.next_id, "the game id reservation is durable")
+        assert.are.equal(0, #saved_stats.games, "an unstarted game is not logged")
+    end)
+
+    it("uses injected session storage paths and clock", function()
+        local board = require("core.board")
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function(opts)
+            return {
+                board = board.from_string(
+                    "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+                ),
+                solution = board.from_string(
+                    "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+                ),
+                difficulty = opts.difficulty,
+                seed = opts.seed,
+                clues = 30,
+            }
+        end
+        local injected_save = DataStorage:getDataDir() .. "/injected_sudoku_save"
+        local injected_stats = DataStorage:getDataDir() .. "/injected_sudoku_stats"
+        local original_save_path = Sudoku.save_path
+        local original_stats_path = Sudoku.stats_path
+        local original_storage_adapter = Sudoku.storage_adapter
+        local original_now = Sudoku.now
+        local original_seed_source = Sudoku.seed_source
+        local injected_writes = 0
+        Sudoku.storage_adapter = {
+            save = function(path, data)
+                injected_writes = injected_writes + 1
+                return storage.save(path, data)
+            end,
+            load = storage.load,
+            load_or_backup = storage.load_or_backup,
+            exists = storage.exists,
+            delete = storage.delete,
+        }
+        Sudoku.save_path = injected_save
+        Sudoku.stats_path = injected_stats
+        Sudoku.now = function()
+            return 1234
+        end
+        Sudoku.seed_source = function()
+            return 5678
+        end
+        finally(function()
+            generator.generate_game = original_generate
+            Sudoku.save_path = original_save_path
+            Sudoku.stats_path = original_stats_path
+            Sudoku.storage_adapter = original_storage_adapter
+            Sudoku.now = original_now
+            Sudoku.seed_source = original_seed_source
+            os.remove(injected_save)
+            os.remove(injected_stats)
+        end)
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.game then
+                shown = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        Sudoku:startGame("easy")
+        generator.generate_game = original_generate
+        Sudoku.save_path = original_save_path
+        Sudoku.stats_path = original_stats_path
+        Sudoku.storage_adapter = original_storage_adapter
+        Sudoku.now = original_now
+        Sudoku.seed_source = original_seed_source
+        UIManager.show = original_show
+        assert.is_not_nil(shown)
+        assert.are.equal(1234, shown.game.timer.started)
+        assert.are.equal(5678, shown.game.seed)
+        assert.are.equal(2, injected_writes)
+        assert.are.equal(shown.game.id, assert(storage.load(injected_save)).id)
+        assert.are.equal(shown.game.id + 1, assert(storage.load(injected_stats)).next_id)
+        assert.is_false(storage.exists(save_path), "the default game path remains untouched")
+        assert.is_false(storage.exists(stats_path), "the default statistics path remains untouched")
     end)
 
     it("shows the statistics view from the menu", function()
@@ -220,6 +323,98 @@ describe("sudoku plugin menu", function()
         assert.is_not_nil(shown.item_table, "the stats dashboard is a menu")
         assert.are.equal("Sudoku statistics", shown.title)
         assert.are.equal("full", refreshtype, "the stats page must refresh the whole screen")
+    end)
+
+    it("rejects a missing callback before statistics recovery UI can open", function()
+        local shown = false
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function()
+            shown = true
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        local result, err
+        assert.has_no.errors(function()
+            result, err = Sudoku:_withStats()
+        end)
+        assert.is_nil(result)
+        assert.are.equal("on_loaded must be a function", err)
+        assert.is_false(shown)
+    end)
+
+    it("fails closed on statistics read errors and retries without showing an empty dashboard", function()
+        local load_error = "Permission denied"
+        local original_load = storage.load_or_backup
+        storage.load_or_backup = function(path, deserialize)
+            if path == stats_path and load_error then
+                return nil, load_error, false, nil, false
+            end
+            return original_load(path, deserialize)
+        end
+        local recovery_dialog, dashboard
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Retry" and widget.cancel_text == "Reset" then
+                recovery_dialog = widget
+            elseif widget and widget.title == "Sudoku statistics" then
+                dashboard = widget
+            end
+        end
+        finally(function()
+            storage.load_or_backup = original_load
+            UIManager.show = original_show
+        end)
+
+        Sudoku:showStatistics()
+        assert.is_not_nil(recovery_dialog)
+        assert.is_nil(dashboard, "a failed read must not be replaced with an empty log")
+
+        local read_error_dialog = recovery_dialog
+        load_error = "corrupt file backup failed (Permission denied): malformed JSON"
+        read_error_dialog.ok_callback()
+        assert.are_not.equal(read_error_dialog, recovery_dialog, "backup failures remain fail-closed and retryable")
+        assert.is_nil(dashboard)
+
+        load_error = nil
+        recovery_dialog.ok_callback()
+        assert.is_not_nil(dashboard)
+    end)
+
+    it("allows an explicit destructive statistics reset after a load failure", function()
+        local original_load = storage.load_or_backup
+        storage.load_or_backup = function(path, deserialize)
+            if path == stats_path then
+                return nil, "unsupported stats version: 99", true, stats_path .. ".backup.bak", false
+            end
+            return original_load(path, deserialize)
+        end
+        local recovery_dialog, dashboard
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.ok_text == "Retry" and widget.cancel_text == "Reset" then
+                recovery_dialog = widget
+            elseif widget and widget.title == "Sudoku statistics" then
+                dashboard = widget
+            end
+        end
+        finally(function()
+            storage.load_or_backup = original_load
+            UIManager.show = original_show
+        end)
+
+        Sudoku:showStatistics()
+        assert.is_not_nil(recovery_dialog)
+        recovery_dialog.cancel_callback()
+
+        local reset_stats = assert(storage.load(stats_path))
+        assert.are.equal(2, reset_stats.version)
+        assert.are.equal(0, #reset_stats.games)
+        assert.is_not_nil(dashboard)
     end)
 
     it("keeps the menu open when showing statistics", function()
@@ -268,6 +463,38 @@ describe("sudoku plugin menu", function()
         assert.is_not_nil(shown, "Continue must show the game view")
         assert.are.equal(2, shown.game:get(0, 2))
         assert.is_true(shown.game.timer.running, "resumed game must start its timer")
+    end)
+
+    it("reconciles and persists the id of an unlogged continued game", function()
+        local board = require("core.board")
+        local stats = require("stats")
+        local g = assert(game.new {
+            puzzle = board.from_string(
+                "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+            ),
+            solution = board.from_string(
+                "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+            ),
+            difficulty = "easy",
+            id = 1,
+            now = os.time,
+        })
+        g:pause()
+        assert.is_true(storage.save(save_path, g:serialize()))
+        assert.is_true(storage.save(stats_path, stats.to_table(stats.new())))
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            shown = widget
+        end
+        item_with("Continue").callback()
+        UIManager.show = original_show
+
+        assert.is_not_nil(shown)
+        assert.are.equal(1, shown.game.id)
+        assert.are.equal(2, assert(storage.load(stats_path)).next_id)
     end)
 
     it("backs up corrupt JSON save on continue, shows info and disables continue (B2)", function()
@@ -523,6 +750,258 @@ describe("sudoku plugin menu", function()
         assert.is_not_nil(io.open(save_path, "rb"), "the abandoned save must survive a failed generation")
     end)
 
+    it("keeps the live view until replacement state is durable and retries failed writes", function()
+        local board = require("core.board")
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function(opts)
+            return {
+                board = board.from_string(
+                    "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+                ),
+                solution = board.from_string(
+                    "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+                ),
+                difficulty = opts.difficulty,
+                seed = opts.seed,
+                clues = 30,
+            }
+        end
+
+        local views = {}
+        local closed = {}
+        local retry_dialog
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.game then
+                views[#views + 1] = widget
+            elseif widget and widget.ok_text == "Retry" then
+                retry_dialog = widget
+            end
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+
+        local original_save = storage.save
+        local failed_path
+        storage.save = function(path, data)
+            if path == failed_path then
+                return nil, "forced write failure"
+            end
+            return original_save(path, data)
+        end
+        finally(function()
+            generator.generate_game = original_generate
+            storage.save = original_save
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        Sudoku:startGame("easy")
+        local old_view = assert(views[1])
+        assert.is_true(old_view.game:place(0, 2, 4))
+        old_view:afterMove()
+        assert.is_true(old_view:checkpoint("test"))
+        local old_id = old_view.game.id
+
+        failed_path = stats_path
+        old_view.new_game_cb("hard")
+        assert.is_not_nil(retry_dialog)
+        assert.are.equal(1, #views, "the replacement view is not exposed before durability")
+        assert.are.equal(0, count_closed(closed, old_view), "the live view remains recoverable")
+        assert.are.equal(old_id, assert(storage.load(save_path)).id)
+
+        local stats_retry_dialog = retry_dialog
+        failed_path = save_path
+        stats_retry_dialog.ok_callback()
+        assert.are_not.equal(stats_retry_dialog, retry_dialog, "the new-game write failure also offers Retry")
+        assert.are.equal(1, #views)
+        assert.are.equal(0, count_closed(closed, old_view))
+        assert.are.equal(old_id, assert(storage.load(save_path)).id)
+
+        failed_path = nil
+        retry_dialog.ok_callback()
+        assert.are.equal(2, #views)
+        assert.are.equal(1, count_closed(closed, old_view))
+        assert.is_true(views[2].game.id > old_id)
+        assert.are.equal(views[2].game.id, assert(storage.load(save_path)).id)
+        local saved_stats = assert(storage.load(stats_path))
+        assert.are.equal("abandoned", saved_stats.games[1].status)
+        assert.are.equal(views[2].game.id + 1, saved_stats.next_id)
+    end)
+
+    it("checkpoints an unsaved live game before replacing it", function()
+        local board = require("core.board")
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function(opts)
+            return {
+                board = board.from_string(
+                    "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+                ),
+                solution = board.from_string(
+                    "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+                ),
+                difficulty = opts.difficulty,
+                seed = opts.seed,
+                clues = 30,
+            }
+        end
+        finally(function()
+            generator.generate_game = original_generate
+        end)
+
+        local views = {}
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.game then
+                views[#views + 1] = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        Sudoku:startGame("easy")
+        local old_view = assert(views[1])
+        assert.is_true(old_view.game:place(0, 2, 4))
+        old_view:afterMove()
+        local old_id = old_view.game.id
+        os.remove(save_path)
+        os.remove(stats_path)
+
+        old_view.new_game_cb("hard")
+
+        assert.are.equal(2, #views)
+        assert.is_true(views[2].game.id > old_id)
+        local saved_stats = assert(storage.load(stats_path))
+        assert.are.equal(old_id, saved_stats.games[1].id)
+        assert.are.equal("abandoned", saved_stats.games[1].status)
+        assert.are.equal(views[2].game.id, assert(storage.load(save_path)).id)
+    end)
+
+    it("keeps the live view when the generated payload cannot construct a game", function()
+        local board = require("core.board")
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function(opts)
+            return {
+                board = board.from_string(
+                    "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+                ),
+                solution = board.from_string(
+                    "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+                ),
+                difficulty = opts.difficulty,
+                seed = opts.seed,
+                clues = 30,
+            }
+        end
+        local original_new = game.new
+        game.new = function(opts)
+            if opts.difficulty == "hard" then
+                return nil, "forced constructor failure"
+            end
+            return original_new(opts)
+        end
+        finally(function()
+            generator.generate_game = original_generate
+            game.new = original_new
+        end)
+
+        local views = {}
+        local closed = {}
+        local failure_message
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.game then
+                views[#views + 1] = widget
+            elseif widget and widget.text and widget.text:find("Failed to start a game", 1, true) then
+                failure_message = widget
+            end
+        end
+        UIManager.close = function(_, widget)
+            closed[#closed + 1] = widget
+        end
+        finally(function()
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        Sudoku:startGame("easy")
+        local old_view = assert(views[1])
+        local old_id = old_view.game.id
+        old_view.new_game_cb("hard")
+
+        assert.is_not_nil(failure_message)
+        assert.are.equal(1, #views)
+        assert.are.equal(0, count_closed(closed, old_view))
+        assert.are.equal(old_id, assert(storage.load(save_path)).id)
+        assert.is_true(old_view.game.timer.running)
+    end)
+
+    it("restores the same live view after standard failure or cancelled custom retry", function()
+        local board = require("core.board")
+        local generator = require("core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function(opts)
+            if opts.difficulty ~= "easy" then
+                return nil, "forced generation failure"
+            end
+            return {
+                board = board.from_string(
+                    "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+                ),
+                solution = board.from_string(
+                    "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+                ),
+                difficulty = opts.difficulty,
+                seed = opts.seed,
+                clues = 30,
+            }
+        end
+        finally(function()
+            generator.generate_game = original_generate
+        end)
+
+        local views = {}
+        local custom_retry
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.game then
+                views[#views + 1] = widget
+            elseif widget and widget.ok_text and widget.ok_text:find("Continue", 1, true) then
+                custom_retry = widget
+            end
+        end
+        finally(function()
+            UIManager.show = original_show
+        end)
+
+        Sudoku:startGame("easy")
+        local old_view = assert(views[1])
+        old_view.new_game_cb("hard")
+        assert.are.equal(1, #views)
+        assert.is_true(old_view.game.timer.running)
+
+        old_view.new_game_cb("custom", {
+            target_tier = "hard",
+            required_techniques = { "x_wing" },
+        })
+        assert.is_not_nil(custom_retry)
+        assert.is_false(old_view.game.timer.running)
+        custom_retry.cancel_callback()
+        assert.are.equal(1, #views)
+        assert.is_true(old_view.game.timer.running)
+    end)
+
     it("renders the submenu without crashing (checked_func evaluated)", function()
         local Device = require("device")
         local TouchMenu = require("ui/widget/touchmenu")
@@ -698,7 +1177,7 @@ describe("sudoku plugin menu", function()
         assert.are.equal(150, replay_opts[2].max_attempts)
     end)
 
-    it("restores active saved game when cancelling custom generation retry", function()
+    it("returns to the main menu when cancelling custom generation retry", function()
         local generator = require("core.generator")
         local original_generate = generator.generate_game
         generator.generate_game = function()
@@ -742,6 +1221,6 @@ describe("sudoku plugin menu", function()
 
         assert.is_not_nil(confirm_dialog)
         confirm_dialog.cancel_callback()
-        assert.is_true(continued, "cancelling custom retry must restore active game if one exists")
+        assert.is_false(continued, "main-menu Cancel must not launch an unrelated saved game")
     end)
 end)

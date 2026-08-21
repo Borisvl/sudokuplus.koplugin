@@ -157,17 +157,6 @@ function stats.new()
     }
 end
 
--- Hands out the next unique game-log id (the seed cannot be the identity:
--- a replay reuses the seed, so two logged games could share it).
-function stats.reserve_id(s)
-    if type(s) ~= "table" or s.version ~= VERSION then
-        return nil, "stats must be a stats table"
-    end
-    local id = s.next_id
-    s.next_id = id + 1
-    return id
-end
-
 local function find_entry(s, id)
     for _, entry in ipairs(s.games) do
         if entry.id == id then
@@ -175,6 +164,91 @@ local function find_entry(s, id)
         end
     end
     return nil
+end
+
+local function advance_next_id(s, id)
+    if id ~= nil and s.next_id <= id then
+        s.next_id = id + 1
+    end
+end
+
+-- Hands out the next unique game-log id (the seed cannot be the identity:
+-- a replay reuses the seed, so two logged games could share it).
+function stats.reserve_id(s)
+    if type(s) ~= "table" or s.version ~= VERSION then
+        return nil, "stats must be a stats table"
+    end
+    local id = s.next_id
+    while find_entry(s, id) do
+        id = id + 1
+    end
+    s.next_id = id + 1
+    return id
+end
+
+local function same_game(first, second)
+    return first.id == second.id
+        and first.seed == second.seed
+        and first.difficulty == second.difficulty
+        and first.started_at == second.started_at
+        and first.puzzle == second.puzzle
+        and first.solution == second.solution
+end
+
+-- Terminal retries are idempotent only when every normalized persisted field
+-- matches, including nested hint and technique lists.
+local function same_record(first, second)
+    if type(first) ~= "table" or type(second) ~= "table" then
+        return first == second
+    end
+    for key, value in pairs(first) do
+        if not same_record(value, second[key]) then
+            return false
+        end
+    end
+    for key in pairs(second) do
+        if first[key] == nil then
+            return false
+        end
+    end
+    return true
+end
+
+function stats.reconcile_id(s, record)
+    if type(s) ~= "table" or s.version ~= VERSION then
+        return nil, "stats must be a stats table"
+    end
+    if
+        type(record) == "table"
+        and type(record.id) == "number"
+        and record.id % 1 == 0
+        and record.id >= 0
+        and record.started_at == nil
+    then
+        if find_entry(s, record.id) then
+            return stats.reserve_id(s), true
+        end
+        advance_next_id(s, record.id)
+        return record.id, false
+    end
+    local normalized, err = validate_record(record)
+    if not normalized then
+        return nil, err
+    end
+    if not normalized.id then
+        return nil, "continued game needs an id"
+    end
+
+    local existing = find_entry(s, normalized.id)
+    if not existing then
+        advance_next_id(s, normalized.id)
+        return normalized.id, false
+    end
+    if existing.status == "in_progress" and same_game(existing, normalized) then
+        advance_next_id(s, normalized.id)
+        return normalized.id, false
+    end
+    return stats.reserve_id(s), true
 end
 
 -- Appends an entry, dropping the oldest non-live entry once the cap is
@@ -236,17 +310,33 @@ function stats.track(s, record)
         if entry.status ~= "in_progress" then
             return nil, "game is already finished"
         end
+        if not same_game(entry, normalized) then
+            return nil, "game id belongs to a different game"
+        end
         merge_entry(entry, normalized)
     else
         normalized.status = "in_progress"
         append_capped(s, normalized)
     end
+    advance_next_id(s, normalized.id)
     return s
 end
 
 local function finalize(s, normalized)
     local entry = normalized.id and find_entry(s, normalized.id)
     if entry then
+        if entry.status ~= "in_progress" then
+            if same_record(entry, normalized) then
+                return true
+            end
+            if entry.status == normalized.status and same_game(entry, normalized) then
+                return nil, "game id belongs to a conflicting terminal record"
+            end
+            return nil, "game id belongs to a different game"
+        end
+        if not same_game(entry, normalized) then
+            return nil, "game id belongs to a different game"
+        end
         merge_entry(entry, normalized)
         entry.status = normalized.status
         entry.ended_at = normalized.ended_at
@@ -256,6 +346,7 @@ local function finalize(s, normalized)
     else
         return false
     end
+    advance_next_id(s, normalized.id)
     -- Streak: a hint-free win extends it; hint-used wins, give-ups and
     -- abandons reset it.
     if normalized.status == "finished" and #normalized.hints == 0 then
@@ -283,14 +374,17 @@ function stats.add(s, record)
     if normalized.status ~= "finished" and normalized.status ~= "give_up" then
         return nil, "add requires a finished or give_up record"
     end
-    finalize(s, normalized)
+    local finalized, finalize_err = finalize(s, normalized)
+    if finalized == nil then
+        return nil, finalize_err
+    end
     return s
 end
 
 -- Marks a started game abandoned (replaced by a new game without finishing).
 -- The live entry's status flips to abandoned with `ended_at`; the final
 -- snapshot was already captured by the last track at the previous save point.
-function stats.abandon(s, id, ended_at)
+function stats.abandon(s, id, ended_at, record)
     if type(s) ~= "table" or s.version ~= VERSION then
         return nil, "stats must be a stats table"
     end
@@ -301,7 +395,19 @@ function stats.abandon(s, id, ended_at)
     if not entry then
         return nil, "no tracked game with that id"
     end
+    if record then
+        local normalized, err = validate_record(record)
+        if not normalized then
+            return nil, err
+        end
+        if not same_game(entry, normalized) then
+            return nil, "game id belongs to a different game"
+        end
+    end
     if entry.status ~= "in_progress" then
+        if entry.status == "abandoned" then
+            return s
+        end
         return nil, "game is already finished"
     end
     entry.status = "abandoned"
@@ -311,7 +417,7 @@ function stats.abandon(s, id, ended_at)
 end
 
 -- Removes a live in-progress entry for a game (e.g. when reset before completion).
-function stats.drop_in_progress(s, id)
+function stats.drop_in_progress(s, id, record)
     if type(s) ~= "table" or s.version ~= VERSION then
         return nil, "stats must be a stats table"
     end
@@ -320,6 +426,15 @@ function stats.drop_in_progress(s, id)
     end
     for i, entry in ipairs(s.games) do
         if entry.id == id and entry.status == "in_progress" then
+            if record then
+                local normalized, err = validate_record(record)
+                if not normalized then
+                    return nil, err
+                end
+                if not same_game(entry, normalized) then
+                    return nil, "game id belongs to a different game"
+                end
+            end
             table.remove(s.games, i)
             return s
         end
@@ -491,10 +606,14 @@ function stats.from_table(t)
         next_id = t.next_id,
         games = {},
     }
+    local max_id = 0
     for _, entry in ipairs(t.games) do
         local normalized, err = validate_record(entry)
         if not normalized then
             return nil, err
+        end
+        if normalized.id and normalized.id > max_id then
+            max_id = normalized.id
         end
         append_capped(result, normalized)
     end
@@ -516,6 +635,7 @@ function stats.from_table(t)
     if in_progress_count > 1 then
         return nil, "multiple in-progress games"
     end
+    advance_next_id(result, max_id)
     return result
 end
 

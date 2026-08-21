@@ -9,7 +9,6 @@ local _ = require("gettext")
 local difficulties = require("ui.difficulties")
 local help = require("ui.help")
 local messages = require("ui.messages")
-local stats = require("stats")
 local techniques = require("ui.techniques")
 local util = require("core.util")
 
@@ -128,9 +127,7 @@ function dialogs.open_difficulty_picker(view, cancel_cb)
         current_row[#current_row + 1] = {
             text = entry.label,
             callback = function()
-                view.menu_open = false
                 UIManager:close(diff_dialog)
-                UIManager:close(view, "flashui")
                 if view.new_game_cb then
                     view.new_game_cb(entry.id)
                 end
@@ -179,8 +176,6 @@ end
 function dialogs.open_custom_difficulty_dialog(view, on_start, cancel_cb)
     local start_cb = on_start
         or function(difficulty, custom_opts)
-            view.menu_open = false
-            UIManager:close(view, "flashui")
             if view.new_game_cb then
                 view.new_game_cb(difficulty, custom_opts)
             end
@@ -339,32 +334,9 @@ function dialogs.confirm_reset(view, cancel_cb)
         text = _("Reset this puzzle from the beginning? All progress will be lost."),
         ok_text = _("Reset"),
         ok_callback = function()
-            if view.stats and view.game.id then
-                stats.drop_in_progress(view.stats, view.game.id)
-                view:persistStats()
-            end
-            local ok, err = view.game:reset()
+            local ok, err = view:resetGame(cancel_cb)
             if not ok then
                 logger.warn("sudoku: reset failed: " .. tostring(err))
-            end
-            if view.stats then
-                view.game.id = stats.reserve_id(view.stats)
-            end
-            view.selected = nil
-            view.armed = nil
-            view.notes_mode = false
-            view._log_started = false
-            view._hint_result = nil
-            view._hint_stage = 0
-            view._hint_cells = {}
-            view._match_value = nil
-            view._match_cells = {}
-            view._completed_digits = view.game:completed_digits()
-            view:deleteSave()
-            view:markToolRowIfChanged()
-            view:markNumberRow()
-            if cancel_cb then
-                cancel_cb()
             end
         end,
         cancel_text = _("Cancel"),
@@ -439,7 +411,35 @@ function dialogs.confirm_continue_custom_generation(
     UIManager:show(confirm_dialog)
 end
 
-function dialogs.open_menu(view)
+function dialogs.confirm_persistence_failure(action, err, retry_cb, discard_cb)
+    local confirm_dialog
+    confirm_dialog = ConfirmBox:new {
+        text = T(_("Could not %1.\n\n%2"), action, tostring(err)),
+        ok_text = _("Retry"),
+        ok_callback = retry_cb,
+        cancel_text = _("Discard"),
+        cancel_callback = discard_cb,
+    }
+    UIManager:show(confirm_dialog)
+    return confirm_dialog
+end
+
+function dialogs.confirm_stats_recovery(err, retry_cb, reset_cb)
+    local confirm_dialog = ConfirmBox:new {
+        text = T(
+            _("Could not load Sudoku statistics.\n\n%1\n\nReset permanently discards the existing statistics file."),
+            tostring(err)
+        ),
+        ok_text = _("Retry"),
+        ok_callback = retry_cb,
+        cancel_text = _("Reset"),
+        cancel_callback = reset_cb,
+    }
+    UIManager:show(confirm_dialog)
+    return confirm_dialog
+end
+
+function dialogs.open_menu(view, skip_checkpoint)
     if view.game:is_finished() then
         dialogs.show_win_dialog(view)
         return
@@ -449,6 +449,18 @@ function dialogs.open_menu(view)
     -- A key press right before the menu opened may have armed the notes
     -- hold; invalidate it so the toggle cannot fire behind the dialog.
     view:_invalidateNotesHold()
+    local checkpointed, checkpoint_err = true
+    if not skip_checkpoint then
+        checkpointed, checkpoint_err = view:checkpoint("pause")
+    end
+    if not checkpointed then
+        view:showPersistenceFailure(_("save the paused game"), checkpoint_err, function()
+            dialogs.open_menu(view)
+        end, function()
+            dialogs.open_menu(view, true)
+        end)
+        return
+    end
     local dialog
     dialog = ButtonDialog:new {
         title = T(

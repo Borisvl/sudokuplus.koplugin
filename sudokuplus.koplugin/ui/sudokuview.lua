@@ -15,6 +15,7 @@ local dialogs = require("ui.dialogs")
 local layout = require("ui.layout")
 local messages = require("ui.messages")
 local numberbar = require("ui.numberbar")
+local game_model = require("game")
 local stats = require("stats")
 local storage = require("storage")
 local techniques = require("ui.techniques")
@@ -57,6 +58,7 @@ local SudokuView = InputContainer:extend {
     stats = nil,
     save_path = nil,
     stats_path = nil,
+    storage_adapter = nil,
     new_game_cb = nil,
     replay_cb = nil,
 }
@@ -123,10 +125,14 @@ function SudokuView:init()
     self._match_value = nil
     self._match_cells = {}
     self._completed_digits = self.game:completed_digits()
+    self._terminal_stats_applied = false
+    self._finalization_complete = false
     self._log_started = false
     self._win_dialog = nil
     self._hold_token = 0
     self._holding_key = nil
+    self._pending_persistence = nil
+    self._skip_checkpoint = false
 
     self.ges_events.Tap = {
         GestureRange:new {
@@ -835,12 +841,14 @@ end
 
 function SudokuView:persistStats()
     if not self.stats or not self.stats_path then
-        return
+        return true
     end
-    local ok, err = storage.save(self.stats_path, stats.to_table(self.stats))
+    local ok, err = (self.storage_adapter or storage).save(self.stats_path, stats.to_table(self.stats))
     if not ok then
         logger.warn("sudoku: failed to save stats: " .. tostring(err))
+        return nil, err
     end
+    return true
 end
 
 -- Creates or refreshes the game-log entry for the live game (matched by the
@@ -848,26 +856,102 @@ end
 -- save points persist, so per-move activity never touches the disk.
 function SudokuView:updateStats(persist)
     if not self.stats or self.game.id == nil or not self.game:is_started() or self.game:is_finished() then
-        return
+        return true
     end
     local ok, err = stats.track(self.stats, self.game:started_record())
     if not ok then
         logger.warn("sudoku: failed to track game: " .. tostring(err))
-        return
+        return nil, err
     end
     if persist then
-        self:persistStats()
+        return self:persistStats()
     end
+    return true
 end
 
 function SudokuView:deleteSave()
     if not self.save_path then
-        return
+        return true
     end
-    local ok, err = storage.delete(self.save_path)
+    local adapter = self.storage_adapter or storage
+    if adapter.exists and not adapter.exists(self.save_path) then
+        return true
+    end
+    local ok, err = adapter.delete(self.save_path)
     if not ok then
         logger.dbg("sudoku: failed to delete save: " .. tostring(err))
+        return nil, err
     end
+    return true
+end
+
+function SudokuView:checkpoint(_reason)
+    if self.game:is_finished() then
+        return true
+    end
+    local adapter = self.storage_adapter or storage
+    if self.save_path then
+        local saved, save_err = adapter.save(self.save_path, self.game:serialize())
+        if not saved then
+            logger.warn("sudoku: failed to save game: " .. tostring(save_err))
+            return nil, save_err
+        end
+    end
+    local tracked, track_err = self:updateStats(false)
+    if not tracked then
+        return nil, track_err
+    end
+    return self:persistStats()
+end
+
+function SudokuView:showPersistenceFailure(action, err, retry_cb, discard_cb)
+    return dialogs.confirm_persistence_failure(action, err, retry_cb or function() end, discard_cb or function() end)
+end
+
+function SudokuView:_closeWithoutCheckpoint()
+    self._skip_checkpoint = true
+    UIManager:close(self, "flashui")
+end
+
+function SudokuView:_persistTerminal(action, on_success)
+    local record = self.game:final_record()
+    local persist_terminal
+    local delete_active_save
+
+    local function complete()
+        self._finalization_complete = true
+        on_success()
+    end
+
+    delete_active_save = function()
+        local deleted, delete_err = self:deleteSave()
+        if deleted then
+            complete()
+            return
+        end
+        self:showPersistenceFailure(_("remove the active game save"), delete_err, delete_active_save, complete)
+    end
+
+    persist_terminal = function()
+        if self.stats then
+            if not self._terminal_stats_applied then
+                local added, add_err = stats.add(self.stats, record)
+                if not added then
+                    self:showPersistenceFailure(action, add_err, persist_terminal, delete_active_save)
+                    return
+                end
+                self._terminal_stats_applied = true
+            end
+            local saved, save_err = self:persistStats()
+            if not saved then
+                self:showPersistenceFailure(action, save_err, persist_terminal, delete_active_save)
+                return
+            end
+        end
+        delete_active_save()
+    end
+
+    persist_terminal()
 end
 
 function SudokuView:onWin()
@@ -876,19 +960,20 @@ function SudokuView:onWin()
     -- since the game is finished by then; invalidating here keeps the
     -- state self-consistent).
     self:_invalidateNotesHold()
+    if self._finalization_complete then
+        self:_showWinDialog()
+        return
+    end
     if not self.game:is_finished() then
         local record, err = self.game:finish()
         if not record then
             logger.warn("sudoku: failed to finish game: " .. tostring(err))
             return
         end
-        if self.stats then
-            stats.add(self.stats, record)
-            self:persistStats()
-        end
-        self:deleteSave()
     end
-    self:_showWinDialog()
+    self:_persistTerminal(_("save the completed game statistics"), function()
+        self:_showWinDialog()
+    end)
 end
 
 function SudokuView:_showWinDialog()
@@ -897,40 +982,68 @@ end
 
 function SudokuView:onGiveUp()
     self:_invalidateNotesHold()
-    local record, err = self.game:give_up()
-    if not record then
-        logger.warn("sudoku: failed to give up: " .. tostring(err))
-        return
+    if not self.game:is_finished() then
+        local record, err = self.game:give_up()
+        if not record then
+            logger.warn("sudoku: failed to give up: " .. tostring(err))
+            return
+        end
     end
-    if self.stats then
-        stats.add(self.stats, record)
-        self:persistStats()
-    end
-    self:deleteSave()
-    UIManager:close(self, "flashui")
+    self:_persistTerminal(_("save the give-up statistics"), function()
+        self:_closeWithoutCheckpoint()
+    end)
 end
 
 function SudokuView:onQuit()
     -- The win dialog also closes the view; a finished game must not be
     -- re-saved (the save was already cleared) or re-tracked in the log.
     if self.game:is_finished() then
-        UIManager:close(self, "flashui")
+        self:_closeWithoutCheckpoint()
         return
     end
     self:_invalidateNotesHold()
     self.game:pause()
-    if self.save_path then
-        local ok, err = storage.save(self.save_path, self.game:serialize())
-        if not ok then
-            logger.warn("sudoku: failed to save game: " .. tostring(err))
-        end
+    local ok, err = self:checkpoint("quit")
+    if ok then
+        self:_closeWithoutCheckpoint()
+        return true
     end
-    self:updateStats(true)
-    UIManager:close(self, "flashui")
+    self:showPersistenceFailure(_("save the game before quitting"), err, function()
+        self:onQuit()
+    end, function()
+        self:_closeWithoutCheckpoint()
+    end)
+    return nil, err
 end
 
 function SudokuView:onClose()
     self:onQuit()
+end
+
+function SudokuView:onFlushSettings()
+    if self._skip_checkpoint or self.game:is_finished() then
+        return true
+    end
+    local should_resume = self.game.timer.running and not self.menu_open
+    self.game:pause()
+    local persist
+    local function finish()
+        self._pending_persistence = nil
+        if should_resume then
+            self.game:resume()
+        end
+    end
+    persist = function()
+        local ok, err = self:checkpoint("flush")
+        if ok then
+            finish()
+            return
+        end
+        self._pending_persistence = { action = _("save the game"), err = err }
+        self:showPersistenceFailure(_("save the game"), err, persist, finish)
+    end
+    persist()
+    return true
 end
 
 function SudokuView:_closeMenuAndResume(dialog, fn)
@@ -943,6 +1056,104 @@ end
 
 function SudokuView:_confirmReset(cancel_cb)
     return dialogs.confirm_reset(self, cancel_cb)
+end
+
+function SudokuView:_applyReset(new_stats, new_id, on_success)
+    if new_stats then
+        if self.stats then
+            for key in pairs(self.stats) do
+                self.stats[key] = nil
+            end
+            for key, value in pairs(new_stats) do
+                self.stats[key] = value
+            end
+        else
+            self.stats = new_stats
+        end
+    end
+    local ok, err = self.game:reset()
+    if not ok then
+        return nil, err
+    end
+    self.game.id = new_id
+    self.selected = nil
+    self.armed = nil
+    self.notes_mode = false
+    self._log_started = false
+    self._hint_result = nil
+    self._hint_stage = 0
+    self._hint_cells = {}
+    self._match_value = nil
+    self._match_cells = {}
+    self._completed_digits = self.game:completed_digits()
+    self._terminal_stats_applied = false
+    self._finalization_complete = false
+    self:markToolRowIfChanged()
+    self:markNumberRow()
+    if on_success then
+        on_success()
+    end
+    return true
+end
+
+function SudokuView:resetGame(on_success)
+    local candidate, clone_err = game_model.restore(self.game:serialize(), { now = self.game.now })
+    if not candidate then
+        return nil, clone_err
+    end
+    local reset, reset_err = candidate:reset()
+    if not reset then
+        return nil, reset_err
+    end
+
+    local new_stats = self.stats
+    local new_id = self.game.id
+    if self.stats then
+        new_stats, clone_err = stats.from_table(stats.to_table(self.stats))
+        if not new_stats then
+            return nil, clone_err
+        end
+        local identity = self.game:is_started() and self.game:started_record() or nil
+        local dropped, drop_err = stats.drop_in_progress(new_stats, self.game.id, identity)
+        if not dropped then
+            return nil, drop_err
+        end
+        new_id = stats.reserve_id(new_stats)
+        candidate.id = new_id
+    end
+
+    local adapter = self.storage_adapter or storage
+    local persist_reset
+    local function apply_reset()
+        local applied, apply_err = self:_applyReset(new_stats, new_id, on_success)
+        if not applied then
+            logger.warn("sudoku: reset failed: " .. tostring(apply_err))
+        end
+    end
+    persist_reset = function()
+        if new_stats and self.stats_path then
+            local stats_saved, stats_err = adapter.save(self.stats_path, stats.to_table(new_stats))
+            if not stats_saved then
+                self:showPersistenceFailure(
+                    _("save statistics before resetting"),
+                    stats_err,
+                    persist_reset,
+                    apply_reset
+                )
+                return
+            end
+        end
+        if self.save_path then
+            local game_saved, game_err = adapter.save(self.save_path, candidate:serialize())
+            if not game_saved then
+                self:showPersistenceFailure(_("save the reset game"), game_err, persist_reset, apply_reset)
+                return
+            end
+        end
+        apply_reset()
+    end
+    persist_reset()
+    return true
 end
 
 function SudokuView:_confirmGiveUp(cancel_cb)
@@ -962,13 +1173,12 @@ function SudokuView:showStats(parent_close_cb)
     local statsview = require("ui.statsview")
     UIManager:show(
         statsview.dashboard(self.stats or stats.new(), {
-            replay_cb = function(seed, difficulty)
+            replay_cb = function(seed, difficulty, custom_tier, custom_techniques)
                 if parent_close_cb then
                     parent_close_cb()
                 end
-                UIManager:close(self, "flashui")
                 if self.replay_cb then
-                    self.replay_cb(seed, difficulty)
+                    self.replay_cb(seed, difficulty, custom_tier, custom_techniques)
                 end
             end,
         }),
@@ -982,18 +1192,38 @@ function SudokuView:onSuspend()
     -- hold could never be invalidated by its release; drop it here instead.
     self:_invalidateNotesHold()
     if not self.game:is_finished() then
-        if self.save_path then
-            local ok, err = storage.save(self.save_path, self.game:serialize())
-            if not ok then
-                logger.warn("sudoku: failed to save on suspend: " .. tostring(err))
-            end
+        local ok, err = self:checkpoint("suspend")
+        if not ok then
+            self._pending_persistence = { action = _("save the suspended game"), err = err }
         end
-        self:updateStats(true)
     end
     return true
 end
 
 function SudokuView:onResume()
+    if self._pending_persistence then
+        local pending = self._pending_persistence
+        self:showPersistenceFailure(pending.action, pending.err, function()
+            local ok, err = self:checkpoint("resume-retry")
+            if ok then
+                self._pending_persistence = nil
+                if not self.menu_open and not self.game:is_finished() then
+                    self.game:resume()
+                end
+                self:refreshFull()
+            else
+                pending.err = err
+                self:onResume()
+            end
+        end, function()
+            self._pending_persistence = nil
+            if not self.menu_open and not self.game:is_finished() then
+                self.game:resume()
+            end
+            self:refreshFull()
+        end)
+        return true
+    end
     if not self.menu_open and not self.game:is_finished() then
         self.game:resume()
     end

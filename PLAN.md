@@ -1641,3 +1641,66 @@ locally inspected ZIP containing every required license/notice and rejects
 mutation fixtures; exact-tag release workflow passes static validation; PLAN,
 README, CONTRIBUTING, CHANGELOG, and AGENTS agree with the implemented commands
 and contracts; one clear milestone commit.
+
+### M21 — Session and Persistence Safety (v1.1.0)
+
+Prevent lifecycle transitions and persistence failures from silently losing the
+last recoverable game or statistics state. This milestone addresses SESS-001,
+SESS-002, PERS-001, STAT-001, and PERS-002 from `REVIEW.md`.
+
+Test-first task order:
+
+1. [x] Add statistics regressions for stale `next_id`, occupied-ID skipping,
+   explicit-ID advancement, collision rejection, and idempotent terminal retries.
+2. [x] Add frontend fault-injection coverage for Pause, `FlushSettings`, Suspend,
+   Quit, Win, Give up, Reset, and their Retry/Discard paths.
+3. [x] Add frontend replacement coverage proving generation/construction/write
+   failures keep the old view and successful replacement closes it only after
+   the new game, statistics, and ID reservation are durable.
+4. [x] Add statistics-load recovery coverage for corrupt data, unsupported
+   schemas, read failures, backup failures, Retry, and destructive Reset.
+5. [x] Inject storage/path/time dependencies into session orchestration and add
+   one idempotent checkpoint operation shared by Pause, Flush, Suspend, and Quit.
+6. [x] Make terminal transitions, Reset, and replacement check every required
+   write/delete and offer explicit Retry/Discard without mutating or closing the
+   live view prematurely.
+7. [x] Normalize and reconcile game IDs on load/track/finalize, persist every
+   reservation before exposing a game, and make repeated terminal writes
+   idempotent without accepting a different game under the same ID.
+8. [x] Fail closed on every nonmissing statistics-load failure and require the
+   user to Retry or explicitly Reset before statistics can be mutated.
+9. [x] Update localization and user/developer documentation for recovery dialogs
+   and persistence guarantees.
+
+Review follow-up (2026-08-21):
+
+1. [x] Preserve all Custom replay metadata and leave the source `SudokuView`
+   open until the replacement coordinator reports success.
+2. [x] Replace the dual synchronous/asynchronous statistics loader with an
+   explicit callback-only private operation that rejects a missing callback
+   before opening recovery UI.
+3. [x] Make Cancel from main-menu Custom generation return to the menu rather
+   than implicitly continuing an unrelated saved game.
+4. [x] Use neutral active-save wording for terminal save-deletion failures and
+   clarify the full-record comparator used for terminal idempotence.
+5. [x] Update regressions and localization, then rerun all milestone gates.
+
+Resolved decisions (2026-08-21):
+
+1. Required persistence failures preserve the live/recoverable state and offer
+   Retry or Discard. Discard explicitly permits the requested destructive
+   transition to continue without durability.
+2. Suspend records a pending persistence failure without blocking sleep and
+   surfaces Retry/Discard on Resume.
+3. Every statistics-load failure offers Retry or destructive Reset. Reset may
+   replace unreadable data; a successfully created corruption backup is retained.
+4. New and reset games persist their ID reservation and initial paused snapshot
+   before they are exposed, while the game log remains unstarted until the first
+   move.
+
+**Exit criteria**: all fault-injection regressions green; no close, delete,
+replacement, or reset occurs before required durability unless Discard was
+chosen; IDs remain unique across quit/continue/retry flows; all 39 core and 8
+frontend specs green; `./dev.sh fmt` and `./dev.sh lint` clean; emulator smoke
+covers Pause, Flush, Suspend/Resume, replacement failure, Retry, Discard, and
+statistics Reset. No commit is created without explicit user approval.

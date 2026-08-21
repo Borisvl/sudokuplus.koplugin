@@ -35,6 +35,7 @@ A full-featured, logical Sudoku puzzle game and interactive tutor crafted specif
   - Optional "Auto-fill notes" and live rule-violation detection.
   - On-demand "Check Board" solver verification with clear strikethrough feedback.
   - Full Undo / Redo history.
+- **💾 Recoverable Sessions**: Pause, suspend, close, reset, and game replacement checkpoint both the board and statistics. Failed writes keep the current session available and offer an explicit Retry or Discard choice.
 - **🌐 Multilingual**: Built-in localization support (English, German included out-of-the-box).
 
 ---

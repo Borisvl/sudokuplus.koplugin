@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release Safety & Compliance**:
   - Isolated every KOReader frontend spec in a unique temporary data home against a pinned local KOReader revision.
   - Added exact spec manifests, verified license-compliant packages, SHA-256 release checksums, and gated tag/retag publication.
+- **Session & Persistence Safety**:
+  - Checkpoint games and live statistics on pause, flush, suspend, and quit, with Retry/Discard recovery for failed writes.
+  - Keep the current game open until replacement generation, construction, ID reservation, statistics, and the initial paused save are durable.
+  - Preserve Custom tier and technique metadata when replaying from in-game statistics; Cancel from main-menu generation remains on the menu.
+  - Reconcile stale game IDs and make terminal statistics retries idempotent without accepting conflicting games or results.
+  - Fail closed on statistics read errors and require Retry or an explicit destructive Reset.
 
 ## [1.0.0] - 2026-08-15
 

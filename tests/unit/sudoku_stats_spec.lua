@@ -89,6 +89,43 @@ describe("stats", function()
         assert.are.equal(4, s.next_id)
     end)
 
+    it("skips occupied ids and advances next_id for explicit records", function()
+        local s = stats.new()
+        assert.is_not_nil(stats.track(s, in_progress_record({ id = 3 })))
+        assert.are.equal(4, s.next_id, "tracking an explicit id advances the allocator")
+
+        s.next_id = 3
+        assert.are.equal(4, stats.reserve_id(s), "reserve_id skips an occupied id")
+        assert.are.equal(5, s.next_id)
+
+        assert.is_not_nil(stats.add(s, record({ id = 8 })))
+        assert.are.equal(9, s.next_id, "adding an explicit terminal id advances the allocator")
+    end)
+
+    it("reconciles continued save ids without reusing a conflicting record", function()
+        local s = stats.new()
+        local live = in_progress_record({ id = 3 })
+        local id, changed = stats.reconcile_id(s, live)
+        assert.are.equal(3, id)
+        assert.is_false(changed)
+        assert.are.equal(4, s.next_id)
+
+        assert.is_not_nil(stats.track(s, live))
+        id, changed = stats.reconcile_id(s, live)
+        assert.are.equal(3, id, "the matching live record keeps its identity")
+        assert.is_false(changed)
+
+        assert.is_not_nil(stats.add(s, record({ id = 3 })))
+        id, changed = stats.reconcile_id(s, live)
+        assert.are.equal(4, id, "a terminal collision receives a fresh identity")
+        assert.is_true(changed)
+
+        local different = in_progress_record({ id = 3, seed = 99, started_at = 5000 })
+        id, changed = stats.reconcile_id(s, different)
+        assert.are.equal(5, id, "a different game never merges under an occupied id")
+        assert.is_true(changed)
+    end)
+
     it("tracks an in-progress game and updates it by id", function()
         local s = stats.new()
         local id = assert(stats.reserve_id(s))
@@ -130,6 +167,35 @@ describe("stats", function()
         assert.are.equal(1, stats.summary(s).finished_count)
     end)
 
+    it("makes an identical terminal retry idempotent and rejects id collisions", function()
+        local s = stats.new()
+        local id = assert(stats.reserve_id(s))
+        assert.is_not_nil(stats.track(s, in_progress_record({ id = id })))
+        local finished = record({ id = id, duration = 120, ended_at = 2000 })
+        assert.is_not_nil(stats.add(s, finished))
+        assert.are.equal(1, s.streak)
+
+        assert.is_not_nil(stats.add(s, finished), "retrying the same finalization succeeds")
+        assert.are.equal(1, #s.games)
+        assert.are.equal(1, s.streak, "an idempotent retry must not update streaks twice")
+
+        local changed, changed_err = stats.add(s, record({ id = id, duration = 121, ended_at = 2000 }))
+        assert.is_nil(changed)
+        assert.are.equal("game id belongs to a conflicting terminal record", changed_err)
+
+        local collision, collision_err = stats.add(
+            s,
+            record({
+                id = id,
+                seed = 999,
+                started_at = 9999,
+                ended_at = 10059,
+            })
+        )
+        assert.is_nil(collision)
+        assert.are.equal("game id belongs to a different game", collision_err)
+    end)
+
     it("appends terminal entries that were never tracked", function()
         local s = stats.new()
         assert.is_not_nil(stats.add(s, record({ id = 1 })))
@@ -163,9 +229,19 @@ describe("stats", function()
         assert.is_nil(missing, "abandoning an untracked id is rejected")
         assert.is_string(missing_err)
 
-        local again, again_err = stats.abandon(s, id, 3000)
-        assert.is_nil(again, "abandoning an already-abandoned game is rejected")
-        assert.is_string(again_err)
+        assert.is_not_nil(stats.abandon(s, id, 3000), "retrying an abandoned transition is idempotent")
+        assert.are.equal(2000, s.games[1].ended_at, "the original terminal timestamp survives a retry")
+    end)
+
+    it("does not abandon a different game that reused the same id", function()
+        local s = stats.new()
+        assert.is_not_nil(stats.track(s, in_progress_record({ id = 3 })))
+
+        local different = in_progress_record({ id = 3, seed = 99, started_at = 5000 })
+        local result, err = stats.abandon(s, 3, 2000, different)
+        assert.is_nil(result)
+        assert.are.equal("game id belongs to a different game", err)
+        assert.are.equal("in_progress", s.games[1].status)
     end)
 
     it("drops an in-progress game from the log", function()
@@ -180,6 +256,22 @@ describe("stats", function()
         -- Dropping non-existent or finished id is a safe no-op
         assert.is_not_nil(stats.drop_in_progress(s, 999))
         assert.are.equal(0, #s.games)
+    end)
+
+    it("does not update or drop a different live game that reused the same id", function()
+        local s = stats.new()
+        local live = in_progress_record({ id = 3 })
+        assert.is_not_nil(stats.track(s, live))
+
+        local different = in_progress_record({ id = 3, seed = 99, started_at = 5000 })
+        local tracked, track_err = stats.track(s, different)
+        assert.is_nil(tracked)
+        assert.are.equal("game id belongs to a different game", track_err)
+
+        local dropped, drop_err = stats.drop_in_progress(s, 3, different)
+        assert.is_nil(dropped)
+        assert.are.equal("game id belongs to a different game", drop_err)
+        assert.are.equal(live.seed, s.games[1].seed)
     end)
 
     it("accepts records returned by a real game", function()
@@ -525,7 +617,7 @@ describe("stats", function()
         assert.are.equal("finished", restored.games[1].status)
         assert.are.equal("w_wing", restored.games[1].hints[1])
         assert.are.equal("give_up", restored.games[2].status)
-        assert.are.equal(2, restored.next_id, "next_id survives the round trip")
+        assert.are.equal(3, restored.next_id, "next_id is normalized above every occupied id")
 
         local a = stats.summary(s)
         local b = stats.summary(restored)
@@ -606,6 +698,19 @@ describe("stats", function()
         })
         assert.is_not_nil(nil_ids, "nil ids are not duplicates")
         assert.is_nil(nil_ids_err)
+    end)
+
+    it("normalizes stale next_id values above the largest loaded id", function()
+        local restored, err = stats.from_table({
+            version = 2,
+            streak = 0,
+            best_streak = 0,
+            next_id = 1,
+            games = { record({ id = 4 }), record({ id = 9 }) },
+        })
+        assert.is_nil(err)
+        assert.are.equal(10, restored.next_id)
+        assert.are.equal(10, stats.reserve_id(restored))
     end)
 
     it("tracks and summaries custom difficulty games with custom_tier and custom_techniques", function()

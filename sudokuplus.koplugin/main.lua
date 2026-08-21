@@ -29,6 +29,11 @@ local SAVE_PATH = DataStorage:getDataDir() .. "/sudokuplus_save"
 local STATS_PATH = DataStorage:getDataDir() .. "/sudokuplus_stats"
 local AUTOFILL_SETTING = "sudokuplus_autofill_notes"
 
+Sudoku.storage_adapter = storage
+Sudoku.save_path = SAVE_PATH
+Sudoku.stats_path = STATS_PATH
+Sudoku.now = os.time
+
 -- Puzzle-generation seed from the wall clock at millisecond resolution.
 -- os.time() alone has one-second granularity, so back-to-back games would
 -- share a puzzle; UIManager:getTime() is an fts-encoded MONOTONIC value, so
@@ -38,6 +43,8 @@ local AUTOFILL_SETTING = "sudokuplus_autofill_notes"
 local function seed_from_wall_clock()
     return math.floor(time.to_ms(time.realtime()))
 end
+
+Sudoku.seed_source = seed_from_wall_clock
 
 local function load_plugin_translations(base_path)
     if not _.loadMO then
@@ -70,44 +77,118 @@ function Sudoku:init()
     self.ui.menu:registerToMainMenu(self)
 end
 
-function Sudoku:loadStats()
-    local s, err, backed_up, _, is_missing = storage.load_or_backup(STATS_PATH, stats.from_table)
+function Sudoku:_resetStats(on_loaded)
+    if type(on_loaded) ~= "function" then
+        return nil, "on_loaded must be a function"
+    end
+    local fresh = stats.new()
+    local saved, save_err = self.storage_adapter.save(self.stats_path, stats.to_table(fresh))
+    if saved then
+        on_loaded(fresh)
+        return
+    end
+    dialogs.confirm_persistence_failure(_("reset the statistics"), save_err, function()
+        self:_resetStats(on_loaded)
+    end, function()
+        on_loaded(fresh)
+    end)
+end
+
+function Sudoku:_withStats(on_loaded)
+    if type(on_loaded) ~= "function" then
+        return nil, "on_loaded must be a function"
+    end
+    local s, err, backed_up, _, is_missing = self.storage_adapter.load_or_backup(self.stats_path, stats.from_table)
     if s then
-        return s
+        on_loaded(s)
+        return true
+    end
+    if is_missing then
+        s = stats.new()
+        on_loaded(s)
+        return true
     end
     if backed_up then
         logger.warn("sudoku: backed up corrupted stats file: " .. tostring(err))
-    elseif err and not is_missing then
+    else
         logger.warn("sudoku: failed to load stats: " .. tostring(err))
     end
-    return stats.new()
+    dialogs.confirm_stats_recovery(err, function()
+        self:_withStats(on_loaded)
+    end, function()
+        self:_resetStats(on_loaded)
+    end)
+    return nil, err
 end
 
 -- Shows the game view for `g` (used by every entry point so the view wiring
 -- never drifts).
 function Sudoku:_viewForGame(g, stats_data)
-    UIManager:show(
-        SudokuView:new {
-            game = g,
-            stats = stats_data,
-            save_path = SAVE_PATH,
-            stats_path = STATS_PATH,
-            new_game_cb = function(new_difficulty, custom_options)
-                self:startGame(new_difficulty, custom_options)
-            end,
-            replay_cb = function(replay_seed, replay_difficulty, replay_custom_tier, replay_custom_techs)
-                self:replayGame(replay_seed, replay_difficulty, replay_custom_tier, replay_custom_techs)
-            end,
-        },
-        "full"
-    )
+    local view
+    view = SudokuView:new {
+        game = g,
+        stats = stats_data,
+        save_path = self.save_path,
+        stats_path = self.stats_path,
+        storage_adapter = self.storage_adapter,
+        new_game_cb = function(new_difficulty, custom_options)
+            self:startGame(new_difficulty, custom_options, view)
+        end,
+        replay_cb = function(replay_seed, replay_difficulty, replay_custom_tier, replay_custom_techs)
+            self:replayGame(replay_seed, replay_difficulty, replay_custom_tier, replay_custom_techs, view)
+        end,
+    }
+    UIManager:show(view, "full")
+    return view
+end
+
+function Sudoku:_resumeSourceView(source_view)
+    if not source_view then
+        return
+    end
+    source_view.menu_open = false
+    if source_view.game:is_finished() then
+        source_view:_showWinDialog()
+        return
+    end
+    source_view.game:resume()
+    source_view:refreshCoarse()
+end
+
+function Sudoku:_activateReplacement(g, stats_data, source_view)
+    g:resume()
+    if source_view then
+        source_view.menu_open = false
+        source_view:_closeWithoutCheckpoint()
+    end
+    self:_viewForGame(g, stats_data)
+end
+
+function Sudoku:_persistReplacement(g, stats_data, source_view)
+    local persist
+    local function activate()
+        self:_activateReplacement(g, stats_data, source_view)
+    end
+    persist = function()
+        local stats_saved, stats_err = self.storage_adapter.save(self.stats_path, stats.to_table(stats_data))
+        if not stats_saved then
+            dialogs.confirm_persistence_failure(_("save the new game statistics"), stats_err, persist, activate)
+            return
+        end
+        local game_saved, game_err = self.storage_adapter.save(self.save_path, g:serialize())
+        if not game_saved then
+            dialogs.confirm_persistence_failure(_("save the new game"), game_err, persist, activate)
+            return
+        end
+        activate()
+    end
+    persist()
 end
 
 -- Generates a puzzle (wall-clock or reproduction seed), abandons the
 -- currently saved game, and starts a fresh one. Shared by startGame and
 -- replayGame so the replace/abandon/bookkeeping flow stays in one place.
-function Sudoku:_startWithSeed(difficulty, seed, custom_options)
-    local stats_data = self:loadStats()
+function Sudoku:_startWithStats(difficulty, seed, custom_options, stats_data, source_view)
     -- Generation (expert especially) can take a few seconds; the emulator
     -- and the device are single-threaded, so explain the wait up front.
     -- forceRePaint() drains the paint/refresh queues immediately: without it
@@ -140,17 +221,18 @@ function Sudoku:_startWithSeed(difficulty, seed, custom_options)
                     is_replay = custom_options.is_replay,
                     on_cancel = custom_options.on_cancel,
                 }
-                local next_seed = custom_options.is_replay and seed or seed_from_wall_clock()
-                self:_startWithSeed("custom", next_seed, next_opts)
+                local next_seed = custom_options.is_replay and seed or self.seed_source()
+                self:_startWithSeed("custom", next_seed, next_opts, source_view)
             end, function()
                 if custom_options.on_cancel then
                     custom_options.on_cancel()
-                elseif storage.exists(SAVE_PATH) then
-                    self:continueGame()
+                elseif source_view then
+                    self:_resumeSourceView(source_view)
                 end
             end)
             return
         end
+        self:_resumeSourceView(source_view)
         UIManager:show(InfoMessage:new {
             text = _("Failed to generate a Sudoku puzzle.") .. "\n" .. tostring(gen_err),
         })
@@ -160,21 +242,34 @@ function Sudoku:_startWithSeed(difficulty, seed, custom_options)
     -- started (at least one move), close its log entry as abandoned. This
     -- happens only after a puzzle exists, so a failed generation keeps the
     -- old game tracked as in progress.
-    local old_save = storage.load(SAVE_PATH)
-    if old_save and type(old_save.id) == "number" and type(old_save.started_at) == "number" then
-        local ok, abandon_err = stats.abandon(stats_data, old_save.id, os.time())
+    local stats_source = source_view and source_view.stats or stats_data
+    local candidate_stats, clone_err = stats.from_table(stats.to_table(stats_source))
+    if not candidate_stats then
+        self:_resumeSourceView(source_view)
+        UIManager:show(InfoMessage:new {
+            text = _("Failed to prepare the game statistics.") .. "\n" .. tostring(clone_err),
+        })
+        return
+    end
+    local old_save = self.storage_adapter.load(self.save_path)
+    local old_record
+    if source_view and source_view.game:is_started() then
+        old_record = source_view.game:started_record()
+    elseif old_save and type(old_save.id) == "number" and type(old_save.started_at) == "number" then
+        local old_game = game.restore(old_save, { now = self.now })
+        if old_game and old_game:is_started() then
+            old_record = old_game:started_record()
+        end
+    end
+    if old_record then
+        local ok, abandon_err = stats.abandon(candidate_stats, old_record.id, self.now(), old_record)
         if not ok and abandon_err ~= "no tracked game with that id" then
             logger.warn("sudoku: failed to abandon the previous game: " .. tostring(abandon_err))
         end
-        if ok then
-            local saved, save_err = storage.save(STATS_PATH, stats.to_table(stats_data))
-            if not saved then
-                logger.warn("sudoku: failed to save stats: " .. tostring(save_err))
-            end
-        end
+    elseif old_save and type(old_save.started_at) == "number" then
+        logger.warn("sudoku: could not verify the previous game identity; leaving its statistics unchanged")
     end
-    local game_id = stats.reserve_id(stats_data)
-    storage.delete(SAVE_PATH)
+    local game_id = stats.reserve_id(candidate_stats)
     local g, game_err = game.new {
         puzzle = payload.board,
         solution = payload.solution,
@@ -185,28 +280,53 @@ function Sudoku:_startWithSeed(difficulty, seed, custom_options)
         techniques = payload.techniques,
         seed = payload.seed,
         id = game_id,
-        now = os.time,
+        now = self.now,
         autofill_notes = G_reader_settings:isTrue(AUTOFILL_SETTING),
     }
     if not g then
+        self:_resumeSourceView(source_view)
         UIManager:show(InfoMessage:new {
             text = _("Failed to start a game.") .. "\n" .. tostring(game_err),
         })
         return
     end
-    self:_viewForGame(g, stats_data)
+    g:pause()
+    self:_persistReplacement(g, candidate_stats, source_view)
 end
 
-function Sudoku:startGame(difficulty, custom_options)
+function Sudoku:_startWithSeed(difficulty, seed, custom_options, source_view, skip_source_checkpoint)
+    if source_view and not source_view.game:is_finished() and not skip_source_checkpoint then
+        source_view.game:pause()
+        local checkpointed, checkpoint_err = source_view:checkpoint("replacement")
+        if not checkpointed then
+            dialogs.confirm_persistence_failure(
+                _("save the current game before replacing it"),
+                checkpoint_err,
+                function()
+                    self:_startWithSeed(difficulty, seed, custom_options, source_view)
+                end,
+                function()
+                    self:_startWithSeed(difficulty, seed, custom_options, source_view, true)
+                end
+            )
+            return
+        end
+    end
+    self:_withStats(function(stats_data)
+        self:_startWithStats(difficulty, seed, custom_options, stats_data, source_view)
+    end)
+end
+
+function Sudoku:startGame(difficulty, custom_options, source_view)
     -- core/ is deterministic: seed the PRNG from the wall clock (ms) in the
     -- plugin layer. A fresh game abandons any previous save, but only once a
     -- new puzzle exists: a failed generation must not destroy the saved game.
     difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
-    self:_startWithSeed(difficulty, seed_from_wall_clock(), custom_options)
+    self:_startWithSeed(difficulty, self.seed_source(), custom_options, source_view)
 end
 
 -- Restarts an exact puzzle from the game log by its reproduction seed.
-function Sudoku:replayGame(seed, difficulty, custom_tier, custom_techniques)
+function Sudoku:replayGame(seed, difficulty, custom_tier, custom_techniques, source_view)
     difficulty = util.is_difficulty(difficulty) and difficulty or "easy"
     if type(seed) ~= "number" or seed % 1 ~= 0 then
         UIManager:show(InfoMessage:new {
@@ -222,15 +342,15 @@ function Sudoku:replayGame(seed, difficulty, custom_tier, custom_techniques)
             is_replay = true,
         }
     end
-    self:_startWithSeed(difficulty, seed, custom_options)
+    self:_startWithSeed(difficulty, seed, custom_options, source_view)
 end
 
 function Sudoku:continueGame()
     -- Any restore failure (JSON parse error, schema validation failure, unsupported
     -- future version, or 7-day timer-drift guard) backs up and removes the save to prevent
     -- a permanent dead end on "Continue", while preserving the data in <path>.<ts>.bak.
-    local g, err, backed_up, bak_path = storage.load_or_backup(SAVE_PATH, function(data)
-        return game.restore(data, { now = os.time })
+    local g, err, backed_up, bak_path = self.storage_adapter.load_or_backup(self.save_path, function(data)
+        return game.restore(data, { now = self.now })
     end)
     if not g then
         if backed_up then
@@ -238,7 +358,7 @@ function Sudoku:continueGame()
             UIManager:show(InfoMessage:new {
                 text = T(_("The save was corrupted; a backup was kept at %1"), tostring(bak_path)) .. reason,
             })
-        elseif storage.exists(SAVE_PATH) then
+        elseif self.storage_adapter.exists(self.save_path) then
             UIManager:show(InfoMessage:new {
                 text = _("Failed to restore the saved game.") .. "\n" .. tostring(err),
             })
@@ -249,28 +369,63 @@ function Sudoku:continueGame()
         end
         return
     end
-    -- A save written before the game-log identity existed gets a fresh id.
-    local stats_data = self:loadStats()
-    if g.id == nil then
-        g.id = stats.reserve_id(stats_data)
-    end
-    -- The save was written while paused; a resumed game starts its timer.
-    g:resume()
-    self:_viewForGame(g, stats_data)
+    self:_withStats(function(stats_data)
+        local game_id, reconcile_err
+        if g.id == nil then
+            game_id, reconcile_err = stats.reserve_id(stats_data)
+        else
+            local identity = g:is_started() and g:started_record() or { id = g.id }
+            game_id, reconcile_err = stats.reconcile_id(stats_data, identity)
+        end
+        if not game_id then
+            UIManager:show(InfoMessage:new {
+                text = _("Failed to reconcile the saved game statistics.") .. "\n" .. tostring(reconcile_err),
+            })
+            return
+        end
+        g.id = game_id
+
+        local persist
+        local function activate()
+            -- The save was written while paused; a resumed game starts its timer.
+            g:resume()
+            self:_viewForGame(g, stats_data)
+        end
+        persist = function()
+            local stats_saved, stats_err = self.storage_adapter.save(self.stats_path, stats.to_table(stats_data))
+            if not stats_saved then
+                dialogs.confirm_persistence_failure(
+                    _("save the continued game statistics"),
+                    stats_err,
+                    persist,
+                    activate
+                )
+                return
+            end
+            local game_saved, game_err = self.storage_adapter.save(self.save_path, g:serialize())
+            if not game_saved then
+                dialogs.confirm_persistence_failure(_("save the continued game"), game_err, persist, activate)
+                return
+            end
+            activate()
+        end
+        persist()
+    end)
 end
 
 function Sudoku:showStatistics()
-    local s = self:loadStats()
-    -- "full": the Tools menu stays open underneath (keep_menu_open), so the
-    -- new fullscreen page must refresh the whole screen itself.
-    UIManager:show(
-        statsview.dashboard(s, {
-            replay_cb = function(seed, difficulty, custom_tier, custom_techniques)
-                self:replayGame(seed, difficulty, custom_tier, custom_techniques)
-            end,
-        }),
-        "full"
-    )
+    self:_withStats(function(s)
+        -- "full": the Tools menu stays open underneath (keep_menu_open), so the
+        -- new fullscreen page must refresh the whole screen itself.
+        UIManager:show(
+            statsview.dashboard(s, {
+                replay_cb = function(seed, difficulty, custom_tier, custom_techniques)
+                    self:replayGame(seed, difficulty, custom_tier, custom_techniques)
+                end,
+            }),
+            "full"
+        )
+    end)
 end
 
 function Sudoku:addToMainMenu(menu_items)
@@ -298,7 +453,7 @@ function Sudoku:addToMainMenu(menu_items)
             {
                 text = _("Continue"),
                 enabled_func = function()
-                    return storage.exists(SAVE_PATH)
+                    return self.storage_adapter.exists(self.save_path)
                 end,
                 callback = function()
                     self:continueGame()
