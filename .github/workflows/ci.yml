@@ -45,7 +45,7 @@ jobs:
           ACTIONLINT_VERSION: "1.7.12"
           ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
         run: |
-          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_x86_64.tar.gz" -o /tmp/actionlint.tar.gz
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -o /tmp/actionlint.tar.gz
           printf '%s  %s\n' "$ACTIONLINT_SHA256" /tmp/actionlint.tar.gz | sha256sum --check
           sudo tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint
 

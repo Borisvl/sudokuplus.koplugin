@@ -19,6 +19,10 @@ fi
 if grep -q 'releases/latest' "$CI" "$RELEASE"; then
     fail "tool downloads must be version- and checksum-pinned"
 fi
+grep -Fq 'stylua-linux-x86_64.zip' "$CI" || fail "CI must use the published StyLua Linux asset name"
+# shellcheck disable=SC2016 # Match the literal workflow environment variable.
+grep -Fq 'actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz' "$CI" \
+    || fail "CI must use the published actionlint Linux asset name"
 grep -q 'workflow_call:' "$CI" || fail "CI must be reusable by release"
 grep -q 'spec_manifest.sh' "$CI" || fail "CI must enforce the spec manifest"
 grep -q 'test-frontend' "$CI" || fail "CI must run frontend specs"
