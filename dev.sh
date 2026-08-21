@@ -2,6 +2,7 @@
 # Dev helper for the Sudoku+ plugin.
 #   ./dev.sh                build (incremental) and run the KOReader emulator
 #   ./dev.sh test [args...] run the busted specs (defaults to sudoku specs; pass --all for full frontend suite)
+#   ./dev.sh test-tooling   run manifest, isolation, package, release, and workflow contract tests
 #   ./dev.sh lint           luacheck + stylua --check
 #   ./dev.sh fmt            stylua (apply formatting)
 #   ./dev.sh pot            extract gettext strings into sudokuplus.koplugin/l10n/sudokuplus.pot

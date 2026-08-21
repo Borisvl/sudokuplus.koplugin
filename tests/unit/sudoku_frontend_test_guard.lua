@@ -76,6 +76,9 @@ function guard.install()
 
     local function assert_allowed(path)
         local absolute = normalized(path, cwd)
+        if not absolute then
+            return
+        end
         for _, root in ipairs(protected_roots) do
             if is_production_name(absolute, root) then
                 error("frontend test blocked production data access: " .. absolute, 3)
@@ -84,6 +87,9 @@ function guard.install()
     end
 
     local function assert_command_allowed(command)
+        if type(command) ~= "string" then
+            return
+        end
         command = command:gsub("/+", "/")
         for _, root in ipairs(protected_roots) do
             if command:find(root .. "/", 1, true) then

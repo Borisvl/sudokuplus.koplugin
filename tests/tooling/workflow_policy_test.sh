@@ -28,6 +28,11 @@ grep -q 'verify_release_package.py' "$ROOT/tools/package_release.sh" || fail "pa
 grep -q 'sudokuplus.koplugin.zip.sha256' "$RELEASE" || fail "release must publish a checksum"
 grep -q 'gh release edit' "$RELEASE" || fail "retagging must update the existing release"
 grep -q -- '--clobber' "$RELEASE" || fail "retagging must replace existing release assets"
+grep -q 'gh api.*git/ref/tags' "$RELEASE" || fail "tag rechecks must use the authenticated GitHub API"
+grep -q 'ref_sha' "$RELEASE" || fail "release must compare the raw lightweight or annotated tag ref"
+if grep -q 'git ls-remote' "$RELEASE"; then
+    fail "tag rechecks must not depend on anonymous git access"
+fi
 if grep -q 'Refuse an existing release' "$RELEASE"; then
     fail "an existing release must not block intentional retagging"
 fi

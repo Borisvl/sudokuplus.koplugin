@@ -126,6 +126,28 @@ describe("sudoku plugin menu", function()
         end
     end)
 
+    it("preserves native behavior for calls without path strings", function()
+        local lines_ok, iterator = pcall(io.lines)
+        assert.is_true(lines_ok)
+        assert.is_function(iterator)
+
+        local function assert_native_argument_error(call)
+            local ok, err = pcall(call)
+            assert.is_false(ok)
+            assert.is_truthy(tostring(err):find("bad argument", 1, true))
+        end
+
+        assert_native_argument_error(function()
+            io.open()
+        end)
+        assert_native_argument_error(function()
+            io.popen()
+        end)
+        assert_native_argument_error(function()
+            loadfile(false)
+        end)
+    end)
+
     it("opens help menu via Help item", function()
         local help_item = item_with("Help")
         assert.is_not_nil(help_item)
