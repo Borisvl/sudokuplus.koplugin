@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2026-08-16
+## [1.1.0] - Unreleased
 
 ### Added
 - **Seed-ID Display**: Show the puzzle generation seed in both the Game Detail view and the victory dialog to facilitate sharing, replaying, and debugging puzzles.
@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Difficulty Model Realignment**:
   - Reclassified **Swordfish** from Hard tier to **Master tier** to balance 3x3 fish complexity alongside X-Wing and Skyscraper.
+- **Release Safety & Compliance**:
+  - Isolated every KOReader frontend spec in a unique temporary data home and added frontend CI against a pinned KOReader revision.
+  - Added exact spec manifests, verified license-compliant packages, SHA-256 release checksums, and gated tag/retag publication.
 
 ## [1.0.0] - 2026-08-15
 

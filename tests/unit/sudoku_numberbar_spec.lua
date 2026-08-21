@@ -1,3 +1,6 @@
+local test_guard = require("sudoku_frontend_test_guard")
+test_guard.install()
+
 describe("sudoku numberbar", function()
     local Blitbuffer
     local layout

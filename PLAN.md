@@ -1579,4 +1579,63 @@ Execute all candidate eliminations deduced by a specific technique instance in a
 
 **Exit criteria**: all specs green (`./dev.sh test`), `./dev.sh lint` and `./dev.sh fmt` clean.
 
+### M20 — Test Isolation and Release Guardrails (done)
 
+Make the full test suite safe to run and make every published archive traceable,
+verified, and license-compliant. This milestone addresses CI-001, CI-002,
+REL-001, REL-002, the release-relevant parts of TOOL-001 and DOC-001, and the
+licensing defects discovered while auditing REL-002. It does not change game
+session persistence; path/storage dependency injection belongs to M21.
+
+Test-first task order:
+
+1. [x] Add tooling tests for spec-manifest completeness and category exclusivity.
+2. [x] Add one authoritative 39-core/8-frontend spec manifest and make local/CI
+   runners consume it without duplicated globs or allowlists.
+3. [x] Add failing isolation tests for a unique per-spec `KO_HOME`, production-path
+   rejection, whole-directory cleanup, and relative storage fixtures.
+4. [x] Add a project-owned frontend launcher that creates `KO_HOME` before Lua or
+   `DataStorage` loads, guards production save/stats/settings paths, and cleans
+   each test home even after failure or interruption.
+5. [x] Pin the KOReader revision, make `env.sh` portable, and add an isolated
+   frontend CI job for all eight KOReader-dependent specs.
+6. [x] Add package-contract tests covering the plugin root, exact tracked file set,
+   license/notices, metadata version, compiled translations, unsafe ZIP paths,
+   temporary files, and checksum verification.
+7. [x] Replace the altered root license with canonical license texts and separate
+   project/third-party notices; include every required license and notice in the
+   installable ZIP.
+8. [x] Make `msgfmt` mandatory, package only tracked/declared inputs, clean staging
+   through traps, verify the finished archive, and emit a SHA-256 sidecar.
+9. [x] Add release-validation tests for strict tags, exact tag/HEAD identity,
+   metadata/changelog agreement, release-note extraction, and both lightweight
+   and annotated tags.
+10. [x] Make CI reusable by the release workflow; build/test with read-only
+    permissions, and publish only verified artifacts in a separate
+    write-permission job that creates or updates the tagged release.
+11. [x] Correct the suite/technique counts and mark v1.1.0 unreleased until the tag
+    is created.
+
+Resolved decisions (2026-08-21):
+
+1. License Sudoku+ as `AGPL-3.0-only`, retain the HoDoKu-derived score table and
+   fixtures under their upstream GPLv3/GFDL terms, and ship separate canonical
+   license texts and third-party notices.
+2. Pin KOReader revision `78d586b420835e85cacf4fc72f1a7e7a40741afd`
+   and build that exact source revision in CI.
+3. Publish stable `vX.Y.Z` tags reachable from `main`, accepting lightweight or
+   annotated tags. Pushing a tag runs all release gates. Force-moving and
+   pushing the same tag reruns the gates, updates that release's notes, and
+   replaces its fixed-name ZIP and SHA-256 assets. This intentionally favors a
+   simple retag workflow over immutable or atomic releases.
+4. Leave the existing v1.0.0 asset unchanged despite its known missing
+   license/notices; the strict compliant package contract applies to subsequent
+   releases.
+
+**Exit criteria**: manifest/tooling tests green; all 39 standalone core specs
+and all 8 isolated frontend specs green locally and in CI; lint and formatting
+clean; pinned KOReader emulator smoke; package verifier accepts a locally
+inspected ZIP containing every required license/notice and rejects mutation
+fixtures; exact-tag release workflow passes static validation; PLAN, README,
+CONTRIBUTING, CHANGELOG, and AGENTS agree with the implemented commands and
+contracts; one clear milestone commit.

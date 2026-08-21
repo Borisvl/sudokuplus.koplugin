@@ -1,16 +1,41 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local storage = require("storage")
+local lfs = require("lfs")
 
 local counter = 0
+local temp_dir
 local function temp_path()
     counter = counter + 1
-    local name = string.format("sudoku_test_tmp_%d_%d.json", os.time(), counter)
-    os.remove(name)
-    return name
+    local name = string.format("sudoku_test_tmp_%d.json", counter)
+    local path = temp_dir .. "/" .. name
+    os.remove(path)
+    return path
 end
 
 describe("storage", function()
+    setup(function()
+        local temp_name = os.tmpname()
+        os.remove(temp_name)
+        temp_dir = temp_name .. ".d"
+        assert(lfs.mkdir(temp_dir))
+    end)
+
+    teardown(function()
+        for entry in lfs.dir(temp_dir) do
+            if entry ~= "." and entry ~= ".." then
+                assert(os.remove(temp_dir .. "/" .. entry))
+            end
+        end
+        assert(lfs.rmdir(temp_dir))
+    end)
+
+    it("keeps storage fixtures in a suite-owned temporary directory", function()
+        local path = temp_path()
+        assert.are.equal("/", path:sub(1, 1))
+        assert.are.equal(temp_dir .. "/", path:sub(1, #temp_dir + 1))
+    end)
+
     it("saves and loads a table round-trip", function()
         local path = temp_path()
         local payload = {
@@ -129,7 +154,8 @@ describe("storage", function()
         local real_io_open = io.open
         io.open = function(p, mode)
             if string.sub(p, -4) == ".tmp" then
-                local real_file = real_io_open(p, mode)
+                local real_file, open_err = real_io_open(p, mode)
+                assert(real_file, open_err)
                 return {
                     write = function()
                         return nil, "write error"
@@ -162,7 +188,8 @@ describe("storage", function()
         local real_io_open = io.open
         io.open = function(p, mode)
             if string.sub(p, -4) == ".tmp" then
-                local real_file = real_io_open(p, mode)
+                local real_file, open_err = real_io_open(p, mode)
+                assert(real_file, open_err)
                 return {
                     write = function(self, text)
                         return real_file:write(text)

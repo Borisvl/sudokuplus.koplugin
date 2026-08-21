@@ -5,6 +5,8 @@
 .idea/
 .vscode/
 *.swp
+__pycache__/
+*.pyc
 
 # Dev dependencies: koreader checkout and rustoku reference are dev-only
 # (see README for setup). The deployed plugin has no external deps.

@@ -1,4 +1,6 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
+local test_guard = require("sudoku_frontend_test_guard")
+test_guard.install()
 
 describe("sudoku plugin menu", function()
     local DataStorage
@@ -60,6 +62,68 @@ describe("sudoku plugin menu", function()
             texts[#texts + 1] = item.text
         end
         assert.are.same({ "Continue", "New game", "Statistics", "Help", "Auto-fill notes" }, texts)
+    end)
+
+    it("runs inside the guarded per-spec KO_HOME", function()
+        assert.are.equal(os.getenv("KO_HOME"), DataStorage:getDataDir())
+        assert.is_true(test_guard.is_installed())
+        local sentinel = os.getenv("SUDOKU_TEST_SENTINEL_ROOT")
+        assert.is_string(sentinel)
+        local protected_path = sentinel .. "/sudokuplus_save"
+        local attempts = {
+            {
+                "os.remove",
+                function()
+                    os.remove(protected_path)
+                end,
+            },
+            {
+                "io.input",
+                function()
+                    io.input(protected_path)
+                end,
+            },
+            {
+                "io.output",
+                function()
+                    io.output(protected_path)
+                end,
+            },
+            {
+                "io.lines",
+                function()
+                    io.lines(protected_path)
+                end,
+            },
+            {
+                "loadfile",
+                function()
+                    loadfile(protected_path)
+                end,
+            },
+            {
+                "dofile",
+                function()
+                    dofile(protected_path)
+                end,
+            },
+            {
+                "os.execute",
+                function()
+                    os.execute("test -f " .. protected_path)
+                end,
+            },
+            {
+                "io.popen",
+                function()
+                    io.popen("test -f " .. protected_path)
+                end,
+            },
+        }
+        for _, attempt in ipairs(attempts) do
+            local ok = pcall(attempt[2])
+            assert.is_false(ok, attempt[1] .. " must reject protected data")
+        end
     end)
 
     it("opens help menu via Help item", function()

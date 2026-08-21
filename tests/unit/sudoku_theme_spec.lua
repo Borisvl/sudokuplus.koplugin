@@ -1,3 +1,6 @@
+local test_guard = require("sudoku_frontend_test_guard")
+test_guard.install()
+
 describe("sudoku theme", function()
     local theme
     setup(function()

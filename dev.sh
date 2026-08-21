@@ -81,8 +81,13 @@ deploy_to_device() {
     local dest="$volume/.adds/koreader/plugins/sudokuplus.koplugin"
 
     # Syntax gate: never land a file that fails to compile on the device.
-    local luajit luajit_file
-    luajit="$(ls "$KOREADER/base/build"/*/luajit 2>/dev/null | head -1 || true)"
+    local luajit="" luajit_file candidate
+    for candidate in "$KOREADER"/base/build/*/luajit; do
+        if [[ -x "$candidate" ]]; then
+            luajit="$candidate"
+            break
+        fi
+    done
     if [[ -n "$luajit" ]]; then
         while IFS= read -r -d '' luajit_file; do
             if ! KOBO_LUAFILE="$luajit_file" "$luajit" -e 'local f, err = loadfile(os.getenv("KOBO_LUAFILE")); if not f then io.stderr:write(err .. "\n"); os.exit(1) end'; then
@@ -132,11 +137,18 @@ case "${1:-}" in
     pot)
         exec ./tools/extract_pot.sh
         ;;
+    test-tooling)
+        exec ./tests/tooling/run.sh
+        ;;
     deploy)
         deploy_to_device "${@:2}"
         exit 0
         ;;
 esac
+
+if [[ "${1:-}" == "test" ]]; then
+    ./tools/check_test_args.sh "${@:2}"
+fi
 
 # Prune broken spec symlinks in KOReader tree and re-link current specs.
 for link in "$KOREADER"/spec/unit/sudoku_*_spec.lua; do
@@ -146,6 +158,9 @@ for spec in tests/unit/*_spec.lua; do
     [[ -e "$spec" ]] || continue
     ln -sfn "$PROJECT_ROOT/$spec" "$KOREADER/spec/unit/$(basename "$spec")"
 done
+ln -sfn \
+    "$PROJECT_ROOT/tests/unit/sudoku_frontend_test_guard.lua" \
+    "$KOREADER/spec/unit/sudoku_frontend_test_guard.lua"
 
 # Keep the checkout plugin link and every existing build directory pointed at
 # the working tree. This avoids stale links when multiple build configurations
@@ -164,10 +179,111 @@ done
 
 cd "$KOREADER"
 
+check_koreader_revision() {
+    local expected actual
+    expected="$(<"$PROJECT_ROOT/tools/koreader-revision")"
+    actual="$(git rev-parse HEAD)"
+    if [[ "$actual" != "$expected" ]]; then
+        printf 'KOReader checkout is %s, expected pinned revision %s\n' "$actual" "$expected" >&2
+        return 1
+    fi
+}
+
+run_koreader_specs() {
+    local category="$1"
+    shift
+    local runner_args=("$@")
+    local paths=()
+    local path
+    while IFS= read -r path; do
+        paths+=("${path##*/}")
+        paths[${#paths[@]}-1]="${paths[${#paths[@]}-1]%_spec.lua}"
+    done < <("$PROJECT_ROOT/tools/spec_manifest.sh" list "$category")
+    ./kodev test front "${runner_args[@]}" "${paths[@]}"
+}
+
+run_guarded_frontend() {
+    local temp_base run_root sentinel_root sentinel_contents protected_roots data_root runner_pid="" status=0
+    temp_base="${TMPDIR:-/tmp}"
+    run_root="$(mktemp -d "${temp_base%/}/sudoku-frontend-tests.XXXXXX")"
+
+    cleanup_guarded_frontend() {
+        trap - EXIT INT TERM HUP
+        if [[ "${SUDOKU_KEEP_TEST_HOME:-0}" == "1" ]]; then
+            printf 'frontend test run retained at %s\n' "$run_root" >&2
+        else
+            rm -rf "$run_root"
+        fi
+    }
+    # shellcheck disable=SC2329 # Invoked by the signal traps below.
+    interrupt_guarded_frontend() {
+        local signal_status="$1"
+        trap - EXIT INT TERM HUP
+        if [[ -n "$runner_pid" ]] && kill -0 "$runner_pid" 2>/dev/null; then
+            kill -TERM "$runner_pid" 2>/dev/null || true
+            wait "$runner_pid" 2>/dev/null || true
+        fi
+        cleanup_guarded_frontend
+        exit "$signal_status"
+    }
+    trap cleanup_guarded_frontend EXIT
+    trap 'interrupt_guarded_frontend 130' INT
+    trap 'interrupt_guarded_frontend 143' TERM
+    trap 'interrupt_guarded_frontend 129' HUP
+    sentinel_root="$run_root/protected-sentinel"
+    mkdir -p "$sentinel_root"
+    sentinel_contents='return "must survive frontend tests"'
+    printf '%s' "$sentinel_contents" > "$sentinel_root/sudokuplus_save"
+
+    protected_roots=""
+    for data_root in "$PROJECT_ROOT"/third_party/koreader/koreader-emulator-*/koreader; do
+        [[ -d "$data_root" ]] || continue
+        protected_roots="${protected_roots:+$protected_roots:}$data_root"
+    done
+    if [[ -n "${KO_HOME:-}" ]]; then
+        protected_roots="${protected_roots:+$protected_roots:}$KO_HOME"
+    fi
+
+    SUDOKU_TEST_RUN_ROOT="$run_root" \
+    SUDOKU_PROTECTED_DATA_ROOTS="$protected_roots" \
+    SUDOKU_TEST_SENTINEL_ROOT="$sentinel_root" \
+        ./kodev test front -w "$PROJECT_ROOT/tools/frontend_test_wrapper.sh" "$@" &
+    runner_pid=$!
+    set +e
+    wait "$runner_pid"
+    status=$?
+    set -e
+    runner_pid=""
+
+    if [[ ! -f "$sentinel_root/sudokuplus_save" ]] \
+        || [[ "$(<"$sentinel_root/sudokuplus_save")" != "$sentinel_contents" ]]; then
+        printf 'frontend tests modified the protected sentinel save\n' >&2
+        status=1
+    fi
+    cleanup_guarded_frontend
+    return "$status"
+}
+
+run_frontend_specs() {
+    local runner_args=("$@")
+    local paths=()
+    local path
+    while IFS= read -r path; do
+        paths+=("${path##*/}")
+        paths[${#paths[@]}-1]="${paths[${#paths[@]}-1]%_spec.lua}"
+    done < <("$PROJECT_ROOT/tools/spec_manifest.sh" list frontend)
+    run_guarded_frontend "${runner_args[@]}" "${paths[@]}"
+}
+
 run_tests() {
-    local test_args=()
+    local common_args=()
+    local explicit_core=()
+    local explicit_frontend=()
+    local requested_category=""
     local has_explicit_test=0
     local run_all=0
+    local output_requested=0
+    local arg category path basename
 
     # Note: Value-flag list mirrors RUNTESTS_GETOPT_SHORT/LONG in
     # third_party/koreader/base/test-runner/runtests. Flags with optional
@@ -179,47 +295,129 @@ run_tests() {
                 run_all=1
                 shift
                 ;;
-            -f|--filter|-t|--tags|-j|--jobs|-o|--output|-w|--wrapper)
+            --core)
+                if [[ -n "$requested_category" && "$requested_category" != "core" ]]; then
+                    printf 'dev.sh test: --core and --frontend cannot be combined\n' >&2
+                    return 1
+                fi
+                requested_category="core"
+                shift
+                ;;
+            --frontend)
+                if [[ -n "$requested_category" && "$requested_category" != "frontend" ]]; then
+                    printf 'dev.sh test: --core and --frontend cannot be combined\n' >&2
+                    return 1
+                fi
+                requested_category="frontend"
+                shift
+                ;;
+            -w|--wrapper|-w?*|--wrapper=*|-g|-g?*|--gdb|--gdb=*|--busted|--busted=*|--meson|--meson=*)
+                printf 'dev.sh test: the frontend isolation harness owns %s\n' "$1" >&2
+                return 1
+                ;;
+            -o|--output)
                 if [[ $# -lt 2 ]]; then
                     printf 'dev.sh test: option %s requires an argument\n' "$1" >&2
                     return 1
                 fi
-                test_args+=("$1" "$2")
+                output_requested=1
+                common_args+=("$1" "$2")
+                shift 2
+                ;;
+            -o?*|--output=*)
+                output_requested=1
+                common_args+=("$1")
+                shift
+                ;;
+            -f|--filter|-t|--tags|-j|--jobs)
+                if [[ $# -lt 2 ]]; then
+                    printf 'dev.sh test: option %s requires an argument\n' "$1" >&2
+                    return 1
+                fi
+                common_args+=("$1" "$2")
                 shift 2
                 ;;
             -*)
-                test_args+=("$1")
+                common_args+=("$1")
                 shift
                 ;;
             *)
                 has_explicit_test=1
-                # Normalize file paths or spec suffixes (e.g. tests/unit/foo_spec.lua -> foo)
-                local arg="$1"
+                arg="$1"
                 arg="${arg##*/}"
-                arg="${arg%_spec.lua}"
-                test_args+=("$arg")
+                basename="${arg%_spec.lua}"
+                category=""
+                while IFS=' ' read -r category path; do
+                    if [[ "${path##*/}" == "${basename}_spec.lua" ]]; then
+                        break
+                    fi
+                    category=""
+                done < "$PROJECT_ROOT/tests/spec-manifest.txt"
+                if [[ -z "$category" ]]; then
+                    printf 'dev.sh test: %s is not in tests/spec-manifest.txt\n' "$1" >&2
+                    return 1
+                fi
+                if [[ -n "$requested_category" && "$category" != "$requested_category" ]]; then
+                    printf 'dev.sh test: %s is not a %s spec\n' "$1" "$requested_category" >&2
+                    return 1
+                fi
+                if [[ "$category" == "core" ]]; then
+                    explicit_core+=("$basename")
+                else
+                    explicit_frontend+=("$basename")
+                fi
                 shift
                 ;;
         esac
     done
 
-    # If no explicit test targets are given and --all is not set, default to all
-    # plugin specs. Note: passing -f/-t without explicit test names will run
-    # each of the 46 plugin spec targets filtered by busted.
-    if (( !run_all && !has_explicit_test )); then
-        local spec
-        for spec in "$PROJECT_ROOT"/tests/unit/*_spec.lua; do
-            [[ -e "$spec" ]] || continue
-            test_args+=("$(basename "$spec" _spec.lua)")
-        done
+    if [[ "$requested_category" == "core" && ${#explicit_frontend[@]} -gt 0 ]] \
+        || [[ "$requested_category" == "frontend" && ${#explicit_core[@]} -gt 0 ]]; then
+        printf 'dev.sh test: explicit specs do not match the requested category\n' >&2
+        return 1
+    fi
+    if ((output_requested)) && ((run_all == 0)) \
+        && { [[ -z "$requested_category" && "$has_explicit_test" -eq 0 ]] \
+            || [[ ${#explicit_core[@]} -gt 0 && ${#explicit_frontend[@]} -gt 0 ]]; }; then
+        printf 'dev.sh test: --output requires one category when plugin suites run separately\n' >&2
+        return 1
     fi
 
-    exec ./kodev test front "${test_args[@]}"
+    "$PROJECT_ROOT/tools/spec_manifest.sh" check
+    check_koreader_revision
+
+    if ((run_all)); then
+        if [[ -n "$requested_category" || "$has_explicit_test" -ne 0 ]]; then
+            printf 'dev.sh test: --all cannot be combined with a category or explicit spec\n' >&2
+            return 1
+        fi
+        run_guarded_frontend "${common_args[@]}"
+        return
+    fi
+
+    if ((has_explicit_test)); then
+        if [[ ${#explicit_core[@]} -gt 0 ]]; then
+            ./kodev test front "${common_args[@]}" "${explicit_core[@]}"
+        fi
+        if [[ ${#explicit_frontend[@]} -gt 0 ]]; then
+            run_guarded_frontend "${common_args[@]}" "${explicit_frontend[@]}"
+            return
+        fi
+        return
+    fi
+
+    if [[ "$requested_category" != "frontend" ]]; then
+        run_koreader_specs core "${common_args[@]}"
+    fi
+    if [[ "$requested_category" != "core" ]]; then
+        run_frontend_specs "${common_args[@]}"
+    fi
 }
 
 if [[ "${1:-}" == "test" ]]; then
     shift
     run_tests "$@"
+    exit $?
 fi
 
 ./kodev build

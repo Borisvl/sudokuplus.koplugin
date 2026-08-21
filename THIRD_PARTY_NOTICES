@@ -1,0 +1,65 @@
+Sudoku+ Third-Party Notices
+===========================
+
+Sudoku+
+-------
+
+Copyright (C) 2026 Boris von Loesch and Sudoku+ contributors.
+
+Sudoku+ is licensed under the GNU Affero General Public License, version 3
+only. The complete license is in LICENSE.
+
+rustoku
+-------
+
+Sudoku+'s solver, techniques, and generator port algorithmic work from
+rustoku at pinned commit afef526d93fa176d75b4c8350cc387b10be6928b.
+
+MIT License
+
+Copyright (c) 2025 Samuel Huang
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+HoDoKu runtime data
+-------------------
+
+The technique workload scores in
+sudokuplus.koplugin/core/techniques/flags.lua are adapted and modified from
+HoDoKu 2.2.0 by Bernhard Hobiger. HoDoKu's program source is licensed under
+GNU GPL version 3 or, at your option, any later version. The adapted score data
+remains subject to GNU GPL version 3; the complete license is in
+COPYING.GPL-3.0. Sudoku+ records its modifications and tier changes in PLAN.md.
+
+Project: https://hodoku.sourceforge.net/
+Source: https://sourceforge.net/projects/hodoku/files/hodoku/hodoku_2.2.0/
+
+HoDoKu example fixtures
+-----------------------
+
+The repository's tests include example puzzle strings and expected deductions
+from HoDoKu's solving-technique pages. The pages state:
+
+Copyright (C) 2008-12 Bernhard Hobiger
+All material on this page is licensed under the GNU FDLv1.3.
+
+The fixtures are distributed as transparent plain-text excerpts with source
+URLs in their test files. They have no invariant sections, front-cover texts,
+or back-cover texts. The complete license is in COPYING.FDL-1.3. These tests
+are repository material and are not included in the installable plugin ZIP.

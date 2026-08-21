@@ -15,7 +15,7 @@ A full-featured, logical Sudoku puzzle game and interactive tutor crafted specif
 
 ## ✨ Features
 
-- **🧠 17 Human Deductive Techniques**: Complete logical solver ported from `rustoku` and HoDoKu logic. Every puzzle is 100% uniquely solvable through human deduction without guessing or brute-force trial-and-error:
+- **🧠 17 Human Deductive Technique Families, 19 Selectable IDs**: Complete logical solver ported from `rustoku` and HoDoKu logic, with AIC split into X-Chain, XY-Chain, and General AIC for targeted practice. Every puzzle is 100% uniquely solvable through human deduction without guessing or brute-force trial-and-error:
   - *Basic*: Naked/Hidden Singles, Naked/Hidden Pairs, Triples, and Quads
   - *Intersections*: Locked Candidates (Pointing & Claiming)
   - *Wings & Fish*: X-Wing, Swordfish, Jellyfish, Skyscraper, W-Wing, XY-Wing, XYZ-Wing
@@ -75,13 +75,13 @@ sudokuplus.koplugin/
 │   ├── generator.lua    # Deterministic seeded puzzle generation & symmetry
 │   ├── hints.lua        # Progressive 3-stage hint derive engine
 │   ├── solver.lua       # MRV backtracking & technique classification
-│   └── techniques/      # 17 human deductive technique implementations
+│   └── techniques/      # 17 technique families exposed as 19 classified IDs
 ├── ui/                  # KOReader widget UI, e-ink refresh engine & menus
 ├── game.lua             # Pure game state machine (undo/redo, notes, timer)
 ├── stats.lua            # Pure statistics & game history log engine
 ├── storage.lua          # Storage serialization
 └── l10n/                # Gettext translation catalogs (.pot, .po, .mo)
-tests/unit/              # Busted specs (46 suites: 39 pure-Lua headless + 7 KOReader UI)
+tests/unit/              # Busted specs (47 suites: 39 pure-Lua headless + 8 KOReader UI)
 tools/                   # Headless benchmarks and release packaging scripts
 dev.sh                   # Build, lint, test, format, and emulator launcher
 ```
@@ -92,11 +92,18 @@ dev.sh                   # Build, lint, test, format, and emulator launcher
 # Run the local KOReader emulator with live symlinked plugin
 ./dev.sh
 
-# Run all 46 unit test specs
+# Run all 47 plugin specs (39 core, then 8 isolated frontend)
 ./dev.sh test
+
+# Run one test category
+./dev.sh test --core
+./dev.sh test --frontend
 
 # Run a specific test
 ./dev.sh test tests/unit/sudoku_hints_spec.lua
+
+# Run manifest, isolation, package, release, and workflow contract tests
+./dev.sh test-tooling
 
 # Check code formatting and static analysis (luacheck + stylua)
 ./dev.sh lint
@@ -112,13 +119,23 @@ dev.sh                   # Build, lint, test, format, and emulator launcher
 
 # Package clean release zip archive
 ./tools/package_release.sh
+# Outputs dist/sudokuplus.koplugin.zip and its .sha256 sidecar
+
+# Publish after dating CHANGELOG.md and committing the release version
+git tag v1.1.0
+git push origin v1.1.0
 ```
+
+Stable `vX.Y.Z` tags run every CI and package gate before publishing. If a tag
+was placed on the wrong commit, force-moving and pushing it reruns the gates and
+updates the existing release and assets.
 
 ---
 
 ## 📜 License & Credits
 
-- **License**: Released under the **[GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE)**. Copyright © 2026 Boris von Loesch and contributors.
+- **License**: Released under the **[GNU Affero General Public License v3.0 only (AGPL-3.0-only)](LICENSE)**. Copyright © 2026 Boris von Loesch and contributors.
 - **Solver & Techniques**: The Lua core is a port of **[rustoku](https://github.com/huangsam/rustoku)** (MIT License) by Samuel Huang. Pinned reference commit: `afef526d93fa176d75b4c8350cc387b10be6928b`.
 - **Techniques & Test Fixtures**: Technique definitions and standard test boards derive from the **[HoDoKu](https://hodoku.sourceforge.net/)** project by Bernhard Hobiger.
+- **Notices**: Complete rustoku and HoDoKu attribution and license details are in **[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)**, **[COPYING.GPL-3.0](COPYING.GPL-3.0)**, and **[COPYING.FDL-1.3](COPYING.FDL-1.3)**.
 - **Platform**: Built for **[KOReader](https://github.com/koreader/koreader)**.

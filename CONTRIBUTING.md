@@ -23,11 +23,13 @@ Sudoku+ is developed against the [KOReader](https://github.com/koreader/koreader
    git clone https://github.com/Borisvl/sudokuplus.koplugin.git
    cd sudokuplus.koplugin
    ```
-2. Fetch and build the local KOReader dev environment:
+2. Fetch and build the pinned KOReader dev environment:
    ```sh
    git clone https://github.com/koreader/koreader.git third_party/koreader
+   git -C third_party/koreader checkout "$(cat tools/koreader-revision)"
+   git -C third_party/koreader submodule update --init --recursive
+   source env.sh
    cd third_party/koreader
-   source ../../env.sh
    ./kodev fetch-thirdparty
    ./kodev build
    cd ../..
@@ -54,12 +56,23 @@ Headless unit tests live in `tests/unit/*_spec.lua` and run via the busted harne
 # Run all plugin specs
 ./dev.sh test
 
+# Run only standalone core or isolated KOReader frontend specs
+./dev.sh test --core
+./dev.sh test --frontend
+
 # Run a specific spec
 ./dev.sh test tests/unit/sudoku_hints_spec.lua
 
 # Filter tests by describe/it block name
 ./dev.sh test -f "skyscraper"
+
+# Run tooling/release contract tests
+./dev.sh test-tooling
 ```
+
+`tests/spec-manifest.txt` is authoritative: every `*_spec.lua` must appear
+exactly once as `core` or `frontend`. Frontend specs run in separate temporary
+`KO_HOME` directories and must install the test guard before loading KOReader.
 
 ### Linting & Formatting
 Code style is strictly enforced via [StyLua](https://github.com/JohnnyMorganz/StyLua) (4-space indent, 120-column limit) and [Luacheck](https://github.com/lunarmodules/luacheck):
@@ -108,3 +121,17 @@ To test building the standalone release zip package:
 ./tools/package_release.sh
 ```
 This generates a clean `dist/sudokuplus.koplugin.zip` ready for device installation.
+The command requires `msgfmt`, verifies the archive contents and metadata, and
+also writes `dist/sudokuplus.koplugin.zip.sha256`.
+
+To publish a stable release, date its `CHANGELOG.md` section, commit the matching
+metadata version on `main`, then push a `vX.Y.Z` tag:
+
+```sh
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The tag workflow runs the full CI and package gates before creating the GitHub
+release. If the tag pointed to the wrong commit, move and force-push it; a green
+rerun updates the existing release notes and replaces the ZIP/checksum assets.

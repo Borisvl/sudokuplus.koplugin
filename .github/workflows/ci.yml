@@ -2,71 +2,159 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  workflow_call:
+    inputs:
+      target_sha:
+        description: Exact commit to verify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TARGET_SHA: ${{ inputs.target_sha || github.sha }}
 
 jobs:
   lint:
-    name: Code Quality (Luacheck & StyLua)
-    runs-on: ubuntu-latest
+    name: Lint and tooling policy
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TARGET_SHA }}
 
-      - name: Install StyLua, Luacheck & gettext
+      - name: Install system tools
+        run: sudo apt-get update && sudo apt-get install -y gettext lua-check shellcheck unzip zip
+
+      - name: Install pinned StyLua
+        env:
+          STYLUA_VERSION: "2.5.2"
+          STYLUA_SHA256: bcb0d855e91f102f28a370e850f8566b3b44b79e6274d806ea5246837c0fd5ab
         run: |
-          sudo apt-get update && sudo apt-get install -y lua-check gettext
-          curl -fsSL https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux-x86_64.zip -o /tmp/stylua.zip
-          sudo unzip -q -o /tmp/stylua.zip -d /usr/local/bin
-          sudo chmod +x /usr/local/bin/stylua
-          rm /tmp/stylua.zip
+          curl -fsSL "https://github.com/JohnnyMorganz/StyLua/releases/download/v${STYLUA_VERSION}/stylua-linux-x86_64.zip" -o /tmp/stylua.zip
+          printf '%s  %s\n' "$STYLUA_SHA256" /tmp/stylua.zip | sha256sum --check
+          sudo unzip -q /tmp/stylua.zip -d /usr/local/bin
 
-      - name: Check StyLua formatting
-        run: stylua --check sudokuplus.koplugin/ tests/ tools/
+      - name: Install pinned actionlint
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_x86_64.tar.gz" -o /tmp/actionlint.tar.gz
+          printf '%s  %s\n' "$ACTIONLINT_SHA256" /tmp/actionlint.tar.gz | sha256sum --check
+          sudo tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint
 
-      - name: Run Luacheck
-        run: luacheck sudokuplus.koplugin/ tests/ tools/
+      - name: Check source SHA
+        run: test "$(git rev-parse HEAD)" = "$TARGET_SHA"
 
-      - name: Check POT & translation freshness
+      - name: Check spec manifest
+        run: ./tools/spec_manifest.sh check
+
+      - name: Check Lua formatting and lint
+        run: |
+          stylua --check sudokuplus.koplugin/ tests/ tools/
+          luacheck sudokuplus.koplugin/ tests/ tools/
+
+      - name: Check shell and workflow syntax
+        run: |
+          shellcheck dev.sh env.sh tools/*.sh tests/tooling/*.sh
+          actionlint
+
+      - name: Check POT and translation freshness
         run: |
           ./tools/extract_pot.sh
           git diff --exit-code sudokuplus.koplugin/l10n/
 
-  test-core:
-    name: Unit Tests (Headless Busted)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Run tooling contract tests
+        run: ./tests/tooling/run.sh
 
-      - name: Install LuaJIT & Busted
+  test-core:
+    name: Core tests (headless LuaJIT)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TARGET_SHA }}
+
+      - name: Install LuaJIT and Busted
         run: sudo apt-get update && sudo apt-get install -y luajit lua-busted
 
-      - name: Setup plugin directory symlink
+      - name: Set up plugin path
         run: |
           mkdir -p plugins
           ln -s ../sudokuplus.koplugin plugins/sudokuplus.koplugin
 
-      - name: Run pure-Lua unit tests
+      - name: Run manifest-listed core specs
         run: |
-          busted --lua=luajit \
-            tests/unit/sudoku_board_spec.lua \
-            tests/unit/sudoku_candidates_spec.lua \
-            tests/unit/sudoku_game_serialize_spec.lua \
-            tests/unit/sudoku_game_spec.lua \
-            tests/unit/sudoku_generator_game_spec.lua \
-            tests/unit/sudoku_generator_spec.lua \
-            tests/unit/sudoku_hints_spec.lua \
-            tests/unit/sudoku_json_spec.lua \
-            tests/unit/sudoku_layout_spec.lua \
-            tests/unit/sudoku_masks_spec.lua \
-            tests/unit/sudoku_prng_spec.lua \
-            tests/unit/sudoku_smoke_spec.lua \
-            tests/unit/sudoku_solve_path_spec.lua \
-            tests/unit/sudoku_solver_spec.lua \
-            tests/unit/sudoku_stats_spec.lua \
-            tests/unit/sudoku_storage_spec.lua \
-            tests/unit/sudoku_technique_*.lua \
-            tests/unit/sudoku_techniques_*.lua \
-            tests/unit/sudoku_util_spec.lua
+          ./tools/spec_manifest.sh check
+          specs=()
+          while IFS= read -r spec; do specs+=("$spec"); done < <(./tools/spec_manifest.sh list core)
+          busted --lua=luajit "${specs[@]}"
+
+  test-frontend:
+    name: Frontend tests (isolated KOReader)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TARGET_SHA }}
+
+      - name: Install KOReader build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              autoconf automake build-essential ca-certificates ccache cmake gcc-multilib gettext git \
+              libtool libtool-bin meson nasm ninja-build patch pkg-config python3 rsync unzip wget
+
+      - name: Checkout pinned KOReader source
+        run: |
+          revision="$(<tools/koreader-revision)"
+          mkdir -p third_party/koreader
+          git init third_party/koreader
+          git -C third_party/koreader remote add origin https://github.com/koreader/koreader.git
+          git -C third_party/koreader fetch --depth=1 origin "$revision"
+          git -C third_party/koreader checkout --detach FETCH_HEAD
+          git -C third_party/koreader submodule update --init --recursive --depth=1
+          test "$(git -C third_party/koreader rev-parse HEAD)" = "$revision"
+
+      - name: Fetch and build KOReader emulator
+        run: |
+          third_party/koreader/kodev fetch-thirdparty
+          third_party/koreader/kodev build
+
+      - name: Run isolated frontend specs
+        run: ./dev.sh test --frontend
+
+  package:
+    name: Build and verify package
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TARGET_SHA }}
+
+      - name: Install package tools
+        run: sudo apt-get update && sudo apt-get install -y gettext zip
+
+      - name: Verify package contract
+        run: |
+          ./tests/tooling/package_release_test.sh
+          ./tools/package_release.sh
+
+      - name: Upload verified release package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sudokuplus-release-package
+          path: |
+            dist/sudokuplus.koplugin.zip
+            dist/sudokuplus.koplugin.zip.sha256
+          if-no-files-found: error
+          retention-days: 3

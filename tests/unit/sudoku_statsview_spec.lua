@@ -1,4 +1,6 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
+local test_guard = require("sudoku_frontend_test_guard")
+test_guard.install()
 
 describe("sudoku stats view", function()
     local Blitbuffer
