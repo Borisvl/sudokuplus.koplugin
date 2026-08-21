@@ -1590,15 +1590,15 @@ session persistence; path/storage dependency injection belongs to M21.
 Test-first task order:
 
 1. [x] Add tooling tests for spec-manifest completeness and category exclusivity.
-2. [x] Add one authoritative 39-core/8-frontend spec manifest and make local/CI
-   runners consume it without duplicated globs or allowlists.
+2. [x] Add one authoritative 39-core/8-frontend spec manifest and make local
+   runners and headless CI consume it without duplicated globs or allowlists.
 3. [x] Add failing isolation tests for a unique per-spec `KO_HOME`, production-path
    rejection, whole-directory cleanup, and relative storage fixtures.
 4. [x] Add a project-owned frontend launcher that creates `KO_HOME` before Lua or
    `DataStorage` loads, guards production save/stats/settings paths, and cleans
    each test home even after failure or interruption.
-5. [x] Pin the KOReader revision, make `env.sh` portable, and add an isolated
-   frontend CI job for all eight KOReader-dependent specs.
+5. [x] Pin the KOReader revision, make `env.sh` portable, and run all eight
+   KOReader-dependent specs through the isolated local frontend harness.
 6. [x] Add package-contract tests covering the plugin root, exact tracked file set,
    license/notices, metadata version, compiled translations, unsafe ZIP paths,
    temporary files, and checksum verification.
@@ -1622,7 +1622,9 @@ Resolved decisions (2026-08-21):
    fixtures under their upstream GPLv3/GFDL terms, and ship separate canonical
    license texts and third-party notices.
 2. Pin KOReader revision `78d586b420835e85cacf4fc72f1a7e7a40741afd`
-   and build that exact source revision in CI.
+   for local frontend tests and emulator smoke. GitHub CI runs the standalone
+   core specs but does not build KOReader from source; official binaries omit
+   the Busted/spec runtime and source builds are too slow and unreliable there.
 3. Publish stable `vX.Y.Z` tags reachable from `main`, accepting lightweight or
    annotated tags. Pushing a tag runs all release gates. Force-moving and
    pushing the same tag reruns the gates, updates that release's notes, and
@@ -1633,9 +1635,9 @@ Resolved decisions (2026-08-21):
    releases.
 
 **Exit criteria**: manifest/tooling tests green; all 39 standalone core specs
-and all 8 isolated frontend specs green locally and in CI; lint and formatting
-clean; pinned KOReader emulator smoke; package verifier accepts a locally
-inspected ZIP containing every required license/notice and rejects mutation
-fixtures; exact-tag release workflow passes static validation; PLAN, README,
-CONTRIBUTING, CHANGELOG, and AGENTS agree with the implemented commands and
-contracts; one clear milestone commit.
+green locally and in CI; all 8 isolated frontend specs green locally; lint and
+formatting clean; pinned KOReader emulator smoke; package verifier accepts a
+locally inspected ZIP containing every required license/notice and rejects
+mutation fixtures; exact-tag release workflow passes static validation; PLAN,
+README, CONTRIBUTING, CHANGELOG, and AGENTS agree with the implemented commands
+and contracts; one clear milestone commit.

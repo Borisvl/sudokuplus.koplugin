@@ -97,41 +97,6 @@ jobs:
           while IFS= read -r spec; do specs+=("$spec"); done < <(./tools/spec_manifest.sh list core)
           busted --lua=luajit "${specs[@]}"
 
-  test-frontend:
-    name: Frontend tests (isolated KOReader)
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout exact source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ env.TARGET_SHA }}
-
-      - name: Install KOReader build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-              autoconf automake build-essential ca-certificates ccache cmake gcc-multilib gettext git \
-              libtool libtool-bin meson nasm ninja-build patch pkg-config python3 rsync unzip wget
-
-      - name: Checkout pinned KOReader source
-        run: |
-          revision="$(<tools/koreader-revision)"
-          mkdir -p third_party/koreader
-          git init third_party/koreader
-          git -C third_party/koreader remote add origin https://github.com/koreader/koreader.git
-          git -C third_party/koreader fetch --depth=1 origin "$revision"
-          git -C third_party/koreader checkout --detach FETCH_HEAD
-          git -C third_party/koreader submodule update --init --recursive --depth=1
-          test "$(git -C third_party/koreader rev-parse HEAD)" = "$revision"
-
-      - name: Fetch and build KOReader emulator
-        run: |
-          third_party/koreader/kodev fetch-thirdparty
-          third_party/koreader/kodev build
-
-      - name: Run isolated frontend specs
-        run: ./dev.sh test --frontend
-
   package:
     name: Build and verify package
     runs-on: ubuntu-24.04

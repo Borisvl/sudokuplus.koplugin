@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Difficulty Model Realignment**:
   - Reclassified **Swordfish** from Hard tier to **Master tier** to balance 3x3 fish complexity alongside X-Wing and Skyscraper.
 - **Release Safety & Compliance**:
-  - Isolated every KOReader frontend spec in a unique temporary data home and added frontend CI against a pinned KOReader revision.
+  - Isolated every KOReader frontend spec in a unique temporary data home against a pinned local KOReader revision.
   - Added exact spec manifests, verified license-compliant packages, SHA-256 release checksums, and gated tag/retag publication.
 
 ## [1.0.0] - 2026-08-15

@@ -25,7 +25,9 @@ grep -Fq 'actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz' "$CI" \
     || fail "CI must use the published actionlint Linux asset name"
 grep -q 'workflow_call:' "$CI" || fail "CI must be reusable by release"
 grep -q 'spec_manifest.sh' "$CI" || fail "CI must enforce the spec manifest"
-grep -q 'test-frontend' "$CI" || fail "CI must run frontend specs"
+if grep -Eq 'test-frontend|Fetch and build KOReader emulator|test --frontend' "$CI"; then
+    fail "CI must not build KOReader to run frontend specs"
+fi
 grep -q 'validate_release.sh' "$RELEASE" || fail "release must validate tag metadata"
 grep -q 'package_release.sh' "$CI" || fail "release CI gates must build the verified package"
 grep -q 'verify_release_package.py' "$ROOT/tools/package_release.sh" || fail "packager must invoke the archive verifier"

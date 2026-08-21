@@ -32,6 +32,8 @@ every session and every agent working in this repository.
 - Specs are split into two categories:
   1. **Pure-Lua core specs** (`tests/unit/sudoku_board_spec.lua`, `sudoku_technique_*.lua`, `sudoku_techniques_*.lua`, `sudoku_generator_*.lua`, `sudoku_solve_path_spec.lua`, `sudoku_util_spec.lua`, etc.): run in CI via standalone headless Busted without KOReader. **They must NEVER require `ui/` modules or KOReader runtime dependencies (`gettext`, `ffi/util`, `UIManager`, `Device`)**.
   2. **KOReader frontend specs** (`sudoku_l10n_spec.lua`, `sudoku_view_spec.lua`, `sudoku_statsview_spec.lua`, `sudoku_menu_spec.lua`): test UI widgets, localization, dialogs, and gestures under the KOReader testrunner (`./dev.sh test`).
+- Frontend specs are a local gate only. GitHub CI runs the standalone core
+  specs; it does not build KOReader from source.
 - Whenever adding tests for UI mappings, formatters, or dialogs (e.g. `ui.techniques`, `ui.difficulties`), add them to `sudoku_l10n_spec.lua` or other frontend UI specs, never to pure core specs.
 - `tests/spec-manifest.txt` is authoritative. Every `tests/unit/*_spec.lua`
   must appear exactly once as `core` or `frontend`; `./tools/spec_manifest.sh
@@ -72,4 +74,4 @@ Every milestone must end with all of:
 - `third_party/` — dev dependencies (koreader checkout, pinned rustoku clone),
   all gitignored.
 - `tools/koreader-revision` — authoritative KOReader commit used by local
-  frontend tests and CI.
+  frontend tests and emulator smoke.
