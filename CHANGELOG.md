@@ -5,50 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - Unreleased
+## [1.1.0] - 2026-08-22
 
 ### Added
-- **Seed-ID Display**: Show the puzzle generation seed in both the Game Detail view and the victory dialog to facilitate sharing, replaying, and debugging puzzles.
-- **Required Solving Techniques**: Display the logical deduction techniques used by the canonical solver pass in Game Details and the victory dialog (with basic singles suppressed when advanced techniques are needed).
-- **Previous / Next Navigation in Game Details**: Browse seamlessly across games in the game history view using navigation buttons, hardware paging/arrow keys, or swipe gestures without closing the view.
-- **In-Progress Spoiler Prevention**: Suppress required technique disclosure for active in-progress games and exclude them from the "Most missed strategies" statistics until completed.
-- **Backward-Compatible Technique Classification**: Analyze legacy saves on demand to classify their required techniques without requiring schema migrations.
-- **Custom Difficulty & Targeted Strategy Practice Mode**:
-  - Practice specific advanced techniques on demand across Medium, Hard, Master, and Expert strategy tiers.
-  - Multi-select strategy picker dialog allows choosing any combination of target strategies.
-  - Practice constraint enforcement: hints only propose allowed strategies and lower-tier basics.
-  - Interactive continue generation dialog with $+50\%$ budget escalation ($100 \to 150 \to 225 \dots$) for rare higher-order techniques.
-- **Disjoint Chain Sub-Classification**:
-  - Split Alternating Inference Chains into three pedagogical categories: **X-Chain** (single-digit conjugate chains), **XY-Chain** (bivalue cell chains with weak inter-cell links), and general **AIC** (mixed links).
-  - Dedicated hint explanations, visual highlights, and localized naming for X-Chain and XY-Chain.
-- **Comprehensive Hint Batch Eliminations**:
-  - Step 3 of the 3-stage hint reveal now executes all candidate eliminations deduced by the specific technique instance as an atomic batch (e.g. eliminating all obsolete notes for a Locked Candidates or Naked/Hidden Subset instance at once rather than one note per hint).
-  - Pattern instance isolation ensures that deductions from separate pattern instances on the board remain cleanly separated.
-  - Seamless notes-off support: applying an elimination hint when notes are disabled materializes the remaining legal candidate notes on the affected cells (while preserving any candidates previously removed manually) so deductions are visibly reflected on the grid and consecutive hints advance cleanly.
-  - Full undo/redo integration with atomic move history and backward compatibility for existing game saves.
-- **Hint Inspection & Session-Wide Deduplication**:
-  - Preserve active 3-step hint reveals and top banner across non-mutating puzzle inspection (arming/switching digits on the number bar, hardware key digit cycling, moving cell selection, and toggling pencil/pen notes mode) so players can freely search for technique patterns before advancing to Stage 2.
-  - Deduplicate hint requests across the game session using deterministic technique identifiers, ensuring that re-requesting a hint on the same puzzle state or after undo/redo cycles only counts as a single hint in statistics.
+- **Custom Strategy Practice Mode**:
+  - Target and practice specific solving strategies on demand across Medium, Hard, Master, and Expert tiers.
+  - Multi-select strategy picker to practice individual techniques or custom combinations.
+  - Dedicated training modes and clear explanations for **X-Chain** and **XY-Chain** chain logic.
+- **Improved Hint Engine & Batch Eliminations**:
+  - Step 3 now applies all candidate eliminations deduced by a technique instance at once (e.g. clearing all obsolete notes for a Locked Candidates or Naked/Hidden Subset in a single tap).
+  - Look around without losing your place: inspect the board, cycle digits, toggle notes, or change cell selection without dismissing an active hint banner.
+  - Applying hint eliminations with notes disabled automatically materializes remaining legal candidates on affected cells.
+  - Hint requests are deduplicated per board state so inspecting hints repeatedly does not penalize statistics.
+- **Statistics & Game History Enhancements**:
+  - Browse seamlessly across games in the history log using previous/next buttons (`◀`/`▶`), hardware page-turn keys, arrow keys, or swipe gestures without closing the view.
+  - Formatted puzzle seeds (`Seed: 4354 5433 …`) and required solving techniques displayed in victory dialogs and game details for easy sharing and replaying.
+  - Spoiler protection: required techniques and strategy rankings remain hidden for active in-progress games until completed.
+  - Dedicated statistics tracking and history breakdown for Custom practice mode alongside standard difficulty tiers.
+  - Redesigned game detail view with adaptive mini-grid sizing and clean two-column stat pairing tailored for e-ink screens.
 
 ### Changed
-- **Exact-Tier Puzzle Generation**:
-  - Standard difficulty requests now return only the selected tier and never silently substitute a nearby difficulty.
-  - Exhausted bounded searches offer Retry with a 50% larger budget or Cancel while preserving the current game.
-  - New-game retries use a fresh seed; replay retries preserve the original reproduction seed and continue from the exhausted search state without recomputing earlier attempts.
-- **Difficulty Model Realignment**:
-  - Reclassified **Swordfish** from Hard tier to **Master tier** to balance 3x3 fish complexity alongside X-Wing and Skyscraper.
-- **Release Safety & Compliance**:
-  - Isolated every KOReader frontend spec in a unique temporary data home against a pinned local KOReader revision.
-  - Added exact spec manifests, verified license-compliant packages, SHA-256 release checksums, and gated tag/retag publication.
-- **Session & Persistence Safety**:
-  - Checkpoint games and live statistics on pause, flush, suspend, and quit, with Retry/Discard recovery for failed writes.
-  - Keep the current game open until replacement generation, construction, ID reservation, statistics, and the initial paused save are durable.
-  - Preserve Custom tier and technique metadata when replaying from in-game statistics; Cancel from main-menu generation remains on the menu.
-  - Reconcile stale game IDs and make terminal statistics retries idempotent without accepting conflicting games or results.
-  - Fail closed on statistics read errors and require Retry or an explicit destructive Reset.
-- **Runtime Module Isolation**:
-  - Load every private module through the unique `sudokuplus.*` namespace so Sudoku+ cannot consume or replace KOReader and other plugin modules in Lua's global module cache.
-  - Keep only KOReader's `main.lua` and `_meta.lua` loader entrypoints at the plugin root, with namespaced metadata as the internal name/version source.
+- **Exact-Tier Puzzle Generation & Faster Creation**:
+  - Standard difficulty requests now strictly match the chosen difficulty without falling back to nearby tiers.
+  - Generator hot paths are significantly optimized, creating Master and Expert puzzles more than twice as fast.
+  - Clean Retry / Cancel dialog with search budget escalation if an exact match requires more attempts.
+- **Enhanced Save Safety & Session Reliability**:
+  - Automatic game checkpoints on pause, device sleep, and app exit prevent lost progress.
+  - Graceful recovery options (Retry / Discard) if storage writes encounter errors.
+  - Complete plugin module isolation to ensure smooth, conflict-free operation alongside KOReader and other plugins.
+- **Difficulty Progression Realignment**:
+  - Reclassified **Swordfish** into Master tier alongside X-Wing and Skyscraper for a smoother difficulty curve.
 
 ## [1.0.0] - 2026-08-15
 

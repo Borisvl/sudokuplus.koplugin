@@ -19,23 +19,29 @@ A full-featured, logical Sudoku puzzle game and interactive tutor crafted specif
   - *Basic*: Naked/Hidden Singles, Naked/Hidden Pairs, Triples, and Quads
   - *Intersections*: Locked Candidates (Pointing & Claiming)
   - *Wings & Fish*: X-Wing, Swordfish, Jellyfish, Skyscraper, W-Wing, XY-Wing, XYZ-Wing
-- **🎯 6 Exact Difficulty Tiers**: Beginner, Easy, Medium, Hard, Master, and Expert, backed by an algorithmic generator with 5 symmetry modes (Rotational 180°, Rotational 90°, Diagonal, Horizontal, Vertical) plus asymmetric boards. Standard generation never substitutes another tier; if its bounded search is exhausted, you can Retry with a larger budget or Cancel without losing the current game.
+  - *Chains*: X-Chain, XY-Chain, Alternating Inference Chains (AIC)
+- **🎯 6 Exact Difficulty Tiers & Custom Practice**:
+  - Standard tiers: Beginner, Easy, Medium, Hard, Master, and Expert, backed by an optimized algorithmic generator with 5 symmetry modes.
+  - Custom Strategy Practice mode: choose any combination of target techniques from Medium to Expert to practice specific solving patterns on demand.
+  - Exact-tier contract: puzzles strictly match the requested difficulty without falling back to nearby tiers.
+- **💡 Progressive 3-Stage Hint Engine**:
   1. **Identify**: Teaches you the next logical technique to look for.
-  2. **Highlight**: Highlights the pattern cells, pincers, and affected candidate eliminations directly on your board.
-  3. **Apply**: Executes the elimination or digit placement for you.
+  2. **Highlight**: Highlights the pattern cells, pincers, and candidate eliminations directly on your board.
+  3. **Apply**: Executes all candidate eliminations for the technique instance in a single atomic step.
 - **⚡ E-Ink Optimized Display**:
   - Region-bounded per-cell partial refreshes with zero full-screen flashing during normal tap-and-play.
   - High-contrast typography and night-mode safe themes.
-- **📊 Rich Analytics & Game History**:
+- **📊 Rich Analytics, Seed Sharing & Game History**:
   - Track total games, win rates, per-difficulty completion times, and active streaks.
   - Identify your most-missed solving techniques.
-  - Interactive game log with mini-board previews and seed-based puzzle replay.
+  - Interactive game log with mini-board previews, formatted seed display (`Seed: 4354 5433 …`), required solving techniques, and multi-modal previous/next game navigation (swipe, arrow keys, page buttons).
+  - Seed-based puzzle replay system to retry specific boards or share puzzles.
 - **✏️ Pen & Pencil Controls**:
-  - Fast single-tap digit entry and dual-mode pencil notes.
+  - Fast single-tap digit entry, hardware button cycling, and dual-mode pencil notes.
   - Optional "Auto-fill notes" and live rule-violation detection.
   - On-demand "Check Board" solver verification with clear strikethrough feedback.
   - Full Undo / Redo history.
-- **💾 Recoverable Sessions**: Pause, suspend, close, reset, and game replacement checkpoint both the board and statistics. Failed writes keep the current session available and offer an explicit Retry or Discard choice.
+- **💾 Recoverable Sessions**: Automatic checkpoints on pause, suspend, close, and reset protect your progress. Failed writes keep the live session available with explicit Retry or Discard choices.
 - **🌐 Multilingual**: Built-in localization support (English, German included out-of-the-box).
 
 ---
@@ -56,11 +62,12 @@ A full-featured, logical Sudoku puzzle game and interactive tutor crafted specif
 ## 🎮 How to Play
 
 - **Select Cell**: Tap any empty or filled cell on the 9×9 grid.
-- **Enter Digits**: Tap numbers 1–9 on the bottom number bar.
-- **Pencil Notes**: Toggle the **Notes** button (pencil icon) to enter candidate notes. Placing a definitive digit automatically prunes notes from intersecting rows, columns, and 3×3 boxes.
+- **Enter Digits**: Tap numbers 1–9 on the bottom number bar, or cycle through digits with hardware page-turn / arrow buttons.
+- **Pencil Notes**: Toggle the **Notes** button (pencil icon) to enter candidate notes, or long-press a cell to quickly write a note. Placing a definitive digit automatically prunes notes from intersecting rows, columns, and 3×3 boxes.
 - **Check Board**: Tap **Check** to verify your board against the solution. Incorrect entries are struck through in ink and keep a shaded background until corrected.
 - **Hints**: Tap **Hint** whenever you are stuck to receive progressive guidance on the next logical technique.
-- **Replay Game**: Visit **Statistics** &rarr; select any finished or abandoned game from the log &rarr; tap **Play again** to retry the exact puzzle seed.
+- **Custom Practice**: Tap **New game** &rarr; **Custom…** to select and practice specific solving strategies.
+- **Browse & Replay**: Visit **Statistics** &rarr; select any game from the log to view its solution, seed, and required techniques, browse past games with `◀`/`▶` (or swipe), or tap **Play again** to replay the exact puzzle.
 
 ---
 
@@ -81,7 +88,7 @@ sudokuplus.koplugin/
 │   ├── stats.lua        # Pure statistics and game-history engine
 │   └── storage.lua      # Storage serialization
 └── l10n/                # Gettext translation catalogs (.pot, .po, .mo)
-tests/unit/              # Busted specs (48 suites: 39 pure-Lua headless + 9 KOReader UI)
+tests/unit/              # Busted specs (49 suites: 40 pure-Lua headless + 9 KOReader UI)
 tools/                   # Headless benchmarks and release packaging scripts
 dev.sh                   # Build, lint, test, format, and emulator launcher
 ```
@@ -92,7 +99,7 @@ dev.sh                   # Build, lint, test, format, and emulator launcher
 # Run the local KOReader emulator with live symlinked plugin
 ./dev.sh
 
-# Run all 48 plugin specs (39 core, then 9 isolated frontend)
+# Run all 49 plugin specs (40 core, then 9 isolated frontend)
 ./dev.sh test
 
 # Run one test category
