@@ -1,4 +1,3 @@
-local bit = require("bit")
 local board = require("sudokuplus.core.board")
 local prng = require("sudokuplus.core.prng")
 local solve_path = require("sudokuplus.core.solve_path")
@@ -63,6 +62,27 @@ local SYMMETRIES = {
     mirrorhorizontal = true,
     mirrordiagonal = true,
 }
+
+function generator.new_metrics()
+    return {
+        version = 1,
+        attempts = { started = 0 },
+        removals = { tried = 0, accepted = 0 },
+        uniqueness = { calls = 0, nodes = 0, caps = 0 },
+        classification = { calls = 0, capped = 0 },
+        aic = { calls = 0, expansions = 0, caps = 0, max_live_queue = 0 },
+    }
+end
+
+local function valid_metrics(metrics)
+    return type(metrics) == "table"
+        and metrics.version == 1
+        and type(metrics.attempts) == "table"
+        and type(metrics.removals) == "table"
+        and type(metrics.uniqueness) == "table"
+        and type(metrics.classification) == "table"
+        and type(metrics.aic) == "table"
+end
 
 local function cell_index(row, col)
     return row * BOARD_SIZE + col + 1
@@ -158,31 +178,14 @@ local function validate_options(options)
     local allowed_techniques = options.allowed_techniques
 
     if difficulty == "custom" then
-        local valid_tier, valid_techs =
-            util.validate_custom_tier_and_techniques(target_tier, required_techniques, "custom difficulty requires ")
-        if not valid_tier then
-            return nil, valid_techs
+        local allowed, valid_tier, valid_techs =
+            util.custom_allowed_techniques(target_tier, required_techniques, "custom difficulty requires ")
+        if not allowed then
+            return nil, valid_tier
         end
         target_tier = valid_tier
         required_techniques = valid_techs
-
-        local required_flags = 0
-        for _, id in ipairs(required_techniques) do
-            local t = flags.TECHNIQUE_BY_ID[id]
-            required_flags = bit.bor(required_flags, t.flag)
-        end
-
-        local floor_mask = 0
-        if target_tier == "medium" then
-            floor_mask = flags.CUMULATIVE_TIER_FLAGS.easy
-        elseif target_tier == "hard" then
-            floor_mask = flags.CUMULATIVE_TIER_FLAGS.medium
-        elseif target_tier == "master" then
-            floor_mask = flags.CUMULATIVE_TIER_FLAGS.hard
-        elseif target_tier == "expert" then
-            floor_mask = flags.CUMULATIVE_TIER_FLAGS.master
-        end
-        allowed_techniques = bit.bor(floor_mask, required_flags)
+        allowed_techniques = allowed
     else
         if target_tier ~= nil or required_techniques ~= nil or allowed_techniques ~= nil then
             return nil, "non-custom difficulty must not specify target_tier, required_techniques, or allowed_techniques"
@@ -223,6 +226,11 @@ local function validate_options(options)
         return nil, "seed must be an integer"
     end
 
+    local metrics = options.metrics
+    if metrics ~= nil and not valid_metrics(metrics) then
+        return nil, "metrics must be a generation metrics table"
+    end
+
     return {
         clues = clues,
         symmetry = symmetry,
@@ -233,20 +241,22 @@ local function validate_options(options)
         max_attempts = max_attempts,
         rng = rng,
         seed = seed,
+        metrics = metrics,
     }
 end
 
-local function new_solver(puzzle, rng, techniques)
+local function new_solver(puzzle, options, techniques)
     -- solver instances clone their RNG, so derive each search seed from the generator RNG.
     return solver.new(puzzle, {
-        rng = prng.new(rng:next()),
+        rng = prng.new(options.rng:next()),
         techniques = techniques,
         search_budget = SEARCH_BUDGET,
+        metrics = options.metrics,
     })
 end
 
-local function sample_solution(rng)
-    local search_solver, err = new_solver(board.new(), rng, 0)
+local function sample_solution(options)
+    local search_solver, err = new_solver(board.new(), options, 0)
     if not search_solver then
         return nil, err
     end
@@ -264,8 +274,12 @@ end
 -- Returns true when the puzzle is proven uniquely solvable, false when it is
 -- proven non-unique, or nil when the search hit the node budget and the
 -- verdict is inconclusive. `err` is only set for a hard solver failure.
-local function is_unique(puzzle, rng)
-    local uniqueness_solver, err = new_solver(puzzle, rng, 0)
+local function is_unique(puzzle, options)
+    local metrics = options.metrics and options.metrics.uniqueness
+    if metrics then
+        metrics.calls = metrics.calls + 1
+    end
+    local uniqueness_solver, err = new_solver(puzzle, options, 0)
     if not uniqueness_solver then
         return nil, err
     end
@@ -273,16 +287,23 @@ local function is_unique(puzzle, rng)
     -- boards or solve paths (solve_until(2) does both). The dig runs this
     -- oracle after every clue removal, so the savings are direct.
     local count = uniqueness_solver:count_solutions(2)
+    if metrics then
+        metrics.nodes = metrics.nodes + (uniqueness_solver.search_nodes or 0)
+    end
     if uniqueness_solver.search_capped then
         -- P4: inconclusive within budget. The dig restores the removed clue
         -- (the safe side of a rejected removal); the final confirmation below
         -- accepts (the dig invariant already guarantees uniqueness).
+        if metrics then
+            metrics.caps = metrics.caps + 1
+        end
         return nil
     end
     return count == 1
 end
 
 local function remove_clues(solution, options, target_clues)
+    local metrics = options.metrics
     local puzzle = board.clone(solution)
     local groups = symmetry_groups(options.symmetry)
     options.rng:shuffle(groups)
@@ -304,11 +325,17 @@ local function remove_clues(solution, options, target_clues)
             end
 
             if #removed > 0 then
-                local unique, unique_err = is_unique(puzzle, options.rng)
+                if metrics then
+                    metrics.removals.tried = metrics.removals.tried + 1
+                end
+                local unique, unique_err = is_unique(puzzle, options)
                 if unique_err then
                     return nil, unique_err
                 elseif unique then
                     clues = clues - #removed
+                    if metrics then
+                        metrics.removals.accepted = metrics.removals.accepted + 1
+                    end
                 else
                     -- Not unique, or inconclusive under the budget: both are
                     -- "do not accept this removal"; restore the group.
@@ -323,7 +350,7 @@ local function remove_clues(solution, options, target_clues)
     -- Final confirmation. unique == nil means the check capped, which is
     -- accepted: every accepted removal above preserved uniqueness, so the
     -- board is unique by construction and the proof is just belt-and-braces.
-    local unique, unique_err = is_unique(puzzle, options.rng)
+    local unique, unique_err = is_unique(puzzle, options)
     if unique_err then
         return nil, unique_err
     end
@@ -335,7 +362,7 @@ local function remove_clues(solution, options, target_clues)
 end
 
 local function generate_single(options, target_clues)
-    local solution, err = sample_solution(options.rng)
+    local solution, err = sample_solution(options)
     if not solution then
         return nil, err
     end
@@ -355,6 +382,10 @@ end
 -- of a tier-solvable puzzle produces the exact same deduction path and technique
 -- set as a tier-restricted solve.
 local function classify_puzzle(puzzle, options, difficulty, custom_techniques_mask)
+    local metrics = options.metrics and options.metrics.classification
+    if metrics then
+        metrics.calls = metrics.calls + 1
+    end
     local techniques = ALL_TECHNIQUES
     if custom_techniques_mask ~= nil then
         techniques = custom_techniques_mask
@@ -362,7 +393,7 @@ local function classify_puzzle(puzzle, options, difficulty, custom_techniques_ma
         techniques = TIER_TECHNIQUES[difficulty]
     end
 
-    local human_solver, err = new_solver(puzzle, options.rng, techniques)
+    local human_solver, err = new_solver(puzzle, options, techniques)
     if not human_solver then
         return nil, err
     end
@@ -371,6 +402,9 @@ local function classify_puzzle(puzzle, options, difficulty, custom_techniques_ma
     if human_solver.search_capped then
         -- P4: the search hit the node budget. Treat as a failed attempt (the
         -- retry loop skips it), never as a difficulty verdict.
+        if metrics then
+            metrics.capped = metrics.capped + 1
+        end
         return nil
     end
     if #solutions ~= 1 then
@@ -399,6 +433,13 @@ local function contains_any_required(classification_techniques, required_techniq
         end
     end
     return false
+end
+
+local function start_attempt(options)
+    local metrics = options.metrics
+    if metrics then
+        metrics.attempts.started = metrics.attempts.started + 1
+    end
 end
 
 local function game_payload(payload, classification, options)
@@ -492,15 +533,15 @@ function generator.generate(options)
         local range = DIFFICULTY_RANGES[range_key] or DIFFICULTY_RANGES[normalized.target_tier]
         local weights_key = DIFFICULTY_WEIGHTS[range_key] and range_key or normalized.target_tier
         for _ = 1, normalized.max_attempts do
+            start_attempt(normalized)
             local payload, attempt_err, classification = attempt_custom_puzzle(normalized, range, weights_key)
             if attempt_err then
                 return nil, attempt_err
             end
-            if
-                payload
+            local accepted = payload
                 and not classification.requires_guessing
                 and contains_any_required(classification.techniques, normalized.required_techniques)
-            then
+            if accepted then
                 return payload.board
             end
         end
@@ -508,6 +549,7 @@ function generator.generate(options)
     end
 
     if not normalized.difficulty then
+        start_attempt(normalized)
         local payload, generate_err = generate_single(normalized, normalized.clues)
         if not payload then
             return nil, generate_err
@@ -519,16 +561,16 @@ function generator.generate(options)
     -- error so callers can explicitly offer another bounded search.
     local range = DIFFICULTY_RANGES[normalized.difficulty]
     for _ = 1, normalized.max_attempts do
+        start_attempt(normalized)
         local payload, attempt_err, classification = attempt_puzzle(normalized, range)
         if attempt_err then
             return nil, attempt_err
         end
-        if
-            payload
+        local accepted = payload
             and not classification.requires_guessing
             and classification.difficulty == normalized.difficulty
             and meets_density_criteria(classification, normalized.difficulty)
-        then
+        if accepted then
             return payload.board
         end
     end
@@ -547,15 +589,15 @@ function generator.generate_game(options)
         local range = DIFFICULTY_RANGES[range_key] or DIFFICULTY_RANGES[normalized.target_tier]
         local weights_key = DIFFICULTY_WEIGHTS[range_key] and range_key or normalized.target_tier
         for _ = 1, normalized.max_attempts do
+            start_attempt(normalized)
             local payload, attempt_err, classification = attempt_custom_puzzle(normalized, range, weights_key)
             if attempt_err then
                 return nil, attempt_err
             end
-            if
-                payload
+            local accepted = payload
                 and not classification.requires_guessing
                 and contains_any_required(classification.techniques, normalized.required_techniques)
-            then
+            if accepted then
                 return game_payload(payload, classification, normalized)
             end
         end
@@ -565,6 +607,7 @@ function generator.generate_game(options)
     if not normalized.difficulty then
         local last_err
         for _ = 1, normalized.max_attempts do
+            start_attempt(normalized)
             local payload, generate_err = generate_single(normalized, normalized.clues)
             if payload then
                 local classification, classify_err = classify_puzzle(payload.board, normalized)
@@ -584,16 +627,16 @@ function generator.generate_game(options)
     -- tier when the bounded search cannot satisfy the request.
     local range = DIFFICULTY_RANGES[normalized.difficulty]
     for _ = 1, normalized.max_attempts do
+        start_attempt(normalized)
         local payload, attempt_err, classification = attempt_puzzle(normalized, range)
         if attempt_err then
             return nil, attempt_err
         end
-        if
-            payload
+        local accepted = payload
             and not classification.requires_guessing
             and classification.difficulty == normalized.difficulty
             and meets_density_criteria(classification, normalized.difficulty)
-        then
+        if accepted then
             return game_payload(payload, classification, normalized)
         end
     end

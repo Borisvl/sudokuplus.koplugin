@@ -148,8 +148,8 @@ describe("sudoku stats view", function()
         local s = sample_stats()
         local replayed
         local menu = statsview.games_list(s, {
-            replay_cb = function(seed, difficulty)
-                replayed = { seed = seed, difficulty = difficulty }
+            replay_cb = function(descriptor)
+                replayed = descriptor
             end,
         })
         local shown
@@ -164,7 +164,7 @@ describe("sudoku stats view", function()
         assert.are.equal(1, shown.entry.id)
         assert.are.equal("finished", shown.entry.status)
         assert.is_nil(replayed)
-        shown.replay_cb(987654, "hard")
+        shown.replay_cb({ seed = 987654, difficulty = "hard" })
         assert.is_not_nil(replayed, "the replay callback is wired through")
         assert.are.equal(987654, replayed.seed)
         assert.are.equal("hard", replayed.difficulty)
@@ -201,7 +201,7 @@ describe("sudoku stats view", function()
         UIManager.show = original_show
 
         closed = {}
-        detail.replay_cb(1, "easy")
+        detail.replay_cb({ seed = 1, difficulty = "easy" })
         UIManager.close = original_close
         assert.are.equal(3, #closed, "detail, list and dashboard are all closed")
         assert.are.same(detail, closed[1])
@@ -397,16 +397,20 @@ describe("sudoku stats view", function()
         assert.is_true(ok, "a migrated game must paint an empty grid, not crash")
     end)
 
-    it("replays the exact puzzle from the detail page", function()
+    it("replays the exact puzzle from an immutable detail descriptor", function()
         local GameDetail = require("sudokuplus.ui.gamedetail")
-        local entry = record({ seed = 987654, difficulty = "hard" })
+        local entry = record({
+            seed = 987654,
+            difficulty = "hard",
+            techniques = { "naked_pairs", "x_wing" },
+        })
         local replayed
         local detail = GameDetail:new {
             entry = entry,
             width = 758,
             height = 1024,
-            replay_cb = function(seed, difficulty)
-                replayed = { seed = seed, difficulty = difficulty }
+            replay_cb = function(descriptor)
+                replayed = descriptor
             end,
         }
         local function find_button(widget)
@@ -427,6 +431,51 @@ describe("sudoku stats view", function()
         assert.is_not_nil(replayed)
         assert.are.equal(987654, replayed.seed)
         assert.are.equal("hard", replayed.difficulty)
+        assert.are.equal(PUZZLE, replayed.puzzle)
+        assert.are.equal(SOLUTION, replayed.solution)
+        assert.are.same({ "naked_pairs", "x_wing" }, replayed.techniques)
+        assert.is_not.equal(entry, replayed)
+        assert.is_not.equal(entry.techniques, replayed.techniques)
+
+        replayed.puzzle = string.rep("0", 81)
+        replayed.techniques[1] = "hidden_pairs"
+        assert.are.equal(PUZZLE, entry.puzzle, "replay descriptor mutation must not alter history")
+        assert.are.same({ "naked_pairs", "x_wing" }, entry.techniques)
+    end)
+
+    it("offers exact replay when a stored puzzle has no seed", function()
+        local GameDetail = require("sudokuplus.ui.gamedetail")
+        local entry = record({ difficulty = "easy" })
+        entry.seed = nil
+        local replayed
+        local detail = GameDetail:new {
+            entry = entry,
+            width = 758,
+            height = 1024,
+            replay_cb = function(descriptor)
+                replayed = descriptor
+            end,
+        }
+        local function find_button(widget)
+            for _, child in ipairs(widget) do
+                if type(child) == "table" and child.text == "Play again" and child.callback then
+                    return child
+                end
+                local found = find_button(child)
+                if found then
+                    return found
+                end
+            end
+            return nil
+        end
+
+        local button = find_button(detail)
+        assert.is_not_nil(button, "stored exact boards are replayable without seed provenance")
+        button.callback()
+        assert.is_not_nil(replayed)
+        assert.is_nil(replayed.seed)
+        assert.are.equal(PUZZLE, replayed.puzzle)
+        assert.are.equal(SOLUTION, replayed.solution)
     end)
 
     it("replays a custom game forwarding custom_tier and custom_techniques", function()
@@ -442,13 +491,8 @@ describe("sudoku stats view", function()
             entry = entry,
             width = 758,
             height = 1024,
-            replay_cb = function(seed, diff, custom_tier, custom_techs)
-                replayed = {
-                    seed = seed,
-                    difficulty = diff,
-                    custom_tier = custom_tier,
-                    custom_techniques = custom_techs,
-                }
+            replay_cb = function(descriptor)
+                replayed = descriptor
             end,
         }
         local function find_button(widget)
@@ -471,29 +515,8 @@ describe("sudoku stats view", function()
         assert.are.equal("custom", replayed.difficulty)
         assert.are.equal("master", replayed.custom_tier)
         assert.are.same({ "swordfish", "x_wing" }, replayed.custom_techniques)
-
-        -- Verify deterministic end-to-end replay generation matches
-        local generator = require("sudokuplus.core.generator")
-        local board_mod = require("sudokuplus.core.board")
-        local prng = require("sudokuplus.core.prng")
-        local g1 = generator.generate_game({
-            difficulty = "custom",
-            target_tier = replayed.custom_tier,
-            required_techniques = replayed.custom_techniques,
-            seed = replayed.seed,
-            rng = prng.new(replayed.seed),
-        })
-        local g2 = generator.generate_game({
-            difficulty = "custom",
-            target_tier = replayed.custom_tier,
-            required_techniques = replayed.custom_techniques,
-            seed = replayed.seed,
-            rng = prng.new(replayed.seed),
-        })
-        assert.is_not_nil(g1)
-        assert.is_not_nil(g2)
-        assert.are.equal(board_mod.to_string(g1.board), board_mod.to_string(g2.board))
-        assert.are.same(g1.techniques, g2.techniques)
+        assert.are.equal(PUZZLE, replayed.puzzle)
+        assert.are.equal(SOLUTION, replayed.solution)
     end)
 
     it("navigates between previous and next games without closing GameDetail", function()
@@ -507,8 +530,8 @@ describe("sudoku stats view", function()
         local detail = GameDetail:new {
             entries = games,
             index = 1,
-            replay_cb = function(seed, difficulty)
-                replayed = { seed = seed, difficulty = difficulty }
+            replay_cb = function(descriptor)
+                replayed = descriptor
             end,
         }
 

@@ -10,6 +10,28 @@ local flags = require("sudokuplus.core.techniques.flags")
 
 local ALL_TECHNIQUES = flags.ALL
 
+local function assert_mandatory_metrics(metrics)
+    assert.are.equal(1, metrics.version)
+    for _, key in ipairs({ "started" }) do
+        assert.is_number(metrics.attempts[key], "attempts." .. key)
+    end
+    for _, key in ipairs({ "tried", "accepted" }) do
+        assert.is_number(metrics.removals[key], "removals." .. key)
+    end
+    for _, key in ipairs({ "calls", "nodes", "caps" }) do
+        assert.is_number(metrics.uniqueness[key], "uniqueness." .. key)
+    end
+    for _, key in ipairs({ "calls", "capped" }) do
+        assert.is_number(metrics.classification[key], "classification." .. key)
+    end
+    for _, key in ipairs({ "calls", "expansions", "caps", "max_live_queue" }) do
+        assert.is_number(metrics.aic[key], "aic." .. key)
+    end
+    assert.is_nil(metrics.techniques, "per-technique counters are intentionally deferred")
+    assert.is_nil(metrics.checkpoints, "checkpoint counters are intentionally deferred")
+    assert.is_nil(metrics.near_misses, "repair counters are intentionally deferred")
+end
+
 describe("core.generator game payload", function()
     it("returns puzzle, solution, difficulty and clue count", function()
         local payload, err = generator.generate_game({
@@ -157,6 +179,101 @@ describe("core.generator game payload", function()
         assert.is_nil(err)
         assert.is_not_nil(payload)
         assert.are.equal(1234567, payload.seed, "the payload must expose the seed for reproduction")
+    end)
+
+    it("keeps optional instrumentation behavior-neutral for boards, paths, PRNG state, and exhaustion", function()
+        local seed = 4242
+        local plain_rng = prng.new(seed)
+        local measured_rng = prng.new(seed)
+        local plain = assert(generator.generate_game({ difficulty = "medium", seed = seed, rng = plain_rng }))
+        local metrics = generator.new_metrics()
+        local measured = assert(generator.generate_game({
+            difficulty = "medium",
+            seed = seed,
+            rng = measured_rng,
+            metrics = metrics,
+        }))
+
+        assert.are.equal(board.to_string(plain.board), board.to_string(measured.board))
+        assert.are.equal(board.to_string(plain.solution), board.to_string(measured.solution))
+        assert.are.same(plain.techniques, measured.techniques)
+        assert.are.equal(plain_rng.state, measured_rng.state)
+
+        local plain_solver_rng = prng.new(seed)
+        local measured_solver_rng = prng.new(seed)
+        local plain_solver = assert(solver.new(plain.board, { techniques = ALL_TECHNIQUES, rng = plain_solver_rng }))
+        local measured_solver = assert(solver.new(plain.board, {
+            techniques = ALL_TECHNIQUES,
+            rng = measured_solver_rng,
+            metrics = generator.new_metrics(),
+        }))
+        local plain_solutions = plain_solver:solve_until(2)
+        local measured_solutions = measured_solver:solve_until(2)
+        assert.are.same(plain_solutions, measured_solutions)
+        assert.are.equal(plain_solver_rng.state, measured_solver_rng.state)
+
+        local plain_failure_rng = prng.new(9999)
+        local measured_failure_rng = prng.new(9999)
+        local _, plain_err = generator.generate_game({
+            difficulty = "medium",
+            max_attempts = 1,
+            rng = plain_failure_rng,
+        })
+        local failure_metrics = generator.new_metrics()
+        local _, measured_err = generator.generate_game({
+            difficulty = "medium",
+            max_attempts = 1,
+            rng = measured_failure_rng,
+            metrics = failure_metrics,
+        })
+        assert.are.equal(plain_err, measured_err)
+        assert.are.equal(plain_failure_rng.state, measured_failure_rng.state)
+    end)
+
+    it("does not compute metrics-only path positions during normal generation", function()
+        local original_lookup = flags.TECHNIQUE_BY_FLAG
+        flags.TECHNIQUE_BY_FLAG = setmetatable({}, {
+            __index = function()
+                error("normal generation consulted the metrics-only technique lookup")
+            end,
+        })
+        finally(function()
+            flags.TECHNIQUE_BY_FLAG = original_lookup
+        end)
+
+        local payload, err = generator.generate_game({ difficulty = "easy", seed = 102, rng = prng.new(102) })
+        assert.is_nil(err)
+        assert.is_not_nil(payload)
+    end)
+
+    it("emits every mandatory counter for Standard and Custom benchmark smoke cases", function()
+        local standard_metrics = generator.new_metrics()
+        local standard = assert(generator.generate_game({
+            difficulty = "master",
+            seed = 105,
+            rng = prng.new(105),
+            metrics = standard_metrics,
+        }))
+        assert.are.equal("master", standard.difficulty)
+        assert_mandatory_metrics(standard_metrics)
+        assert.is_true(standard_metrics.attempts.started >= 1)
+        assert.is_true(standard_metrics.removals.tried >= standard_metrics.removals.accepted)
+        assert.is_true(standard_metrics.uniqueness.calls >= standard_metrics.removals.tried)
+        assert.is_true(standard_metrics.uniqueness.nodes > 0)
+        assert.is_true(standard_metrics.classification.calls >= 1)
+
+        local custom_metrics = generator.new_metrics()
+        local custom = assert(generator.generate_game({
+            difficulty = "custom",
+            target_tier = "medium",
+            required_techniques = { "naked_pairs" },
+            seed = 1,
+            rng = prng.new(1),
+            metrics = custom_metrics,
+        }))
+        assert.are.equal("custom", custom.difficulty)
+        assert_mandatory_metrics(custom_metrics)
+        assert.is_true(custom_metrics.classification.calls >= 1)
     end)
 
     it("snapshots the rng state as the seed when none is provided", function()

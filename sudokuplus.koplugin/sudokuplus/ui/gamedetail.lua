@@ -107,8 +107,29 @@ local function count_clues(puzzle)
     return n
 end
 
+local function replay_descriptor(entry)
+    return {
+        seed = entry.seed,
+        difficulty = entry.difficulty,
+        custom_tier = entry.custom_tier,
+        custom_techniques = util.deep_copy(entry.custom_techniques),
+        techniques = util.deep_copy(entry.techniques),
+        puzzle = entry.puzzle,
+        solution = entry.solution,
+    }
+end
+
+local function can_replay(entry)
+    local has_exact_boards = type(entry.puzzle) == "string"
+        and #entry.puzzle == 81
+        and type(entry.solution) == "string"
+        and #entry.solution == 81
+    return has_exact_boards or entry.seed ~= nil
+end
+
 -- Fullscreen page for one logged game: miniature board + per-game stats and
--- a "Play again" action that regenerates the exact puzzle from its seed.
+-- a "Play again" action that uses exact stored boards when available, falling
+-- back to seed generation only for legacy records.
 local GameDetail = InputContainer:extend {
     name = "gamedetail",
     covers_fullscreen = true,
@@ -209,12 +230,12 @@ function GameDetail:init()
             UIManager:close(self, "flashui")
         end,
     }
-    if self.replay_cb and entry.seed ~= nil then
+    if self.replay_cb and can_replay(entry) then
         button_row[#button_row + 1] = {
             text = _("Play again"),
             callback = function()
                 UIManager:close(self, "flashui")
-                self.replay_cb(entry.seed, entry.difficulty, entry.custom_tier, entry.custom_techniques)
+                self.replay_cb(replay_descriptor(entry))
             end,
         }
     end

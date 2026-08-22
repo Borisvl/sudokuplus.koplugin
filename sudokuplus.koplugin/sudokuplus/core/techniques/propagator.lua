@@ -88,6 +88,7 @@ function propagator.new(b, m, c, techniques, options)
         search_status = nil,
         aic_max_depth = options and options.aic_max_depth,
         aic_max_expansions = options and options.aic_max_expansions,
+        metrics = options and options.metrics,
     }, mt)
 end
 

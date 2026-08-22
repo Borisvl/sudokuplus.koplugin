@@ -71,6 +71,7 @@ local function clone_state(state)
         techniques = state.techniques,
         aic_max_depth = state.aic_max_depth,
         aic_max_expansions = state.aic_max_expansions,
+        metrics = state.metrics,
         -- search_budget persists across calls on an instance, but the node
         -- counter and cap flag are run-scoped: a clone must not inherit a
         -- stale pre-charged count or a stale cap from a previous run.
@@ -84,6 +85,7 @@ local function new_propagator(state)
     return propagator.new(state.board, state.masks, state.candidates, state.techniques, {
         aic_max_depth = state.aic_max_depth,
         aic_max_expansions = state.aic_max_expansions,
+        metrics = state.metrics,
     })
 end
 
@@ -184,6 +186,7 @@ function solver.new(b, opts)
         techniques = options.techniques or 0,
         aic_max_depth = options.aic_max_depth,
         aic_max_expansions = options.aic_max_expansions,
+        metrics = options.metrics,
         search_budget = options.search_budget,
         search_nodes = 0,
         search_capped = false,

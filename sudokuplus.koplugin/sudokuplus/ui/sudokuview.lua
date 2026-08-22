@@ -1173,12 +1173,12 @@ function SudokuView:showStats(parent_close_cb)
     local statsview = require("sudokuplus.ui.statsview")
     UIManager:show(
         statsview.dashboard(self.stats or stats.new(), {
-            replay_cb = function(seed, difficulty, custom_tier, custom_techniques)
+            replay_cb = function(descriptor)
                 if parent_close_cb then
                     parent_close_cb()
                 end
                 if self.replay_cb then
-                    self.replay_cb(seed, difficulty, custom_tier, custom_techniques)
+                    self.replay_cb(descriptor)
                 end
             end,
         }),

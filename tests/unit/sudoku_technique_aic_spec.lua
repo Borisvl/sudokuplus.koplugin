@@ -3,6 +3,7 @@ package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 local bit = require("bit")
 local board = require("sudokuplus.core.board")
 local candidates = require("sudokuplus.core.candidates")
+local generator = require("sudokuplus.core.generator")
 local masks = require("sudokuplus.core.masks")
 local aic = require("sudokuplus.core.techniques.aic")
 local propagator = require("sudokuplus.core.techniques.propagator")
@@ -71,7 +72,7 @@ local function first_pass_trace(puzzle, technique_mask)
     return trace
 end
 
-local function capped_propagator()
+local function capped_propagator(metrics)
     local c = candidates.new()
     for r = 0, 8 do
         for col = 0, 8 do
@@ -79,7 +80,7 @@ local function capped_propagator()
         end
     end
     candidates.set(c, 0, 0, bit.bor(bit.lshift(1, 0), bit.lshift(1, 1)))
-    local p = propagator.new(board.new(), masks.new(), c, aic.flags())
+    local p = propagator.new(board.new(), masks.new(), c, aic.flags(), { metrics = metrics })
     return p
 end
 
@@ -228,6 +229,38 @@ describe("core.techniques.aic", function()
         for _, entry in ipairs({ { "x_chain", X_CHAIN }, { "xy_chain", XY_CHAIN }, { "dnl", DNL } }) do
             assert.are.same(FIRST_PASS_TRACES[entry[1]], first_pass_trace(entry[2]), entry[1])
         end
+    end)
+
+    it("records streaming AIC work counters without changing the first deduction", function()
+        local metrics = generator.new_metrics()
+        local s = solver.new(board.from_string(X_CHAIN), { techniques = flags.X_CHAIN })
+        local p = propagator.new(s.board, s.masks, s.candidates, flags.X_CHAIN, { metrics = metrics })
+        local path = solve_path.new()
+
+        assert.is_true(aic.apply(p, path))
+        assert.are.same(
+            FIRST_PASS_TRACES.x_chain,
+            (function()
+                local trace = {}
+                for _, step in ipairs(path.steps) do
+                    trace[#trace + 1] = { step.row, step.col, step.value }
+                end
+                return trace
+            end)()
+        )
+        assert.are.equal(1, metrics.aic.calls)
+        assert.is_true(metrics.aic.expansions > 0)
+        assert.is_true(metrics.aic.max_live_queue > 0)
+        assert.are.equal(0, metrics.aic.caps)
+
+        local capped_metrics = generator.new_metrics()
+        local capped = capped_propagator(capped_metrics)
+        capped.aic_max_expansions = 0
+        local changed, status = aic.apply(capped, solve_path.new())
+        assert.is_false(changed)
+        assert.are.equal(aic.STATUS_SEARCH_CAPPED, status)
+        assert.are.equal(1, capped_metrics.aic.calls)
+        assert.are.equal(1, capped_metrics.aic.caps)
     end)
 
     it("reports expansion-cap status separately from no-chain", function()

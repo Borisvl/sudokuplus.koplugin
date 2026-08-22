@@ -1796,3 +1796,97 @@ strict-generation and Retry/Cancel regressions green; current-game state remains
 recoverable after exhaustion; localization is current; all core and frontend
 specs green; `./dev.sh fmt`, `./dev.sh test`, and `./dev.sh lint` clean; package
 verification and emulator plugin-load smoke pass; one clear milestone commit.
+
+### M24 — Performance P0: Contracts, Exact Replay, and Reproducible Baselines (v1.1.0)
+
+Make generator stream changes safe and establish reproducible Standard/Custom
+measurements before implementing the P1 hot-path optimizations from
+`PERFORMANCE_PLAN.MD`.
+
+Open questions: none. The replay, exact-tier, deterministic-budget, Custom
+any-of, and rare-target failure contracts are resolved in
+`PERFORMANCE_PLAN.MD`. Per the current work request, prepare and verify this
+milestone without committing until explicit approval is given.
+
+Scope correction (2026-08-22): the original exhaustive 28-case, 100-request
+matrix took more than 30 minutes and collected counters for future P2-P4 work.
+That is disproportionate for choosing P1 optimizations. P0 now measures only
+the two established bottlenecks: exact uniqueness work in Master/Custom
+generation and AIC expansion/queue growth in Expert classification. Custom cases are
+one-attempt yield probes. Broader per-strategy calibration, symmetry timing,
+focus scheduling, checkpoints, near-miss repair, and per-technique profiling
+are deferred until a later phase demonstrates a need for them.
+
+Test-first task order:
+
+1. [x] Add replay regressions proving Game Detail forwards an immutable exact
+   replay descriptor with puzzle, solution, difficulty, Custom metadata, seed,
+   and canonical strategy metadata.
+2. [x] Prove valid exact records bypass the generator, receive a fresh game ID,
+   preserve the historical record, and replay even without a seed.
+3. [x] Preserve an explicit seed-generation fallback for legacy records without
+   valid puzzle/solution strings; reject invalid legacy Custom metadata before
+   entering the retry flow.
+4. [x] Retain the M23 exact-tier Standard contract and Retry/Cancel behavior;
+   P0 must add no adjacent-tier fallback.
+5. [x] Add optional deterministic counters for attempts, clue removals,
+   uniqueness nodes/caps, classification calls/caps, and AIC expansions/caps, with
+   behavior-neutral board, path, PRNG-state, and exhaustion regressions.
+6. [x] Replace the exhaustive benchmark with stable focused summaries for
+   Standard Master, Custom Master all-selected and X-Wing one-attempt probes,
+   X-Chain/General-AIC one-attempt probes, fixed propagation fixtures, a dense
+   no-elimination AIC state, and an explicit expansion-cap state.
+7. [x] Record the compact pre-P1 host baseline below. Run only a short Kobo
+   spot-check after P1 when target hardware is attached; a full pre-P1 device
+   calibration is deferred as it would not change the selected P1 work.
+
+Implementation constraints:
+
+1. Instrumentation is optional, integer-only in `core/`, streaming, and must not
+   retain per-attempt paths or queues.
+2. Instrumentation must not consume PRNG values, change solver/AIC ordering, or
+   introduce wall-clock, KOReader, or callback dependencies into `core/`.
+3. Stored puzzle and solution strings are authoritative for replay; the seed is
+   provenance. Only legacy records lacking exact boards invoke generation.
+4. Benchmark tools may measure CPU time, but core budgets remain deterministic
+   work counts.
+
+Focused host baseline (Apple M2 Pro, KOReader LuaJIT 2.1.1783773675, seed
+20260807, 25 samples, 2026-08-22):
+
+| Generation case | Success | p50 / p95 / max | Uniqueness nodes | AIC expansions |
+| --- | ---: | ---: | ---: | ---: |
+| Standard Master request | 25/25 | 64.1 / 201.6 / 369.6 ms | 1,696,638 | 0 |
+| Custom Master all, one attempt | 1/25 | 14.6 / 27.7 / 31.1 ms | 298,923 | 0 |
+| Custom X-Wing, one attempt | 0/25 | 9.2 / 18.5 / 24.8 ms | 240,275 | 0 |
+| Custom X-Chain, one attempt | 0/25 | 16.0 / 47.6 / 49.7 ms | 285,213 | 67,183 |
+| Custom General AIC, one attempt | 3/25 | 20.8 / 86.0 / 128.1 ms | 370,649 | 97,433 |
+
+| Fixed propagation case | p50 / p95 / max | AIC expansions per run | Max queue |
+| --- | ---: | ---: | ---: |
+| Master X-Wing | 4.01 / 7.85 / 7.95 ms | 0 | 0 |
+| Custom X-Chain | 7.56 / 13.20 / 13.22 ms | 19 | 11 |
+| Custom XY-Chain | 11.21 / 17.85 / 19.61 ms | 565 | 450 |
+| Custom General AIC | 8.79 / 17.04 / 17.57 ms | 100 | 45 |
+| Dense no-elimination | 0.03 / 0.07 / 0.08 ms | 0 | 0 |
+| Expansion cap | 0.02 / 0.12 / 0.13 ms | 1 | 1 |
+
+The default generation and propagation commands complete in under ten seconds
+total on this host. The baseline confirms P1 should first reduce the
+roughly 68,000 uniqueness nodes per Standard Master request; AIC work remains a
+separate later optimization except where P1's propagation-only classification
+removes redundant DFS.
+
+Verification status (2026-08-22): the emulator boots and loads Sudoku+ from the
+working tree. The automated frontend regressions cover exact replay and invalid
+legacy Custom replay, but the interactive replay and Retry/Cancel smoke remains
+pending because this environment could not capture or control the native SDL
+window. Do not mark the milestone complete until that short manual smoke passes.
+
+**Exit criteria**: exact and legacy replay regressions green; focused counters
+are emitted by a Standard/Custom smoke; instrumentation is behavior-neutral;
+the compact host baseline is recorded; exact-tier Retry/Cancel and replay pass
+emulator smoke; `./dev.sh fmt`, `./dev.sh test`, and `./dev.sh lint` pass;
+documentation is current; one clear milestone commit is made only after
+explicit user approval. A short Kobo performance spot-check remains a v1.1.0
+release gate after P1, not a reason to retain exhaustive P0 calibration code.

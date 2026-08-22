@@ -11,6 +11,9 @@ describe("sudoku plugin menu", function()
     local save_path
     local stats_path
 
+    local PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+    local SOLUTION = "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+
     local function item_with(text)
         for _, item in ipairs(menu_items.sudokuplus.sub_item_table) do
             if item.text == text then
@@ -817,6 +820,199 @@ describe("sudoku plugin menu", function()
         assert.are.equal(1, cancelled)
     end)
 
+    it("replays stored exact boards without invoking generation and assigns a fresh id", function()
+        local bit = require("bit")
+        local board = require("sudokuplus.core.board")
+        local flags = require("sudokuplus.core.techniques.flags")
+        local generator = require("sudokuplus.core.generator")
+        local stats = require("sudokuplus.stats")
+        local original_generate = generator.generate_game
+        local generator_calls = 0
+        generator.generate_game = function()
+            generator_calls = generator_calls + 1
+            return nil, "the exact replay path must bypass generation"
+        end
+
+        local historical = {
+            status = "finished",
+            id = 7,
+            seed = nil,
+            difficulty = "custom",
+            custom_tier = "master",
+            custom_techniques = { "x_wing" },
+            techniques = { "naked_singles", "hidden_singles", "x_wing" },
+            duration = 90,
+            hints = {},
+            mistakes = 0,
+            check_errors = 0,
+            started_at = 100,
+            ended_at = 190,
+            moves = 40,
+            filled = 51,
+            correct = 51,
+            puzzle = PUZZLE,
+            solution = SOLUTION,
+            board = SOLUTION,
+        }
+        local history = stats.new()
+        assert.is_not_nil(stats.add(history, historical))
+        local before = stats.to_table(history)
+        assert.is_true(storage.save(stats_path, before))
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        local original_close = UIManager.close
+        UIManager.show = function(_, widget)
+            if widget and widget.game then
+                shown = widget
+            end
+        end
+        UIManager.close = function() end
+
+        finally(function()
+            generator.generate_game = original_generate
+            UIManager.show = original_show
+            UIManager.close = original_close
+        end)
+
+        Sudoku:replayGame({
+            seed = historical.seed,
+            difficulty = historical.difficulty,
+            custom_tier = historical.custom_tier,
+            custom_techniques = { "x_wing" },
+            techniques = { "naked_singles", "hidden_singles", "x_wing" },
+            puzzle = historical.puzzle,
+            solution = historical.solution,
+        })
+
+        assert.are.equal(0, generator_calls)
+        assert.is_not_nil(shown)
+        assert.are.equal(PUZZLE, board.to_string(shown.game.puzzle))
+        assert.are.equal(SOLUTION, board.to_string(shown.game.solution))
+        assert.are.equal("custom", shown.game:difficulty())
+        assert.are.equal("master", shown.game.custom_tier)
+        assert.are.same({ "x_wing" }, shown.game.custom_techniques)
+        assert.are.equal(bit.bor(flags.CUMULATIVE_TIER_FLAGS.hard, flags.X_WING), shown.game._allowed_techniques)
+        assert.are.same(historical.techniques, shown.game:techniques())
+        assert.is_nil(shown.game.seed)
+        assert.are.equal(8, shown.game.id, "a replay is a new game, not the historical record")
+
+        local after = assert(storage.load(stats_path))
+        assert.are.same(before.games, after.games, "replay must not mutate the historical record")
+        assert.are.equal(9, after.next_id, "the fresh replay id reservation is durable")
+    end)
+
+    it("ignores stray Custom metadata on a non-Custom exact replay", function()
+        local board = require("sudokuplus.core.board")
+        local generator = require("sudokuplus.core.generator")
+        local original_generate = generator.generate_game
+        generator.generate_game = function()
+            error("exact replay must not invoke generation")
+        end
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.game then
+                shown = widget
+            end
+        end
+        finally(function()
+            generator.generate_game = original_generate
+            UIManager.show = original_show
+        end)
+
+        Sudoku:replayGame({
+            difficulty = "hard",
+            custom_tier = "master",
+            custom_techniques = { "x_wing" },
+            puzzle = PUZZLE,
+            solution = SOLUTION,
+        })
+
+        assert.is_not_nil(shown)
+        assert.are.equal(PUZZLE, board.to_string(shown.game.puzzle))
+        assert.are.equal("hard", shown.game:difficulty())
+        assert.is_nil(shown.game.custom_tier)
+        assert.is_nil(shown.game.custom_techniques)
+    end)
+
+    it("rejects invalid legacy Custom replay metadata before generation", function()
+        local generator = require("sudokuplus.core.generator")
+        local original_generate = generator.generate_game
+        local generator_calls = 0
+        generator.generate_game = function()
+            generator_calls = generator_calls + 1
+            return nil, "invalid metadata must not enter the retry flow"
+        end
+
+        local shown_message
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.text then
+                shown_message = widget.text
+            end
+        end
+        finally(function()
+            generator.generate_game = original_generate
+            UIManager.show = original_show
+        end)
+
+        Sudoku:replayGame({
+            seed = 246813579,
+            difficulty = "custom",
+            custom_tier = "master",
+            custom_techniques = { "obsolete_strategy" },
+        })
+
+        assert.are.equal(0, generator_calls)
+        assert.is_string(shown_message)
+        assert.is_true(shown_message:find("custom_techniques", 1, true) ~= nil)
+    end)
+
+    it("uses seed generation only as the legacy replay fallback", function()
+        local board = require("sudokuplus.core.board")
+        local generator = require("sudokuplus.core.generator")
+        local original_generate = generator.generate_game
+        local generated_opts
+        generator.generate_game = function(opts)
+            generated_opts = opts
+            return {
+                board = board.from_string(PUZZLE),
+                solution = board.from_string(SOLUTION),
+                difficulty = opts.difficulty,
+                seed = opts.seed,
+                clues = 30,
+                techniques = { "naked_singles" },
+            }
+        end
+
+        local shown
+        local UIManager = require("ui/uimanager")
+        local original_show = UIManager.show
+        UIManager.show = function(_, widget)
+            if widget and widget.game then
+                shown = widget
+            end
+        end
+
+        finally(function()
+            generator.generate_game = original_generate
+            UIManager.show = original_show
+        end)
+
+        Sudoku:replayGame({ seed = 246813579, difficulty = "hard" })
+
+        assert.is_not_nil(generated_opts)
+        assert.are.equal(246813579, generated_opts.seed)
+        assert.are.equal("hard", generated_opts.difficulty)
+        assert.is_not_nil(shown)
+        assert.are.equal(PUZZLE, board.to_string(shown.game.puzzle))
+    end)
+
     it("continues standard replay retries from the exhausted PRNG state", function()
         local generator = require("sudokuplus.core.generator")
         local original_generate = generator.generate_game
@@ -1022,6 +1218,61 @@ describe("sudoku plugin menu", function()
         assert.are.equal(old_id, saved_stats.games[1].id)
         assert.are.equal("abandoned", saved_stats.games[1].status)
         assert.are.equal(views[2].game.id, assert(storage.load(save_path)).id)
+    end)
+
+    it("coordinates checkpoint retry and discard before replacing a live game", function()
+        local dialogs = require("sudokuplus.ui.dialogs")
+        local original_confirm = dialogs.confirm_persistence_failure
+        local retry_callback
+        local discard_callback
+        dialogs.confirm_persistence_failure = function(_, _, retry, discard)
+            retry_callback = retry
+            discard_callback = discard
+        end
+        finally(function()
+            dialogs.confirm_persistence_failure = original_confirm
+        end)
+
+        local checkpoint_calls = 0
+        local pause_calls = 0
+        local continued = 0
+        local checkpoint_succeeds = false
+        local source_view = {
+            game = {
+                is_finished = function()
+                    return false
+                end,
+                pause = function()
+                    pause_calls = pause_calls + 1
+                end,
+            },
+            checkpoint = function(_, reason)
+                assert.are.equal("replacement", reason)
+                checkpoint_calls = checkpoint_calls + 1
+                return checkpoint_succeeds, "forced checkpoint failure"
+            end,
+        }
+        local continue_replacement = function()
+            continued = continued + 1
+        end
+
+        Sudoku:_withSourceCheckpoint(source_view, false, continue_replacement)
+        assert.are.equal(0, continued)
+        assert.are.equal(1, checkpoint_calls)
+        assert.are.equal(1, pause_calls)
+
+        checkpoint_succeeds = true
+        retry_callback()
+        assert.are.equal(1, continued)
+        assert.are.equal(2, checkpoint_calls)
+        assert.are.equal(2, pause_calls)
+
+        checkpoint_succeeds = false
+        Sudoku:_withSourceCheckpoint(source_view, false, continue_replacement)
+        discard_callback()
+        assert.are.equal(2, continued)
+        assert.are.equal(3, checkpoint_calls, "discard must not attempt another checkpoint")
+        assert.are.equal(3, pause_calls)
     end)
 
     it("keeps the live view when the generated payload cannot construct a game", function()

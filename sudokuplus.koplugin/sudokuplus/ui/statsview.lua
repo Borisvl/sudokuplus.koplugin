@@ -95,10 +95,10 @@ function statsview.games_list(s, opts)
                     entries = games,
                     index = i,
                     entry = entry,
-                    replay_cb = function(seed, difficulty, custom_tier, custom_techs)
+                    replay_cb = function(descriptor)
                         close_session(opts.widgets)
                         if opts.replay_cb then
-                            opts.replay_cb(seed, difficulty, custom_tier, custom_techs)
+                            opts.replay_cb(descriptor)
                         end
                     end,
                 }

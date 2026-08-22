@@ -844,15 +844,12 @@ describe("sudoku view", function()
 
     it("forwards Custom replay metadata from win statistics without closing the source view", function()
         local puzzle = blank_solution({ { 0, 3 }, { 8, 0 } })
-        local replayed_seed, replayed_difficulty, replayed_tier, replayed_techniques
+        local replayed
         local s = stats.new()
         local view = new_view(new_game(puzzle, SOLUTION), {
             stats = s,
-            replay_cb = function(seed, difficulty, custom_tier, custom_techniques)
-                replayed_seed = seed
-                replayed_difficulty = difficulty
-                replayed_tier = custom_tier
-                replayed_techniques = custom_techniques
+            replay_cb = function(descriptor)
+                replayed = descriptor
             end,
         })
         local shown_widgets = {}
@@ -903,11 +900,16 @@ describe("sudoku view", function()
 
         -- Trigger "Play again"
         assert.is_not_nil(detail_view.replay_cb)
-        detail_view.replay_cb(12345, "custom", "master", { "swordfish", "x_wing" })
-        assert.are.equal(12345, replayed_seed)
-        assert.are.equal("custom", replayed_difficulty)
-        assert.are.equal("master", replayed_tier)
-        assert.are.same({ "swordfish", "x_wing" }, replayed_techniques)
+        detail_view.replay_cb({
+            seed = 12345,
+            difficulty = "custom",
+            custom_tier = "master",
+            custom_techniques = { "swordfish", "x_wing" },
+        })
+        assert.are.equal(12345, replayed.seed)
+        assert.are.equal("custom", replayed.difficulty)
+        assert.are.equal("master", replayed.custom_tier)
+        assert.are.same({ "swordfish", "x_wing" }, replayed.custom_techniques)
         assert.are.equal(0, count_closed(closed, view), "the replacement coordinator owns the source view")
         assert.are.equal(1, count_closed(closed, win_dialog), "replaying from stats must close parent win dialog")
     end)
@@ -915,16 +917,15 @@ describe("sudoku view", function()
     it("replays from pause statistics without closing the source view", function()
         local s = stats.new()
         local id = assert(stats.reserve_id(s))
-        local replayed_seed, replayed_difficulty
+        local replayed
         local g = new_game(PUZZLE, SOLUTION, function()
             return 1000
         end)
         g.id = id
         local view = new_view(g, {
             stats = s,
-            replay_cb = function(seed, difficulty)
-                replayed_seed = seed
-                replayed_difficulty = difficulty
+            replay_cb = function(descriptor)
+                replayed = descriptor
             end,
         })
         assert.is_true(g:place(0, 2, 4))
@@ -973,9 +974,9 @@ describe("sudoku view", function()
 
         -- Trigger "Play again"
         assert.is_not_nil(detail_view.replay_cb)
-        detail_view.replay_cb(54321, "hard")
-        assert.are.equal(54321, replayed_seed)
-        assert.are.equal("hard", replayed_difficulty)
+        detail_view.replay_cb({ seed = 54321, difficulty = "hard" })
+        assert.are.equal(54321, replayed.seed)
+        assert.are.equal("hard", replayed.difficulty)
         assert.are.equal(0, count_closed(closed, view), "the replacement coordinator owns the source view")
         assert.are.equal(1, count_closed(closed, pause_dialog), "replaying from stats must close parent pause dialog")
     end)

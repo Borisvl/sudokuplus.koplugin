@@ -324,6 +324,10 @@ local function is_strong_linked(node, counts)
 end
 
 function aic.apply(prop, path)
+    local metrics = prop.metrics and prop.metrics.aic
+    if metrics then
+        metrics.calls = metrics.calls + 1
+    end
     local max_depth = prop.aic_max_depth or aic.MAX_DEPTH
     local max_expansions = prop.aic_max_expansions or aic.MAX_EXPANSIONS
     local counts = build_link_counts(prop)
@@ -354,6 +358,9 @@ function aic.apply(prop, path)
                 last_link = "weak",
             },
         }
+        if metrics and metrics.max_live_queue < 1 then
+            metrics.max_live_queue = 1
+        end
         local head = 1
         while head <= #queue do
             local current_path = queue[head]
@@ -362,7 +369,13 @@ function aic.apply(prop, path)
                 depth_capped = true
             else
                 expansions = expansions + 1
+                if metrics then
+                    metrics.expansions = metrics.expansions + 1
+                end
                 if expansions > max_expansions then
+                    if metrics then
+                        metrics.caps = metrics.caps + 1
+                    end
                     return false, aic.STATUS_SEARCH_CAPPED
                 end
                 local current = current_path.node
@@ -382,12 +395,18 @@ function aic.apply(prop, path)
                             end
                         end
                         queue[#queue + 1] = new_path
+                        if metrics then
+                            metrics.max_live_queue = math.max(metrics.max_live_queue, #queue - head + 1)
+                        end
                     end
                 end
             end
         end
     end
     if depth_capped then
+        if metrics then
+            metrics.caps = metrics.caps + 1
+        end
         return false, aic.STATUS_SEARCH_CAPPED
     end
     return false

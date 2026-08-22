@@ -1,3 +1,4 @@
+local bit = require("bit")
 local flags = require("sudokuplus.core.techniques.flags")
 local masks = require("sudokuplus.core.masks")
 
@@ -51,6 +52,25 @@ function util.validate_custom_tier_and_techniques(tier, techniques, prefix)
         validated_techs[i] = t
     end
     return tier, validated_techs
+end
+
+function util.custom_allowed_techniques(tier, techniques, prefix)
+    local valid_tier, valid_techs = util.validate_custom_tier_and_techniques(tier, techniques, prefix)
+    if not valid_tier then
+        return nil, valid_techs
+    end
+
+    local lower_tier = {
+        medium = "easy",
+        hard = "medium",
+        master = "hard",
+        expert = "master",
+    }
+    local allowed = flags.CUMULATIVE_TIER_FLAGS[lower_tier[valid_tier]] or 0
+    for _, id in ipairs(valid_techs) do
+        allowed = bit.bor(allowed, flags.TECHNIQUE_BY_ID[id].flag)
+    end
+    return allowed, valid_tier, valid_techs
 end
 
 util.FULL_CANDIDATE_MASK = 0x1FF
