@@ -1,4 +1,5 @@
 local board = require("sudokuplus.core.board")
+local exact_search = require("sudokuplus.core.exact_search")
 local prng = require("sudokuplus.core.prng")
 local solve_path = require("sudokuplus.core.solve_path")
 local solver = require("sudokuplus.core.solver")
@@ -67,7 +68,7 @@ function generator.new_metrics()
     return {
         version = 1,
         attempts = { started = 0 },
-        removals = { tried = 0, accepted = 0 },
+        removals = { tried = 0, accepted = 0, forced = 0 },
         uniqueness = { calls = 0, nodes = 0, caps = 0 },
         classification = { calls = 0, capped = 0 },
         aic = { calls = 0, expansions = 0, caps = 0, max_live_queue = 0 },
@@ -271,40 +272,56 @@ local function sample_solution(options)
     return solution.board
 end
 
--- Returns true when the puzzle is proven uniquely solvable, false when it is
--- proven non-unique, or nil when the search hit the node budget and the
--- verdict is inconclusive. `err` is only set for a hard solver failure.
-local function is_unique(puzzle, options)
+-- Singleton removals search only for an alternative value at the removed
+-- cell. Multi-cell symmetry groups retain the conservative two-solution count.
+local function is_unique(workspace, removed, options)
     local metrics = options.metrics and options.metrics.uniqueness
     if metrics then
         metrics.calls = metrics.calls + 1
     end
-    local uniqueness_solver, err = new_solver(puzzle, options, 0)
-    if not uniqueness_solver then
-        return nil, err
+
+    local unique
+    local forced = false
+    if #removed == 1 then
+        local cell = removed[1]
+        local alternative, alternative_err
+        alternative, alternative_err, forced = workspace:has_alternative(cell.row, cell.col)
+        if alternative_err then
+            return nil, alternative_err
+        end
+        if alternative ~= nil then
+            unique = not alternative
+        end
+    else
+        local count, count_err = workspace:count_solutions(2)
+        if count == nil then
+            return nil, count_err
+        end
+        unique = count == 1
     end
-    -- P1: count_solutions(2) only counts, it never materializes solution
-    -- boards or solve paths (solve_until(2) does both). The dig runs this
-    -- oracle after every clue removal, so the savings are direct.
-    local count = uniqueness_solver:count_solutions(2)
+
     if metrics then
-        metrics.nodes = metrics.nodes + (uniqueness_solver.search_nodes or 0)
+        metrics.nodes = metrics.nodes + workspace.search_nodes
+        if forced then
+            options.metrics.removals.forced = options.metrics.removals.forced + 1
+        end
     end
-    if uniqueness_solver.search_capped then
-        -- P4: inconclusive within budget. The dig restores the removed clue
-        -- (the safe side of a rejected removal); the final confirmation below
-        -- accepts (the dig invariant already guarantees uniqueness).
+    if workspace.search_capped then
         if metrics then
             metrics.caps = metrics.caps + 1
         end
         return nil
     end
-    return count == 1
+    return unique
 end
 
 local function remove_clues(solution, options, target_clues)
     local metrics = options.metrics
-    local puzzle = board.clone(solution)
+    local workspace, workspace_err = exact_search.new(solution, solution, { search_budget = SEARCH_BUDGET })
+    if not workspace then
+        return nil, workspace_err
+    end
+    local puzzle = workspace.board
     local groups = symmetry_groups(options.symmetry)
     options.rng:shuffle(groups)
 
@@ -319,8 +336,11 @@ local function remove_clues(solution, options, target_clues)
             for _, cell in ipairs(group) do
                 local index = cell_index(cell[1], cell[2])
                 if puzzle[index] ~= 0 then
-                    removed[#removed + 1] = { index = index, value = puzzle[index] }
-                    puzzle[index] = 0
+                    local value, remove_err = workspace:remove(cell[1], cell[2])
+                    if not value then
+                        return nil, remove_err
+                    end
+                    removed[#removed + 1] = { row = cell[1], col = cell[2] }
                 end
             end
 
@@ -328,7 +348,7 @@ local function remove_clues(solution, options, target_clues)
                 if metrics then
                     metrics.removals.tried = metrics.removals.tried + 1
                 end
-                local unique, unique_err = is_unique(puzzle, options)
+                local unique, unique_err = is_unique(workspace, removed, options)
                 if unique_err then
                     return nil, unique_err
                 elseif unique then
@@ -340,22 +360,14 @@ local function remove_clues(solution, options, target_clues)
                     -- Not unique, or inconclusive under the budget: both are
                     -- "do not accept this removal"; restore the group.
                     for _, cell in ipairs(removed) do
-                        puzzle[cell.index] = cell.value
+                        local restored, restore_err = workspace:restore(cell.row, cell.col)
+                        if not restored then
+                            return nil, restore_err
+                        end
                     end
                 end
             end
         end
-    end
-
-    -- Final confirmation. unique == nil means the check capped, which is
-    -- accepted: every accepted removal above preserved uniqueness, so the
-    -- board is unique by construction and the proof is just belt-and-braces.
-    local unique, unique_err = is_unique(puzzle, options)
-    if unique_err then
-        return nil, unique_err
-    end
-    if unique == false then
-        return nil, "generated puzzle is not uniquely solvable"
     end
 
     return puzzle
@@ -398,21 +410,22 @@ local function classify_puzzle(puzzle, options, difficulty, custom_techniques_ma
         return nil, err
     end
 
-    local solutions = human_solver:solve_until(2)
-    if human_solver.search_capped then
-        -- P4: the search hit the node budget. Treat as a failed attempt (the
-        -- retry loop skips it), never as a difficulty verdict.
-        if metrics then
+    local path = solve_path.new()
+    local propagated, status = human_solver:propagate(path)
+    if status ~= nil then
+        -- Advanced techniques may cap their own bounded searches. An
+        -- incomplete pass is not a difficulty verdict.
+        if metrics and status == "search_capped" then
             metrics.capped = metrics.capped + 1
         end
         return nil
     end
-    if #solutions ~= 1 then
+    if not propagated or not human_solver:is_solved() then
         return nil
     end
 
     local clues = board.count_clues(puzzle)
-    return solve_path.classify(solutions[1].solve_path, { clues = clues })
+    return solve_path.classify(path, { clues = clues })
 end
 
 local function meets_density_criteria(classification, target_difficulty)

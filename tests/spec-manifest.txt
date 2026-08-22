@@ -1,5 +1,6 @@
 core tests/unit/sudoku_board_spec.lua
 core tests/unit/sudoku_candidates_spec.lua
+core tests/unit/sudoku_exact_search_spec.lua
 core tests/unit/sudoku_game_serialize_spec.lua
 core tests/unit/sudoku_game_spec.lua
 core tests/unit/sudoku_generator_game_spec.lua

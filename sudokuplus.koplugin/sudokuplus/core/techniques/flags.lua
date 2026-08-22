@@ -137,7 +137,18 @@ flags.TECHNIQUES_BY_TIER = {
     },
 }
 
+-- Candidate masks are always nine bits. Keep the general fallback because
+-- this helper also counts the wider technique-flag masks above.
+local CANDIDATE_BIT_COUNTS = { [0] = 0 }
+for mask = 1, 0x1FF do
+    CANDIDATE_BIT_COUNTS[mask] = CANDIDATE_BIT_COUNTS[math.floor(mask / 2)] + (mask % 2)
+end
+
 function flags.count(mask)
+    local candidate_count = CANDIDATE_BIT_COUNTS[mask]
+    if candidate_count ~= nil then
+        return candidate_count
+    end
     local count = 0
     while mask ~= 0 do
         mask = bit.band(mask, mask - 1)

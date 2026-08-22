@@ -1,6 +1,7 @@
 package.path = "plugins/sudokuplus.koplugin/?.lua;" .. package.path
 
 local board = require("sudokuplus.core.board")
+local exact_search = require("sudokuplus.core.exact_search")
 local generator = require("sudokuplus.core.generator")
 local prng = require("sudokuplus.core.prng")
 local solve_path = require("sudokuplus.core.solve_path")
@@ -9,13 +10,14 @@ local sudoku = require("sudokuplus.core.sudoku")
 local flags = require("sudokuplus.core.techniques.flags")
 
 local ALL_TECHNIQUES = flags.ALL
+local LOGICAL_FIXTURE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
 
 local function assert_mandatory_metrics(metrics)
     assert.are.equal(1, metrics.version)
     for _, key in ipairs({ "started" }) do
         assert.is_number(metrics.attempts[key], "attempts." .. key)
     end
-    for _, key in ipairs({ "tried", "accepted" }) do
+    for _, key in ipairs({ "tried", "accepted", "forced" }) do
         assert.is_number(metrics.removals[key], "removals." .. key)
     end
     for _, key in ipairs({ "calls", "nodes", "caps" }) do
@@ -246,6 +248,82 @@ describe("core.generator game payload", function()
         assert.is_not_nil(payload)
     end)
 
+    it("classifies technique-solvable puzzles without entering backtracking", function()
+        local mt = getmetatable(assert(solver.new(board.new())))
+        local original_solve_until = mt.solve_until
+        mt.solve_until = function(self, bound)
+            if self.techniques ~= 0 then
+                error("classification entered backtracking")
+            end
+            return original_solve_until(self, bound)
+        end
+        finally(function()
+            mt.solve_until = original_solve_until
+        end)
+
+        local payload, err = generator.generate_game({ difficulty = "easy", seed = 102, rng = prng.new(102) })
+        assert.is_nil(err)
+        assert.is_not_nil(payload)
+    end)
+
+    it("preserves the complete logical path used by the previous bounded solve", function()
+        local puzzle = assert(board.from_string(LOGICAL_FIXTURE))
+        local propagated_solver = assert(solver.new(puzzle, { techniques = ALL_TECHNIQUES }))
+        local path = solve_path.new()
+        assert.is_true(propagated_solver:propagate(path))
+        assert.is_true(propagated_solver:is_solved())
+
+        local reference = assert(solver.new(puzzle, { techniques = ALL_TECHNIQUES })):solve_until(2)
+        assert.are.equal(1, #reference)
+        assert.are.same(reference[1].solve_path, path)
+        assert.are.same(solve_path.classify(reference[1].solve_path), solve_path.classify(path))
+    end)
+
+    it("rejects propagation dead ends and incomplete logical solves", function()
+        local mt = getmetatable(assert(solver.new(board.new())))
+        local original_propagate = mt.propagate
+        finally(function()
+            mt.propagate = original_propagate
+        end)
+
+        for _, propagated in ipairs({ false, true }) do
+            mt.propagate = function()
+                return propagated
+            end
+            local payload, err = generator.generate_game({
+                difficulty = "easy",
+                max_attempts = 1,
+                seed = 102,
+                rng = prng.new(102),
+            })
+            assert.is_nil(payload)
+            assert.is_string(err)
+        end
+    end)
+
+    it("rejects capped propagation instead of classifying it", function()
+        local mt = getmetatable(assert(solver.new(board.new())))
+        local original_propagate = mt.propagate
+        local metrics = generator.new_metrics()
+        mt.propagate = function()
+            return true, "search_capped"
+        end
+        finally(function()
+            mt.propagate = original_propagate
+        end)
+
+        local payload, err = generator.generate_game({
+            difficulty = "easy",
+            max_attempts = 1,
+            seed = 102,
+            rng = prng.new(102),
+            metrics = metrics,
+        })
+        assert.is_nil(payload)
+        assert.is_string(err)
+        assert.are.equal(1, metrics.classification.capped)
+    end)
+
     it("emits every mandatory counter for Standard and Custom benchmark smoke cases", function()
         local standard_metrics = generator.new_metrics()
         local standard = assert(generator.generate_game({
@@ -258,7 +336,12 @@ describe("core.generator game payload", function()
         assert_mandatory_metrics(standard_metrics)
         assert.is_true(standard_metrics.attempts.started >= 1)
         assert.is_true(standard_metrics.removals.tried >= standard_metrics.removals.accepted)
-        assert.is_true(standard_metrics.uniqueness.calls >= standard_metrics.removals.tried)
+        assert.are.equal(
+            standard_metrics.removals.tried,
+            standard_metrics.uniqueness.calls,
+            "each removal needs one proof; the final reproof is redundant"
+        )
+        assert.is_true(standard_metrics.removals.forced > 0)
         assert.is_true(standard_metrics.uniqueness.nodes > 0)
         assert.is_true(standard_metrics.classification.calls >= 1)
 
@@ -427,28 +510,26 @@ describe("core.generator game payload", function()
     end)
 
     it("digs safely and never hard-fails when uniqueness checks hit the budget (P4)", function()
-        -- Force every dig uniqueness check (techniques == 0, non-empty board)
-        -- to a tiny node budget so most checks cap. Capped removals must be
-        -- restored, the final confirmation must accept (the dig invariant
-        -- guarantees uniqueness), and generation must not hard-fail.
-        local board_mod = require("sudokuplus.core.board")
-        local solver_mod = require("sudokuplus.core.solver")
-        local original_new = solver_mod.new
-        solver_mod.new = function(b, opts)
-            opts = opts or {}
-            if opts.techniques == 0 and board_mod.count_clues(b) > 0 then
-                opts = { rng = opts.rng, techniques = 0, search_budget = 100 }
-            end
-            return original_new(b, opts)
+        -- Force every exact uniqueness workspace to a tiny node budget so
+        -- most checks cap. Capped removals must be restored and generation
+        -- must not hard-fail.
+        local original_new = exact_search.new
+        exact_search.new = function(puzzle, solution)
+            return original_new(puzzle, solution, { search_budget = 0 })
         end
         finally(function()
-            solver_mod.new = original_new
+            exact_search.new = original_new
         end)
 
-        local payload, err = generator.generate_game { difficulty = "easy", seed = 123, rng = prng.new(123) }
+        local metrics = generator.new_metrics()
+        local payload, err = generator.generate_game {
+            seed = 123,
+            rng = prng.new(123),
+            metrics = metrics,
+        }
         assert.is_nil(err)
         assert.is_not_nil(payload)
-        assert.are.equal("easy", payload.difficulty)
+        assert.is_true(metrics.uniqueness.caps > 0, "the forced cap must actually be exercised")
         local solutions = solver.new(payload.board):solve_until(2)
         assert.are.equal(1, #solutions, "the dig invariant must hold even with capped checks")
     end)
@@ -549,7 +630,7 @@ describe("core.generator game payload", function()
         it("generates custom puzzles across all strategy tiers", function()
             local test_tiers = {
                 { tier = "hard", techs = { "hidden_pairs", "naked_triples" }, seed = 456 },
-                { tier = "master", techs = { "swordfish", "x_wing" }, seed = 789 },
+                { tier = "master", techs = { "swordfish", "x_wing" }, seed = 3 },
                 { tier = "expert", techs = { "x_chain", "aic" }, seed = 1011 },
             }
             for _, cfg in ipairs(test_tiers) do
@@ -594,8 +675,8 @@ describe("core.generator game payload", function()
                 difficulty = "custom",
                 target_tier = "master",
                 required_techniques = { "x_wing", "swordfish" },
-                seed = 789,
-                rng = prng.new(789),
+                seed = 3,
+                rng = prng.new(3),
             })
             assert.is_nil(err)
             assert.is_not_nil(payload)

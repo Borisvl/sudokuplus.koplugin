@@ -1890,3 +1890,62 @@ emulator smoke; `./dev.sh fmt`, `./dev.sh test`, and `./dev.sh lint` pass;
 documentation is current; one clear milestone commit is made only after
 explicit user approval. A short Kobo performance spot-check remains a v1.1.0
 release gate after P1, not a reason to retain exhaustive P0 calibration code.
+
+### M25 — Performance P1: Exact Uniqueness and Classification Hot Path (v1.1.0)
+
+Remove the largest measured sources of redundant work without changing puzzle
+contracts or complicating the general solver. The generator will use a small
+exact-search workspace whose domains are recomputed from row/column/box masks;
+the existing candidate-cache solver remains unchanged for gameplay and hints.
+
+Open questions: none. Singleton removals use the alternative-solution theorem;
+multi-cell symmetry groups retain the conservative two-solution count. The
+workspace is generator-only, uses deterministic node budgets, and preserves
+row-major MRV tie order and ascending digit order. Benchmark timing is
+directional; deterministic search nodes and generated boards are the primary
+comparison. Changes remain uncommitted until the end-of-milestone report is
+reviewed.
+
+Test-first task order:
+
+1. [x] Add differential tests comparing the singleton alternative oracle with
+   fresh `count_solutions(2)` over deterministic unique-parent transitions.
+2. [x] Cover forced singleton masks, unique/non-unique children, malformed or
+   mismatched known solutions, capped searches, and exact state restoration.
+3. [x] Cover multi-cell removals and independently prove final uniqueness for
+   every supported symmetry.
+4. [x] Introduce the reusable exact-search workspace, route the dig through it,
+   and remove the inductively redundant final uniqueness reproof.
+5. [x] Add a 0..511 bit-count lookup while preserving the existing fallback for
+   larger technique masks.
+6. [x] Replace classification DFS with full logical propagation; preserve paths
+   for completed puzzles and reject stalls, dead ends, and capped AIC passes.
+7. [x] Attribute each subchange with the focused 25-sample benchmark, then run
+   all tests, formatting, lint, and independent uniqueness verification.
+
+Fresh pre-P1 comparison run (Apple M2 Pro, KOReader LuaJIT 2.1.1783773675,
+seed 20260807, 25 samples, 2026-08-22): Standard Master 25/25, p50 106.9 ms,
+p95 312.3 ms, maximum 746.9 ms, 1,696,638 uniqueness nodes, and 6.5 attempts
+per request. Host timing varies with load; the node total is deterministic.
+
+P1 result (same machine, seed, and 25-sample corpus): after the exact-search
+workspace, singleton alternative oracle, forced-mask shortcut, and final-reproof
+removal, Standard Master measured p50 42.9 ms, p95 187.5 ms, maximum 236.8 ms,
+1,037,661 uniqueness nodes, and 6.7 attempts. After propagation-only
+classification and the bounded 9-bit count lookup, it measured p50 37.3 ms,
+p95 170.6 ms, maximum 197.0 ms, with the same node count and attempt yield.
+The full benchmark wall time fell from 7.09 s to 2.57 s. All generated benchmark
+puzzles passed an independent technique-less exact uniqueness solve.
+
+The generator stream changes intentionally because exact uniqueness no longer
+draws unused random seeds for deterministic counts; stored-board replay is the
+compatibility contract. Custom Master fixture seed 789 was recalibrated to seed
+3 with the same any-of technique contract. All 40 core specs, all 9 frontend
+specs, tooling/package contracts, formatting, and lint pass. No emulator smoke
+was required because P1 changes only the pure-Lua core and tests.
+
+**Exit criteria**: differential exact-search corpus green; every generated
+benchmark puzzle independently proven unique; exact-tier and Custom contracts
+unchanged; deterministic uniqueness work and Standard Master p95 materially
+improved; each optimization attributed separately; `./dev.sh fmt`,
+`./dev.sh test`, and `./dev.sh lint` pass; concise before/after report delivered.

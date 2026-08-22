@@ -99,6 +99,17 @@ describe("core.techniques.flags", function()
         assert.are.equal(0, flags.count(0))
         assert.are.equal(1, flags.count(flags.NAKED_SINGLES))
         assert.are.equal(3, flags.count(bit.bor(flags.NAKED_SINGLES, flags.HIDDEN_SINGLES, flags.NAKED_PAIRS)))
+
+        for mask = 0, 0x1FF do
+            local reference = 0
+            local remaining = mask
+            while remaining ~= 0 do
+                remaining = bit.band(remaining, remaining - 1)
+                reference = reference + 1
+            end
+            assert.are.equal(reference, flags.count(mask), "9-bit candidate mask " .. mask)
+        end
+        assert.are.equal(3, flags.count(bit.bor(flags.X_WING, flags.X_CHAIN, flags.XY_CHAIN)))
     end)
 
     it("finds the lowest set bit index", function()

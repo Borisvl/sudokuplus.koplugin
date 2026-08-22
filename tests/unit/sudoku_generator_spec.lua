@@ -232,6 +232,11 @@ describe("core.generator", function()
             assert.is_not_nil(puzzle)
             assert.is_true(board.count_clues(puzzle) >= 72)
             assert_symmetric(puzzle, symmetry)
+            assert.are.equal(
+                1,
+                assert(solver.new(puzzle)):count_solutions(2),
+                string.format("symmetry '%s' must preserve independent uniqueness", symmetry)
+            )
         end
     end)
 
